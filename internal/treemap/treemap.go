@@ -1,6 +1,8 @@
+// Package treemap implements a UI-independent squarified area layout.
 package treemap
 
 import (
+	"cmp"
 	"math"
 	"slices"
 )
@@ -10,123 +12,99 @@ type Item struct {
 	Label string
 	Value uint64
 }
-
 type Rect struct {
 	X, Y, W, H float32
 	ID         int
 }
 
-func (r Rect) Contains(x, y float32) bool {
-	return x >= r.X && x <= r.X+r.W && y >= r.Y && y <= r.Y+r.H
-}
+func (r Rect) Contains(x, y float32) bool { return x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H }
 
-// Layout returns a stable squarified treemap. Zero-valued items are skipped.
-// The caller owns the returned slice and can reuse it between frames.
+// Layout sorts a copy of the input. Floating point summation avoids overflowing
+// when several very large uint64 values are supplied. All output is local to
+// the given bounds, and zero weights consume no area.
 func Layout(items []Item, width, height float32) []Rect {
-	positive := make([]Item, 0, len(items))
-	for _, item := range items {
-		if item.Value > 0 {
-			positive = append(positive, item)
-		}
-	}
-	slices.SortStableFunc(positive, func(a, b Item) int {
-		if a.Value > b.Value {
-			return -1
-		}
-		if a.Value < b.Value {
-			return 1
-		}
-		if a.ID < b.ID {
-			return -1
-		}
-		return 1
-	})
-	if width <= 0 || height <= 0 || len(positive) == 0 {
+	if width <= 0 || height <= 0 {
 		return nil
 	}
-	total := uint64(0)
-	for _, item := range positive {
-		total += item.Value
+	a := make([]Item, 0, len(items))
+	total := 0.0
+	for _, it := range items {
+		if it.Value > 0 {
+			a = append(a, it)
+			total += float64(it.Value)
+		}
 	}
-	areas := make([]float64, len(positive))
-	for i, item := range positive {
-		areas[i] = float64(item.Value) / float64(total) * float64(width) * float64(height)
+	if total == 0 {
+		return nil
 	}
-	result := make([]Rect, 0, len(positive))
-	remaining := positive
-	remainingAreas := areas
-	x, y, w, h := float64(0), float64(0), float64(width), float64(height)
-	for len(remaining) > 0 {
-		short := min(w, h)
-		rowItems := 0
-		rowArea := 0.0
-		best := math.Inf(1)
-		for rowItems < len(remaining) {
-			candidate := appendArea(rowArea, remainingAreas[rowItems])
-			worse := worst(candidate, short)
-			if rowItems > 0 && worse > best {
+	slices.SortFunc(a, func(x, y Item) int {
+		if n := cmp.Compare(y.Value, x.Value); n != 0 {
+			return n
+		}
+		return cmp.Compare(x.ID, y.ID)
+	})
+	scale := float64(width) * float64(height) / total
+	areas := make([]float64, len(a))
+	for i := range a {
+		areas[i] = float64(a[i].Value) * scale
+	}
+	result := make([]Rect, 0, len(a))
+	x, y, w, h := 0.0, 0.0, float64(width), float64(height)
+	for start := 0; start < len(a) && w > 0 && h > 0; {
+		short := math.Min(w, h)
+		end := start + 1
+		sum := areas[start]
+		score := aspect(sum, areas[start], areas[start], short)
+		for end < len(a) {
+			next := sum + areas[end]
+			s := aspect(next, areas[start], areas[end], short)
+			if s > score {
 				break
 			}
-			rowItems++
-			rowArea = candidate
-			best = worse
+			sum = next
+			score = s
+			end++
 		}
-		if rowItems == 0 {
-			rowItems = 1
-			rowArea = remainingAreas[0]
-		}
-		if w <= h {
-			rowH := rowArea / w
-			cursor := x
-			for i := 0; i < rowItems; i++ {
-				rw := remainingAreas[i] / rowH
-				result = append(result, Rect{float32(cursor), float32(y), float32(rw), float32(rowH), remaining[i].ID})
-				cursor += rw
-			}
-			y += rowH
-			h -= rowH
-		} else {
-			rowW := rowArea / h
+		if w >= h {
+			thickness := math.Min(w, sum/h)
 			cursor := y
-			for i := 0; i < rowItems; i++ {
-				rh := remainingAreas[i] / rowW
-				result = append(result, Rect{float32(x), float32(cursor), float32(rowW), float32(rh), remaining[i].ID})
-				cursor += rh
+			for i := start; i < end; i++ {
+				length := areas[i] / thickness
+				if i == end-1 {
+					length = y + h - cursor
+				}
+				result = append(result, Rect{float32(x), float32(cursor), float32(thickness), float32(length), a[i].ID})
+				cursor += length
 			}
-			x += rowW
-			w -= rowW
+			x += thickness
+			w -= thickness
+		} else {
+			thickness := math.Min(h, sum/w)
+			cursor := x
+			for i := start; i < end; i++ {
+				length := areas[i] / thickness
+				if i == end-1 {
+					length = x + w - cursor
+				}
+				result = append(result, Rect{float32(cursor), float32(y), float32(length), float32(thickness), a[i].ID})
+				cursor += length
+			}
+			y += thickness
+			h -= thickness
 		}
-		remaining = remaining[rowItems:]
-		remainingAreas = remainingAreas[rowItems:]
-		if w <= 0 || h <= 0 {
-			break
-		}
+		start = end
 	}
 	return result
 }
-
-func appendArea(a, b float64) float64 { return a + b }
-
-func rowSize(area, w, h float64) (float64, float64) {
-	if w <= h {
-		return w, area / w
-	}
-	return area / h, h
+func aspect(sum, largest, smallest, side float64) float64 {
+	sq := sum * sum
+	s := side * side
+	return math.Max(s*largest/sq, sq/(s*smallest))
 }
-
-func worst(rowArea, short float64) float64 {
-	if rowArea <= 0 || short <= 0 {
-		return math.Inf(1)
-	}
-	// For a row with fixed short side, the largest and smallest item
-	// determine the worst aspect ratio.
-	return rowArea * rowArea / (short * short)
-}
-
-func Hit(rects []Rect, x, y float32) (int, bool) {
-	for i := len(rects) - 1; i >= 0; i-- {
-		if rects[i].Contains(x, y) {
-			return rects[i].ID, true
+func Hit(rs []Rect, x, y float32) (int, bool) {
+	for _, r := range rs {
+		if r.Contains(x, y) {
+			return r.ID, true
 		}
 	}
 	return 0, false
