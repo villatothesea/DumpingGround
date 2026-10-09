@@ -131,44 +131,34 @@ func (m *Model) selectedProcess() (process.Info, bool) {
 }
 func (m *Model) processView(c *ui.Context) {
 	t := c.Theme()
-	ui.Row(c).FillWidth().Height(42).Shrink(0).Padding(5, 10).Gap(8).AlignItems(ui.Center).Children(func() {
-		if ui.SearchField(c, &m.processQuery).Label("Search processes").Placeholder("Name, PID or path").Width(240).Changed() {
-			m.dirtyProcesses = true
-		}
-		if ui.Checkbox(c, &m.processTreeMode, "Tree").Changed() {
+	ui.Row(c).FillWidth().Height(40).Shrink(0).PaddingX(12).Gap(8).AlignItems(ui.Center).Children(func() {
+		m.segPair(c, t, "Process view", []string{"List", "Tree"}, b2i(m.processTreeMode), func(i int) {
+			m.processTreeMode = i == 1
 			m.processSelected = -1
+		})
+		pauseGlyph, pauseText := "pause", "Pause"
+		if m.processPaused {
+			pauseGlyph, pauseText = "play", "Resume"
 		}
-		ui.Checkbox(c, &m.processPaused, "Pause")
-		if ui.Select(c, &m.processInterval, []string{"1 s", "2 s", "5 s"}).Width(76).Changed() {
-			switch m.processInterval {
-			case "2 s":
-				m.sampleInterval.Store(2e9)
-			case "5 s":
-				m.sampleInterval.Store(5e9)
-			default:
-				m.sampleInterval.Store(1e9)
-			}
+		if m.iconTextButton(c, pauseGlyph, pauseText).Clicked() {
+			m.processPaused = !m.processPaused
 		}
-		if ui.Button(c, "Refresh").Clicked() {
+		if m.processPaused && m.iconTextButton(c, "refresh", "Refresh once").Clicked() {
 			m.refreshOnce()
 		}
 		ui.Spacer(c)
-		if ui.Button(c, "Details").Clicked() {
-			m.showDetails = !m.showDetails
+		label := "Every " + m.processInterval
+		if m.processPaused {
+			label = "Paused"
 		}
+		if strings.TrimSpace(m.processQuery) != "" {
+			label += fmt.Sprintf("  ·  %d of %d match", len(m.processFlat), len(m.processRows))
+		}
+		ui.Text(c, label).FontSize(11).TextColor(t.TextMuted).Shrink(0)
 	})
 	if m.lastProcessError != "" {
-		ui.Text(c, m.lastProcessError).Padding(4, 10).TextColor(t.TextMuted)
+		ui.Text(c, m.lastProcessError).Padding(2, 12).TextColor(t.Danger).SingleLine()
 	}
-	ui.Row(c).FillWidth().Height(26).PaddingX(12).Shrink(0).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, fmt.Sprintf("Processes  ·  %d", len(m.processRows))).Bold()
-		ui.Spacer(c)
-		label := fmt.Sprintf("%d matching", len(m.processFlat))
-		if m.processPaused {
-			label += " · Paused"
-		}
-		ui.Text(c, label).TextColor(t.TextMuted)
-	})
 	columns := []ui.TableColumn{
 		{ID: "name", Title: "Process", Width: 230, Sortable: true}, {ID: "pid", Title: "PID", Width: 70, Align: ui.End, Sortable: true},
 		{ID: "cpu", Title: "CPU %", Width: 75, Align: ui.End, Sortable: true}, {ID: "memory", Title: "Working set", Width: 104, Align: ui.End, Sortable: true},
@@ -222,57 +212,97 @@ func (m *Model) processView(c *ui.Context) {
 			m.processMenu(menu, r)
 		})
 	}
-	ui.Column(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-		if m.processTreeMode {
-			m.processTree.List.Selected = &m.processSelected
-			m.processTree.List.Sort = &m.processSort
-			ui.OutlineTable(c, &m.processTree, columns, m.processRoots, func(id uint32) []uint32 { return m.processChildren[id] }, cell).FillWidth().Grow(1).Label("Process table")
-		} else {
-			m.processList.Selected = &m.processSelected
-			m.processList.Sort = &m.processSort
-			m.processList.Key = func(i int) any {
-				r := m.processByPID[m.processFlat[i]]
-				return struct {
-					PID     uint32
-					Started int64
-				}{r.PID, r.Started.UnixNano()}
+	table := func() {
+		ui.Column(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
+			if m.processTreeMode {
+				m.processTree.List.Selected = &m.processSelected
+				m.processTree.List.Sort = &m.processSort
+				ui.OutlineTable(c, &m.processTree, columns, m.processRoots, func(id uint32) []uint32 { return m.processChildren[id] }, cell).FillWidth().Grow(1).Label("Process table")
+			} else {
+				m.processList.Selected = &m.processSelected
+				m.processList.Sort = &m.processSort
+				m.processList.Key = func(i int) any {
+					r := m.processByPID[m.processFlat[i]]
+					return struct {
+						PID     uint32
+						Started int64
+					}{r.PID, r.Started.UnixNano()}
+				}
+				if ui.Table(c, &m.processList, columns, len(m.processFlat), func(row, col int) { cell(m.processFlat[row], col) }).FillWidth().Grow(1).Label("Process table").Submitted() {
+					m.showDetails = true
+				}
 			}
-			if ui.Table(c, &m.processList, columns, len(m.processFlat), func(row, col int) { cell(m.processFlat[row], col) }).FillWidth().Grow(1).Label("Process table").Submitted() {
-				m.showDetails = true
-			}
-		}
-	})
+		})
+	}
 	selected, ok := m.selectedProcess()
-	ui.Row(c).FillWidth().Height(36).Shrink(0).Padding(3, 10).Gap(8).AlignItems(ui.Center).Background(t.Surface).Children(func() {
-		text := "Select a process"
+	if m.showDetails && ok {
+		m.requestInspection(selected.PID)
+		ui.SplitVertical(c, &m.detailSplit, func() {
+			ui.Column(c).Fill().Children(func() {
+				table()
+				m.processSelBar(c, selected, ok)
+			})
+		}, func() {
+			m.processDetails(c)
+		}).Grow(1).MinHeight(0).FillWidth()
+	} else {
+		ui.Column(c).Grow(1).MinHeight(0).FillWidth().Children(func() {
+			table()
+			m.processSelBar(c, selected, ok)
+		})
+	}
+}
+
+// processSelBar is the 36 DIP selection strip of the redesign: icon, name,
+// PID and path on the left, actions on the right.
+func (m *Model) processSelBar(c *ui.Context, selected process.Info, ok bool) {
+	t := c.Theme()
+	bar := ui.Row(c).FillWidth().Height(36).Shrink(0).PaddingX(12).Gap(8).AlignItems(ui.Center).Background(t.Surface)
+	bar.BorderWidth(1, 0, 0, 0).BorderColor(t.Border)
+	bar.Children(func() {
 		if ok {
-			text = fmt.Sprintf("%s · PID %d · %s", selected.Name, selected.PID, selected.Path)
-			if selected.Access != "" {
-				text += " · " + selected.Access
+			if icon := m.processIcon(selected.Path); icon != nil {
+				ui.Image(c, icon).Size(16, 16)
 			}
+			ui.Text(c, selected.Name).Bold().SingleLine().Shrink(0)
+			ui.Text(c, fmt.Sprintf("PID %d", selected.PID)).TextColor(t.TextMuted).Shrink(0)
+			path := selected.Path
+			if path == "" {
+				path = "(no path)"
+			}
+			if selected.Access != "" {
+				path += " · " + selected.Access
+			}
+			ui.Text(c, path).SingleLine().Grow(1).MinWidth(0).TextColor(t.TextMuted).Tooltip(path)
+		} else {
+			ui.Text(c, "Select a process to inspect or act on").SingleLine().Grow(1).MinWidth(0).TextColor(t.TextMuted)
 		}
-		ui.Text(c, text).SingleLine().Grow(1).MinWidth(0).Tooltip(text)
-		if ui.Button(c, "Open location").Disabled(!ok || selected.Path == "").Clicked() {
+		if m.iconTextButton(c, "folder", "Open location").Disabled(!ok || selected.Path == "").Clicked() {
 			mygo.Shell.ShowItemInFolder(selected.Path)
 		}
-		if ui.Button(c, "Copy path").Disabled(!ok || selected.Path == "").Clicked() {
+		if m.iconTextButton(c, "copy", "Copy path").Disabled(!ok || selected.Path == "").Clicked() {
 			mygo.Clipboard.WriteText(selected.Path)
 		}
-		if ui.Button(c, "End process").Disabled(!ok || selected.PID <= 4).Clicked() {
+		if m.iconTextButton(c, "x", "End process").Disabled(!ok || selected.PID <= 4).TextColor(t.Danger).Clicked() {
 			m.terminateTarget = selected
 			m.terminateTree = false
 			m.terminateOpen = true
 		}
-		if ui.Button(c, "End tree").Disabled(!ok || selected.PID <= 4).Clicked() {
-			m.terminateTarget = selected
-			m.terminateTree = true
-			m.terminateOpen = true
+		m.iconButton(c, "more", "More end options").Disabled(!ok || selected.PID <= 4).Menu(func(menu *ui.Menu) {
+			if menu.Item("End process tree").Chosen() {
+				m.terminateTarget = selected
+				m.terminateTree = true
+				m.terminateOpen = true
+			}
+		})
+		det := "chup"
+		if m.showDetails {
+			det = "down"
+		}
+		if m.iconTextButton(c, det, "Details").Clicked() {
+			m.showDetails = !m.showDetails
 		}
 	})
-	if m.showDetails && ok {
-		m.requestInspection(selected.PID)
-		m.processDetails(c)
-	}
 }
 func (m *Model) processIcon(path string) *ui.Bitmap {
 	if icon, ok := m.iconCache[path]; ok {
@@ -353,12 +383,90 @@ func (m *Model) requestInspection(pid uint32) {
 		}
 	}()
 }
+
+// segPair is a two/three-option segmented control built from clickable rows:
+// unlike ui.Segmented, whose choice lands after the frame, e.Clicked() applies
+// in the same frame so derived state stays consistent.
+func (m *Model) segPair(c *ui.Context, t *ui.Theme, name string, labels []string, sel int, choose func(int)) {
+	g := ui.Row(c).Height(28).Radius(6).Shrink(0).Label(name)
+	g.BorderWidth(1).BorderColor(t.Border)
+	g.Children(func() {
+		for i, name := range labels {
+			i, name := i, name
+			on := sel == i
+			e := ui.Row(c).Height(26).PaddingX(10).AlignItems(ui.Center).Radius(5).Label(name)
+			e.Draw(func(p *ui.Painter, r ui.Rect) {
+				if on {
+					p.Fill(r, t.SurfacePressed, 5)
+				} else if e.Hovered() {
+					p.Fill(r, t.SurfaceHover, 5)
+				}
+			})
+			e.Children(func() {
+				tx := ui.Text(c, name).SingleLine()
+				if on {
+					tx.Bold()
+				} else {
+					tx.TextColor(t.TextMuted)
+				}
+			})
+			if e.Clicked() && !on {
+				choose(i)
+			}
+		}
+	})
+}
+
+func b2i(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+var detailTabs = []string{"Properties", "Modules", "Threads", "Handles", "Stack"}
+
+// detailPill is one dock tab: a small pill rather than ui.Tabs so the click
+// applies in the same frame.
+func (m *Model) detailPill(c *ui.Context, t *ui.Theme, name string) {
+	on := m.detailTab == name
+	e := ui.Row(c).Height(24).PaddingX(10).AlignItems(ui.Center).Radius(12).Label(name)
+	e.Draw(func(p *ui.Painter, r ui.Rect) {
+		if on {
+			p.Fill(r, t.SurfacePressed, 12)
+		} else if e.Hovered() {
+			p.Fill(r, t.SurfaceHover, 12)
+		}
+	})
+	e.Children(func() {
+		tx := ui.Text(c, name).SingleLine()
+		if on {
+			tx.Bold()
+		} else {
+			tx.TextColor(t.TextMuted)
+		}
+	})
+	if e.Clicked() {
+		m.detailTab = name
+	}
+}
+
 func (m *Model) processDetails(c *ui.Context) {
-	ui.Column(c).Height(190).Shrink(0).AlignItems(ui.Stretch).Children(func() {
-		ui.Row(c).Height(32).Shrink(0).Padding(2, 10).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Select(c, &m.detailTab, []string{"Properties", "Modules", "Threads", "Handles", "Stack"}).Width(130)
-			ui.Text(c, fmt.Sprintf("%d modules · %d threads", len(m.inspectedModules), len(m.inspectedThreads))).TextColor(c.Theme().TextMuted)
-			ui.Text(c, m.inspectError).SingleLine().Grow(1).MinWidth(0)
+	t := c.Theme()
+	ui.Column(c).Fill().AlignItems(ui.Stretch).Children(func() {
+		head := ui.Row(c).Height(32).Shrink(0).PaddingX(8).Gap(8).AlignItems(ui.Center)
+		head.BorderWidth(0, 0, 1, 0).BorderColor(t.Border)
+		head.Children(func() {
+			ui.Row(c).Gap(2).Children(func() {
+				for _, name := range detailTabs {
+					m.detailPill(c, t, name)
+				}
+			})
+			ui.Text(c, fmt.Sprintf("%d modules · %d threads", len(m.inspectedModules), len(m.inspectedThreads))).FontSize(11).TextColor(t.TextMuted).Shrink(0)
+			ui.Text(c, m.inspectError).SingleLine().Grow(1).MinWidth(0).TextColor(t.TextMuted)
+			if m.iconButton(c, "x", "Close details").Clicked() {
+				m.showDetails = false
+			}
 		})
 		if m.detailTab == "Properties" {
 			i := m.inspectedInfo

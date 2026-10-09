@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/dumpingground/dumpingground/internal/disk"
+	"github.com/dumpingground/dumpingground/internal/format"
 	"github.com/dumpingground/dumpingground/internal/process"
 	"github.com/dumpingground/dumpingground/internal/treemap"
 	"github.com/egoist/mygo"
@@ -19,6 +20,8 @@ type page uint8
 const (
 	processPage page = iota
 	diskPage
+	uninstallPage
+	startupPage
 )
 
 type processResult struct {
@@ -90,6 +93,11 @@ type Model struct {
 	iconCache                       map[string]*ui.Bitmap
 	iconPending                     map[string]bool
 	iconRequests                    chan string
+	detailSplit                     float32
+	themeMode                       int
+	settingsOpen                    bool
+	reservedQuery                   string
+	sys                             systemUsage
 	status                          string
 	diskScanner                     disk.Scanner
 	diskPath, diskDrive             string
@@ -141,7 +149,7 @@ func New() *Model {
 		processUpdates: make(chan processResult, 1), refresh: make(chan struct{}, 1), inspection: make(chan inspectionResult, 1), events: make(chan func(), 8),
 		iconCache:   make(map[string]*ui.Bitmap),
 		iconPending: make(map[string]bool), iconRequests: make(chan string, 32),
-		diskStatus: "Choose a drive or folder to scan", diskMode: "Tree", diskMetric: "Allocated", diskSelected: -1, diskNode: -1, extensionSelected: -1, mapRoot: -1, diskSplit: 300, animateMap: true, detailTab: "Properties"}
+		diskStatus: "Choose a drive or folder to scan", diskMode: "Tree", diskMetric: "Allocated", diskSelected: -1, diskNode: -1, extensionSelected: -1, mapRoot: -1, diskSplit: 300, animateMap: true, detailTab: "Properties", detailSplit: 200}
 }
 func (m *Model) Run() error {
 	mygo.App.SetName("DumpingGround")
@@ -308,11 +316,22 @@ func (m *Model) view(c *ui.Context) {
 	if c.Shortcut(ui.Ctrl, ui.Key2) {
 		m.page = diskPage
 	}
+	if c.Shortcut(ui.Ctrl, ui.Key3) {
+		m.page = uninstallPage
+	}
+	if c.Shortcut(ui.Ctrl, ui.Key4) {
+		m.page = startupPage
+	}
 	if c.Shortcut(0, ui.KeyF5) {
 		if m.page == processPage {
 			m.refreshOnce()
-		} else {
+		} else if m.page == diskPage {
 			m.startScan()
+		}
+	}
+	if m.page == diskPage && m.diskSnapshot != nil && m.diskRoot != m.diskSnapshot.Root {
+		if c.Shortcut(0, ui.KeyBackspace) || c.Shortcut(0, ui.KeyBack) {
+			m.navigateDisk(m.diskSnapshot.Nodes[m.diskRoot].Parent)
 		}
 	}
 	m.samplerActive.Store(!m.processPaused && m.page == processPage && !m.minimized)
@@ -325,43 +344,32 @@ func (m *Model) view(c *ui.Context) {
 		m.lastQuery = m.processQuery
 		m.lastSort = m.processSort
 	}
+	if m.themeMode != 0 {
+		t := ui.LightTheme()
+		if m.themeMode == 2 {
+			t = ui.DarkTheme()
+		}
+		c.SetTheme(t)
+	}
+	m.sys.sample()
 	t := c.Theme()
 	ui.Column(c).Fill().AlignItems(ui.Stretch).Font("Segoe UI").FontSize(12).Background(t.Background).Children(func() {
-		ui.Row(c).FillWidth().Height(42).Shrink(0).Padding(5, 10).Gap(8).AlignItems(ui.Center).Background(t.Surface).Children(func() {
-			ui.Text(c, "DumpingGround").FontSize(16).Bold().Width(155)
-			p := ui.Button(c, "Processes").Label("Processes")
-			if m.page == processPage {
-				p.Background(t.Accent).TextColor(t.AccentText)
-			}
-			if p.Clicked() {
-				m.page = processPage
-			}
-			d := ui.Button(c, "Disk usage").Label("Disk usage")
-			if m.page == diskPage {
-				d.Background(t.Accent).TextColor(t.AccentText)
-			}
-			if d.Clicked() {
-				m.page = diskPage
-			}
-			ui.Spacer(c)
-			ui.Text(c, fmt.Sprintf("%d processes", len(m.processRows))).FontSize(12).TextColor(t.TextMuted)
-		})
-		if m.page == processPage {
+		m.topBar(c, t)
+		switch m.page {
+		case processPage:
 			m.processView(c)
-		} else {
+		case diskPage:
 			m.diskView(c)
+		case uninstallPage:
+			m.reservedView(c, "pkg", "Uninstall", "Lists installed software with search, size sorting and removal. Tab position, shortcut and the shared search box are reserved.")
+		case startupPage:
+			m.reservedView(c, "zap", "Startup items", "Manages programs that start with Windows, with enable and disable controls. Tab position, shortcut and the shared search box are reserved.")
 		}
-		ui.Row(c).FillWidth().Height(26).Shrink(0).Padding(4, 10).Gap(8).AlignItems(ui.Center).Background(t.Surface).Children(func() {
-			text := m.status
-			if text == "" {
-				text = "F5 Refresh   ·   Ctrl+1 Processes   ·   Ctrl+2 Disk usage"
-			}
-			if m.page == diskPage {
-				text = m.diskStatus
-			}
-			ui.Text(c, text).SingleLine().Grow(1).MinWidth(0).TextColor(t.TextMuted)
-		})
+		m.statusBar(c, t)
 	})
+	if m.settingsOpen {
+		m.settingsView(c)
+	}
 	if m.terminateOpen {
 		choice := ui.AlertDialog(c, &m.terminateOpen, "End process?", fmt.Sprintf("%s (PID %d). Unsaved work may be lost.", m.terminateTarget.Name, m.terminateTarget.PID), "Cancel", "End process")
 		if choice == 1 {
@@ -379,6 +387,236 @@ func (m *Model) view(c *ui.Context) {
 			}()
 		}
 	}
+}
+
+// topBar is the 40 DIP strip of the redesign: brand, underline tabs, live
+// system meters, the page-scoped search field and window-level tools.
+func (m *Model) topBar(c *ui.Context, t *ui.Theme) {
+	bar := ui.Row(c).FillWidth().Height(40).Shrink(0).PaddingX(12).Gap(4).AlignItems(ui.Center).Background(t.Surface)
+	bar.Draw(func(p *ui.Painter, r ui.Rect) { p.Fill(ui.Rect{X: r.X, Y: r.Y + r.H - 1, W: r.W, H: 1}, t.Border, 0) })
+	bar.Children(func() {
+		ui.Row(c).Width(168).Shrink(0).Gap(8).AlignItems(ui.Center).Children(func() {
+			logo := ui.Box(c).Size(22, 22).Radius(6).Background(t.Accent).Label("DumpingGround")
+			logo.Draw(func(p *ui.Painter, r ui.Rect) {
+				p.Icon(glyphs["chart"], ui.Rect{X: r.X + 4, Y: r.Y + 4, W: 14, H: 14}, t.AccentText)
+			})
+			ui.Text(c, "DumpingGround").FontSize(14).Bold().SingleLine()
+		})
+		ui.Row(c).Gap(2).Shrink(0).Children(func() {
+			m.pageTab(c, t, processPage, "Processes")
+			m.pageTab(c, t, diskPage, "Disk usage")
+			m.pageTab(c, t, uninstallPage, "Uninstall")
+			m.pageTab(c, t, startupPage, "Startup")
+		})
+		ui.Row(c).Gap(2).PaddingX(8).Shrink(0).AlignItems(ui.Center).Children(func() {
+			ui.Box(c).Width(1).Height(20).Background(t.Border)
+			m.meter(c, t, "CPU", fmt.Sprintf("%.0f%%", m.sys.cpu), m.sys.cpu, fmt.Sprintf("Total CPU usage %.0f%%", m.sys.cpu))
+			tip := fmt.Sprintf("Memory %.1f of %.1f GB used (%d%%)", float64(m.sys.memUsed)/1073741824, float64(m.sys.memTotal)/1073741824, m.sys.memLoad)
+			m.meter(c, t, "MEM", fmt.Sprintf("%d%%", m.sys.memLoad), float64(m.sys.memLoad), tip)
+			var rd, wr uint64
+			for _, r := range m.processRows {
+				rd += r.ReadRate
+				wr += r.WriteRate
+			}
+			m.ioMeter(c, t, rd, wr)
+		})
+		ui.Spacer(c)
+		switch m.page {
+		case processPage:
+			if ui.SearchField(c, &m.processQuery).Label("Search processes").Placeholder("Name, PID or path").Width(240).Changed() {
+				m.dirtyProcesses = true
+			}
+		case diskPage:
+			ui.SearchField(c, &m.diskQuery).Label("Filter files").Placeholder("Filter files").Width(240).Disabled(m.diskSnapshot == nil)
+		default:
+			ui.SearchField(c, &m.reservedQuery).Label("Search").Placeholder("Not available on this page").Width(240).Disabled(true)
+		}
+		dark := t.Dark
+		th := m.iconButton(c, map[bool]string{true: "sun", false: "moon"}[dark], map[bool]string{true: "Switch to light theme", false: "Switch to dark theme"}[dark])
+		if th.Clicked() {
+			if dark {
+				m.themeMode = 1
+			} else {
+				m.themeMode = 2
+			}
+		}
+		if m.iconButton(c, "gear", "Settings").Clicked() {
+			m.settingsOpen = true
+		}
+	})
+}
+
+// pageTab is one top-bar underline tab. It is a plain clickable row rather
+// than ui.Tabs so the page change applies in the same frame as the click.
+func (m *Model) pageTab(c *ui.Context, t *ui.Theme, pg page, label string) {
+	on := m.page == pg
+	e := ui.Row(c).Height(30).PaddingX(10).AlignItems(ui.Center).Radius(4).Label(label)
+	e.Draw(func(p *ui.Painter, r ui.Rect) {
+		if on {
+			p.Fill(ui.Rect{X: r.X + 8, Y: r.Y + r.H - 2, W: r.W - 16, H: 2}, t.Accent, 1)
+		} else if e.Hovered() {
+			p.Fill(r, t.SurfaceHover, 4)
+		}
+	})
+	e.Children(func() {
+		tx := ui.Text(c, label).SingleLine()
+		if on {
+			tx.Bold()
+		} else {
+			tx.TextColor(t.TextMuted)
+		}
+	})
+	if e.Clicked() {
+		m.page = pg
+	}
+}
+
+// meter draws one top-bar gauge: muted label, bold value, a 2 DIP accent
+// track under the pair, like the prototype's .meter.
+func (m *Model) meter(c *ui.Context, t *ui.Theme, label, value string, pct float64, tip string) {
+	e := ui.Row(c).Height(28).PaddingX(7).Gap(5).AlignItems(ui.Center).Radius(6).Shrink(0).Tooltip(tip)
+	e.Draw(func(p *ui.Painter, r ui.Rect) {
+		if e.Hovered() {
+			p.Fill(r, t.SurfaceHover, 6)
+		}
+		track := ui.Rect{X: r.X + 7, Y: r.Y + r.H - 3, W: r.W - 14, H: 2}
+		p.Fill(track, t.SurfacePressed, 1)
+		w := track.W * float32(min(max(pct, 0), 100)) / 100
+		p.Fill(ui.Rect{X: track.X, Y: track.Y, W: w, H: 2}, t.Accent, 1)
+	})
+	e.Children(func() {
+		ui.Text(c, label).FontSize(11).TextColor(t.TextMuted)
+		ui.Text(c, value).Bold()
+	})
+}
+
+func (m *Model) ioMeter(c *ui.Context, t *ui.Theme, rd, wr uint64) {
+	e := ui.Row(c).Height(28).PaddingX(7).Gap(6).AlignItems(ui.Center).Radius(6).Shrink(0).Tooltip(fmt.Sprintf("Process I/O  read %s  ·  write %s", format.Rate(rd), format.Rate(wr)))
+	e.Draw(func(p *ui.Painter, r ui.Rect) {
+		if e.Hovered() {
+			p.Fill(r, t.SurfaceHover, 6)
+		}
+	})
+	e.Children(func() {
+		ui.Text(c, "I/O").FontSize(11).TextColor(t.TextMuted)
+		ui.Row(c).Gap(1).AlignItems(ui.Center).Children(func() {
+			icon(c, "dn", 11).TextColor(t.TextMuted)
+			ui.Text(c, format.Rate(rd)).Bold().FontSize(11)
+		})
+		ui.Row(c).Gap(1).AlignItems(ui.Center).Children(func() {
+			icon(c, "upa", 11).TextColor(t.TextMuted)
+			ui.Text(c, format.Rate(wr)).Bold().FontSize(11)
+		})
+	})
+}
+
+// iconTextButton is the redesign's .btn: 28 DIP control face with a leading
+// 14 DIP glyph and hover and press feedback.
+func (m *Model) iconTextButton(c *ui.Context, name, label string) ui.Element {
+	t := c.Theme()
+	e := ui.Row(c).Height(28).PaddingX(12).Gap(6).AlignItems(ui.Center).Radius(t.Radius).Background(t.Surface).Label(label)
+	e.BorderWidth(1).BorderColor(t.Border)
+	e.Draw(func(p *ui.Painter, r ui.Rect) {
+		if e.Pressed() {
+			p.Fill(r, t.SurfacePressed, t.Radius)
+		} else if e.Hovered() {
+			p.Fill(r, t.SurfaceHover, t.Radius)
+		}
+	})
+	e.Children(func() {
+		icon(c, name, 14).TextColor(t.Text)
+		ui.Text(c, label).SingleLine()
+	})
+	return e
+}
+
+// iconButton is the top bar's 34×28 glyph button with hover and press states.
+func (m *Model) iconButton(c *ui.Context, name, tip string) ui.Element {
+	t := c.Theme()
+	e := ui.Row(c).Size(34, 28).Radius(6).AlignItems(ui.Center).Tooltip(tip).Label(tip)
+	e.Draw(func(p *ui.Painter, r ui.Rect) {
+		if e.Pressed() {
+			p.Fill(r, t.SurfacePressed, 6)
+		} else if e.Hovered() {
+			p.Fill(r, t.SurfaceHover, 6)
+		}
+	})
+	e.Children(func() { icon(c, name, 16).TextColor(t.Text) })
+	return e
+}
+
+// statusBar mirrors the page status on the left and key hints on the right.
+func (m *Model) statusBar(c *ui.Context, t *ui.Theme) {
+	bar := ui.Row(c).FillWidth().Height(26).Shrink(0).PaddingX(12).Gap(12).AlignItems(ui.Center).Background(t.Surface)
+	bar.Draw(func(p *ui.Painter, r ui.Rect) { p.Fill(ui.Rect{X: r.X, Y: r.Y, W: r.W, H: 1}, t.Border, 0) })
+	bar.Children(func() {
+		text := m.status
+		switch m.page {
+		case diskPage:
+			text = m.diskStatus
+		case uninstallPage, startupPage:
+			text = "Reserved"
+		}
+		if text == "" {
+			text = "Ready"
+		}
+		ui.Text(c, text).SingleLine().Grow(1).MinWidth(0).TextColor(t.TextMuted)
+		ui.Text(c, "F5 refresh · Ctrl+1–4 pages").FontSize(11).TextColor(t.TextMuted).Shrink(0)
+		if m.page == diskPage {
+			icon(c, "info", 14).TextColor(t.TextMuted).Tooltip("Hard-link allocation is counted once per scan. Reparse points and cloud placeholders are skipped; unknown allocation is estimated. Whole-drive scans try the read-only MFT path and fall back to a directory walk.")
+		}
+	})
+}
+
+// settingsView is the popover of the redesign, a small modal with the two
+// scope-wide preferences plus the map transition toggle.
+func (m *Model) settingsView(c *ui.Context) {
+	ui.Modal(c, &m.settingsOpen, func() {
+		ui.Column(c).Width(360).Padding(6, 16, 14, 16).Gap(10).Children(func() {
+			ui.Text(c, "Settings").Bold().FontSize(14)
+			ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
+				ui.Column(c).Grow(1).MinWidth(0).Children(func() {
+					ui.Text(c, "Process refresh")
+					ui.Text(c, "Automatic sampling on the Processes page").FontSize(11).TextColor(c.Theme().TextMuted)
+				})
+				if ui.Select(c, &m.processInterval, []string{"1 s", "2 s", "5 s"}).Width(80).Changed() {
+					switch m.processInterval {
+					case "2 s":
+						m.sampleInterval.Store(2e9)
+					case "5 s":
+						m.sampleInterval.Store(5e9)
+					default:
+						m.sampleInterval.Store(1e9)
+					}
+				}
+			})
+			ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
+				ui.Column(c).Grow(1).MinWidth(0).Children(func() {
+					ui.Text(c, "Space metric")
+					ui.Text(c, "Used by the space map and percent column").FontSize(11).TextColor(c.Theme().TextMuted)
+				})
+				ui.Select(c, &m.diskMetric, []string{"Allocated", "Logical"}).Width(100).Label("Size metric")
+			})
+			ui.Checkbox(c, &m.animateMap, "Animate map drill-down").Tooltip("Respects Windows reduced motion")
+		})
+	})
+}
+
+// reservedView is the empty state for tabs whose features are planned.
+func (m *Model) reservedView(c *ui.Context, glyphName, title, desc string) {
+	t := c.Theme()
+	ui.Column(c).Grow(1).MinHeight(0).AlignItems(ui.Center).Children(func() {
+		ui.Spacer(c)
+		ui.Box(c).Size(56, 56).Radius(14).Background(t.Surface).Children(func() {
+			icon(c, glyphName, 26).TextColor(t.TextMuted)
+		}).Draw(func(p *ui.Painter, r ui.Rect) { p.Stroke(r, t.Border, 14, 1) })
+		ui.Text(c, title).FontSize(15).Bold().PaddingY(4)
+		ui.Row(c).Padding(1, 8).Radius(10).Background(t.Surface).Children(func() {
+			ui.Text(c, "Reserved · planned").FontSize(11).TextColor(t.TextMuted)
+		}).Draw(func(p *ui.Painter, r ui.Rect) { p.Stroke(r, t.Border, 10, 1) })
+		ui.Text(c, desc).Width(420).TextAlign(ui.Center).PaddingY(8).TextColor(t.TextMuted)
+		ui.Spacer(c)
+	})
 }
 func (m *Model) captureFrames() {
 	os.MkdirAll(m.CaptureDir, 0755)

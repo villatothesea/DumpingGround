@@ -71,7 +71,7 @@ func TestWorkspaceControlsStayInsideWindow(t *testing.T) {
 				m.rebuildProcessTree()
 				tt := ui.NewTester(m.view, size[0], size[1])
 				tt.SetScale(scale)
-				for _, name := range []string{"Refresh", "Processes  ·  1", "fixture.exe", "End process", "Details"} {
+				for _, name := range []string{"Pause", "fixture.exe", "End process", "Details", "Search processes"} {
 					visible(t, tt, size[0], size[1], name)
 				}
 				if err := tt.Click("Disk usage"); err != nil {
@@ -80,16 +80,14 @@ func TestWorkspaceControlsStayInsideWindow(t *testing.T) {
 				if m.page != diskPage {
 					t.Fatal("page did not switch")
 				}
-				for _, name := range []string{"Scan drive", "Scan", "Cancel", "Drive", "Browse…", "Scan D:\\"} {
+				for _, name := range []string{"Scan", "Scan path", "Browse…", "Drive C:\\", "Drive D:\\"} {
 					visible(t, tt, size[0], size[1], name)
 				}
-				if err := tt.Click("Select drive"); err != nil {
+				if err := tt.Click("Drive D:\\"); err != nil {
 					t.Fatal(err)
 				}
-				tt.Key(0, ui.KeyDown)
-				tt.Key(0, ui.KeyEnter)
 				if m.diskDrive != "D:\\" || m.diskPath != "D:\\" {
-					t.Fatalf("drive selection did not update scan path: %s %s", m.diskDrive, m.diskPath)
+					t.Fatalf("drive chip did not update scan path: %s %s", m.diskDrive, m.diskPath)
 				}
 				if dest := os.Getenv("DG_CAPTURE"); dest != "" {
 					f, err := os.Create(dest)
@@ -140,7 +138,10 @@ func TestScanButtonCompletesAndClearReleasesState(t *testing.T) {
 	if len(m.diskRects) == 0 {
 		t.Fatal("treemap did not lay out files")
 	}
-	if err := tt.Click("Clear index"); err != nil {
+	if err := tt.Click("More"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem("Clear index"); err != nil {
 		t.Fatal(err)
 	}
 	if m.diskSnapshot != nil || m.diskItems != nil || m.diskRects != nil {
