@@ -53,14 +53,23 @@ type Model struct {
 	diskStatus   string
 	diskCancel   context.CancelFunc
 	diskItems    []treemap.Item
+	diskVolumes  []disk.Volume
+	diskDrive    string
 }
 
 func New() *Model {
 	path, _ := os.Getwd()
+	volumes := disk.Volumes()
+	drive := ""
+	if len(volumes) > 0 {
+		drive = volumes[0].Path
+	}
 	return &Model{
 		processSvc:   process.NewService(),
 		processByPID: make(map[uint32]process.Info),
 		diskPath:     path,
+		diskVolumes:  volumes,
+		diskDrive:    drive,
 		diskStatus:   "Choose a folder and start a scan",
 	}
 }
@@ -155,7 +164,7 @@ func (m *Model) view(c *ui.Context) {
 	t := c.Theme()
 	ui.Column(c).Fill().Background(t.Background).Children(func() {
 		m.toolbar(c)
-		ui.Row(c).Grow(1).Children(func() {
+		ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
 			m.navigation(c)
 			ui.Column(c).Grow(1).Padding(16).Gap(12).Children(func() {
 				if m.page == processPage {
@@ -189,6 +198,13 @@ func (m *Model) toolbar(c *ui.Context) {
 				go m.refreshOnce()
 			}
 		} else {
+			if len(m.diskVolumes) > 0 {
+				ui.Select(c, &m.diskDrive, m.volumeOptions()).Width(100).Label("Drive")
+				if ui.Button(c, "Scan drive").Clicked() {
+					m.diskPath = m.diskDrive
+					m.startScan()
+				}
+			}
 			ui.TextInput(c, &m.diskPath).Placeholder("Folder to scan").Width(300)
 			if ui.PrimaryButton(c, "Scan").Clicked() {
 				m.startScan()
@@ -201,6 +217,14 @@ func (m *Model) toolbar(c *ui.Context) {
 			}
 		}
 	})
+}
+
+func (m *Model) volumeOptions() []string {
+	options := make([]string, 0, len(m.diskVolumes))
+	for _, volume := range m.diskVolumes {
+		options = append(options, volume.Path)
+	}
+	return options
 }
 
 func (m *Model) navigation(c *ui.Context) {
@@ -229,8 +253,8 @@ func (m *Model) navigation(c *ui.Context) {
 
 func (m *Model) processView(c *ui.Context) {
 	t := c.Theme()
-	ui.Row(c).Grow(1).Gap(12).Children(func() {
-		ui.Column(c).Grow(1).MinWidth(500).Gap(8).Children(func() {
+	ui.Row(c).Grow(1).Gap(12).AlignItems(ui.Stretch).Children(func() {
+		ui.Column(c).Grow(1).MinWidth(500).Gap(8).AlignItems(ui.Stretch).Children(func() {
 			ui.Row(c).Height(30).Shrink(0).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, fmt.Sprintf("Processes  ·  %d", len(m.processRows))).Bold()
 				ui.Spacer(c)
@@ -387,8 +411,8 @@ func (m *Model) diskView(c *ui.Context) {
 		})
 		return
 	}
-	ui.Row(c).Grow(1).Gap(12).Children(func() {
-		ui.Column(c).Width(330).Shrink(0).Gap(8).Children(func() {
+	ui.Row(c).Grow(1).Gap(12).AlignItems(ui.Stretch).Children(func() {
+		ui.Column(c).Width(330).Shrink(0).Gap(8).AlignItems(ui.Stretch).Children(func() {
 			ui.Text(c, fmt.Sprintf("logical %s · allocated %s · %s", format.Bytes(m.diskSnapshot.Bytes), format.Bytes(m.diskSnapshot.Allocated), m.diskStatus)).FontSize(12).TextColor(t.TextMuted)
 			m.diskTable(c)
 		})
