@@ -196,6 +196,9 @@ func (m *Model) toolbar(c *ui.Context) {
 			if ui.Button(c, "Cancel").Disabled(m.diskCancel == nil).Clicked() {
 				m.cancelScan()
 			}
+			if m.diskSnapshot != nil && ui.Button(c, "Clear index").Clicked() {
+				m.clearDisk()
+			}
 		}
 	})
 }
@@ -368,6 +371,7 @@ func (m *Model) diskView(c *ui.Context) {
 	ui.Row(c).Height(32).Shrink(0).AlignItems(ui.Center).Children(func() {
 		if m.diskSnapshot != nil && m.diskRoot != m.diskSnapshot.Root && ui.Button(c, "← Back").Clicked() {
 			m.diskRoot = m.diskSnapshot.Nodes[m.diskRoot].Parent
+			m.diskSelected = 0
 		}
 		if m.diskSnapshot != nil {
 			ui.Text(c, "  "+m.diskSnapshot.Nodes[m.diskRoot].Path).TextColor(t.TextMuted).SingleLine()
@@ -536,6 +540,7 @@ func (m *Model) startScan() {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.diskCancel = cancel
 	m.diskSnapshot = nil
+	m.diskItems = nil
 	m.diskStatus = "Scanning…"
 	progress := make(chan disk.Progress, 8)
 	go func() {
@@ -557,15 +562,40 @@ func (m *Model) startScan() {
 		}
 	}()
 	go func() {
-		for p := range progress {
-			if m.window != nil {
-				m.window.Update(func() {
-					m.diskProgress = p
-					m.diskStatus = fmt.Sprintf("Scanning… %d files · %s", p.Files, format.Bytes(p.Bytes))
-				})
+		ticker := time.NewTicker(150 * time.Millisecond)
+		defer ticker.Stop()
+		var latest disk.Progress
+		dirty := false
+		for {
+			select {
+			case p, ok := <-progress:
+				if !ok {
+					return
+				}
+				latest, dirty = p, true
+			case <-ticker.C:
+				if dirty && m.window != nil {
+					p := latest
+					m.window.Update(func() {
+						m.diskProgress = p
+						m.diskStatus = fmt.Sprintf("Scanning… %d files · %s", p.Files, format.Bytes(p.Allocated))
+					})
+					dirty = false
+				}
 			}
 		}
 	}()
+}
+
+func (m *Model) clearDisk() {
+	if m.diskCancel != nil {
+		return
+	}
+	m.diskSnapshot = nil
+	m.diskItems = nil
+	m.diskRoot = 0
+	m.diskSelected = 0
+	m.diskStatus = "Choose a folder and start a scan"
 }
 
 func (m *Model) cancelScan() {
