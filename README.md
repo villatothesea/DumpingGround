@@ -25,7 +25,7 @@ Windows 原生进程查看器与磁盘空间分析工具，使用 Go + [MyGo](ht
 6. Enter/双击目录下钻，Up/Root 返回；点击空间图文件定位其目录并选中文件。点击扩展名筛选对应文件，Clear type filter 清除。
 7. Allocated / Logical 切换空间图口径。Export CSV 导出本次扫描结果；Clear index 清除内存索引。
 
-整盘 NTFS 扫描会尝试只读 MFT 路径；缺少权限或不支持的元数据布局时自动回退目录遍历，并显示原因。**本机未获管理员权限，MFT 解码测试已通过，但管理员整盘读取尚未完成实机验收。** 普通用户扫描已验证，不需要提权才能使用。
+整盘 NTFS 扫描会尝试只读 MFT 路径；缺少权限或不支持的元数据布局自动回退目录遍历，并显示原因。严格对照验证使用单独的 `DumpingGround-verify.exe`，失败会标为 `INCONCLUSIVE`。**本机未获管理员权限，严格 MFT 实测为 INCONCLUSIVE；普通用户扫描仍可用。**
 
 ## 构建
 
@@ -50,9 +50,11 @@ go build -tags mygo_noinspector -trimpath -ldflags "-s -w -H=windowsgui" -o buil
 
 截图参数只捕获本应用窗口。普通启动不会扫描磁盘、写截图或导出日志。
 
-## 当前限制
+## 诊断能力
 
-- 尚未实现 Process Explorer 的全局句柄搜索、线程调用栈、符号解析和内核驱动能力。
+进程详情新增 `Handles` 和 `Stack`。MFT 严格验证命令和权限要求见 [diagnostics.md](diagnostics.md)。当前非管理员实测 MFT 返回 `INCONCLUSIVE`，不会冒充通过。
+
+- PE 深度能力的边界：全局句柄搜索和地址调用栈已实现；符号服务器、WOW64/ARM64 栈、句柄追踪和内核驱动能力尚未完成。
 - 模块/线程详情按选择加载；受保护进程仍受 Windows 权限限制。
 - NTFS 快速扫描是实验性路径，复杂属性列表可能回退。扫描活动文件系统不是一致性快照。
 - 重解析点和离线/云占位文件跳过，避免循环和触发下载；硬链接分配空间每次扫描计一次。
@@ -66,6 +68,7 @@ go build -tags mygo_noinspector -trimpath -ldflags "-s -w -H=windowsgui" -o buil
 - [开发设计与提交规则](docs/development.md)
 - [实际功能验收](docs/acceptance.md)
 - [历史性能记录](docs/performance.md)
-- [MyGo 复用与上游候选](docs/mygo-integration.md)
+- [诊断能力：MFT 验证、句柄搜索、线程调用栈](docs/diagnostics.md)
+- [MFT 严格验证记录](docs/mft-validation.md)
 
 使用 `type(scope): imperative summary` 提交消息。一项功能或修复一个提交；构建产物不入库。

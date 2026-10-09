@@ -272,6 +272,10 @@ func (m *Model) requestInspection(pid uint32) {
 	m.inspectedPID = pid
 	m.inspectedModules = nil
 	m.inspectedThreads = nil
+	m.handles = nil
+	m.stacks = nil
+	m.handleErr = ""
+	m.stackErr = ""
 	m.inspectError = "Loading…"
 	if m.window == nil {
 		return
@@ -289,7 +293,10 @@ func (m *Model) requestInspection(pid uint32) {
 		if p, ok := inspector.(process.PropertyInspector); ok {
 			info, e3 = p.Properties(pid)
 		}
-		r := inspectionResult{pid: pid, modules: modules, threads: threads, err: errors.Join(e1, e2, e3), info: info}
+		r := inspectionResult{pid: pid, modules: modules, threads: threads, err: errors.Join(e1, e2, e3), info: info, stacks: map[uint32][]process.StackFrame{}}
+		if s, ok := inspector.(process.StackInspector); ok && len(threads) > 0 {
+			r.stacks[threads[0].ID], r.stackErr = s.Stack(pid, threads[0].ID, 64)
+		}
 		select {
 		case <-m.inspection:
 		default:
@@ -306,7 +313,7 @@ func (m *Model) requestInspection(pid uint32) {
 func (m *Model) processDetails(c *ui.Context) {
 	ui.Column(c).Height(190).Shrink(0).AlignItems(ui.Stretch).Children(func() {
 		ui.Row(c).Height(32).Shrink(0).Padding(2, 10).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Select(c, &m.detailTab, []string{"Properties", "Modules", "Threads"}).Width(130)
+			ui.Select(c, &m.detailTab, []string{"Properties", "Modules", "Threads", "Handles", "Stack"}).Width(130)
 			ui.Text(c, fmt.Sprintf("%d modules · %d threads", len(m.inspectedModules), len(m.inspectedThreads))).TextColor(c.Theme().TextMuted)
 			ui.Text(c, m.inspectError).SingleLine().Grow(1).MinWidth(0)
 		})
@@ -335,7 +342,7 @@ func (m *Model) processDetails(c *ui.Context) {
 				}
 				ui.Text(c, s).SingleLine().Tooltip(r.Path)
 			}).Grow(1).FillWidth()
-		} else {
+		} else if m.detailTab == "Threads" {
 			cols := []ui.TableColumn{{Title: "Thread ID", Width: 140}, {Title: "Owner PID", Width: 140}, {Title: "Base priority"}}
 			ui.Table(c, &m.detailList, cols, len(m.inspectedThreads), func(i, col int) {
 				r := m.inspectedThreads[i]
@@ -347,6 +354,59 @@ func (m *Model) processDetails(c *ui.Context) {
 				}
 				ui.Text(c, s)
 			}).Grow(1).FillWidth()
+		} else if m.detailTab == "Handles" {
+			ui.Row(c).Height(28).Shrink(0).PaddingX(10).Gap(6).Children(func() {
+				ui.SearchField(c, &m.handleQuery).Placeholder("Filter type or name").Width(220)
+				if ui.Button(c, "Search handles").Clicked() {
+					m.requestHandleSearch(m.inspectedPID)
+				}
+				ui.Text(c, fmt.Sprintf("%d results", len(m.handles))).TextColor(c.Theme().TextMuted)
+			})
+			cols := []ui.TableColumn{{Title: "Handle", Width: 90}, {Title: "Type", Width: 130}, {Title: "Name"}, {Title: "Access", Width: 90, Align: ui.End}}
+			ui.Table(c, &m.detailList, cols, len(m.handles), func(i, col int) {
+				h := m.handles[i]
+				s := fmt.Sprintf("0x%x", h.Value)
+				if col == 1 {
+					s = h.Type
+				} else if col == 2 {
+					s = h.Name
+				} else if col == 3 {
+					s = fmt.Sprintf("0x%x", h.Access)
+				}
+				ui.Text(c, s).SingleLine().Tooltip(h.Name)
+			}).Grow(1).FillWidth()
+			if m.handleErr != "" {
+				ui.Text(c, m.handleErr).FontSize(11).TextColor(c.Theme().TextMuted).SingleLine()
+			}
+		} else {
+			threadID := m.stackThread
+			if threadID == 0 && len(m.inspectedThreads) > 0 {
+				threadID = m.inspectedThreads[0].ID
+			}
+			frames := m.stacks[threadID]
+			ui.Row(c).Height(28).Shrink(0).PaddingX(10).Gap(6).Children(func() {
+				ui.Text(c, fmt.Sprintf("Thread %d · %d frames", threadID, len(frames)))
+				if ui.Button(c, "Refresh stack").Clicked() {
+					m.requestStack(m.inspectedPID, threadID)
+				}
+			})
+			cols := []ui.TableColumn{{Title: "Address", Width: 150}, {Title: "Symbol"}, {Title: "Offset", Width: 100, Align: ui.End}}
+			ui.Table(c, &m.detailList, cols, len(frames), func(i, col int) {
+				f := frames[i]
+				s := fmt.Sprintf("0x%x", f.Address)
+				if col == 1 {
+					s = f.Symbol
+					if s == "" {
+						s = "(unresolved)"
+					}
+				} else if col == 2 {
+					s = fmt.Sprintf("0x%x", f.Offset)
+				}
+				ui.Text(c, s).SingleLine()
+			}).Grow(1).FillWidth()
+			if m.stackErr != "" {
+				ui.Text(c, m.stackErr).FontSize(11).TextColor(c.Theme().TextMuted).SingleLine()
+			}
 		}
 	})
 }

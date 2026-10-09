@@ -53,6 +53,21 @@ func (s *Scanner) Active() bool { return s.active.Load() }
 // consumers must use the returned snapshot as the authoritative final state.
 // Cancellation returns a partial snapshot as well as context.Canceled.
 func (s *Scanner) Scan(ctx context.Context, root string, progress chan<- Progress) (*Snapshot, error) {
+	if len(root) == 3 && root[1:] == ":\\" {
+		fast, fastErr := fastVolumeScan(ctx, root, progress)
+		if fastErr == nil || errors.Is(fastErr, context.Canceled) || errors.Is(fastErr, context.DeadlineExceeded) {
+			return fast, fastErr
+		}
+		fallback, walkErr := s.scanDirectory(ctx, root, progress)
+		if fallback != nil {
+			fallback.Fallback = fastErr.Error()
+		}
+		return fallback, walkErr
+	}
+	return s.scanDirectory(ctx, root, progress)
+}
+
+func (s *Scanner) scanDirectory(ctx context.Context, root string, progress chan<- Progress) (*Snapshot, error) {
 	if !s.active.CompareAndSwap(false, true) {
 		return nil, errors.New("a disk scan is already running")
 	}
@@ -72,15 +87,7 @@ func (s *Scanner) Scan(ctx context.Context, root string, progress chan<- Progres
 		return nil, errors.New("scan target is not a directory")
 	}
 	start := time.Now()
-	fallback := ""
-	if len(root) == 3 && root[1:] == ":\\" {
-		fast, fastErr := fastVolumeScan(ctx, root, progress)
-		if fastErr == nil || errors.Is(fastErr, context.Canceled) || errors.Is(fastErr, context.DeadlineExceeded) {
-			return fast, fastErr
-		}
-		fallback = fastErr.Error()
-	}
-	out := &Snapshot{Method: "Directory walk", Fallback: fallback, Nodes: []Node{{ID: 0, Parent: -1, Name: root, Path: root, Dir: true}}}
+	out := &Snapshot{Method: "Directory walk", Nodes: []Node{{ID: 0, Parent: -1, Name: root, Path: root, Dir: true}}}
 	pending := []int{0}
 	identities := make(map[string]struct{})
 	last := time.Time{}
@@ -90,9 +97,6 @@ func (s *Scanner) Scan(ctx context.Context, root string, progress chan<- Progres
 		}
 		last = time.Now()
 		p := Progress{Files: out.Files, Dirs: out.Dirs, Skipped: out.Skipped, Bytes: out.Bytes, Allocated: out.Allocated, Estimated: out.Estimated, Current: path, Elapsed: time.Since(start), Method: out.Method}
-		if fallback != "" {
-			p.Method += " (MFT unavailable)"
-		}
 		select {
 		case progress <- p:
 		default:

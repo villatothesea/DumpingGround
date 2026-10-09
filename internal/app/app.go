@@ -30,11 +30,14 @@ type scanResult struct {
 	err      error
 }
 type inspectionResult struct {
-	pid     uint32
-	modules []process.Module
-	threads []process.Thread
-	err     error
-	info    process.Info
+	pid                 uint32
+	modules             []process.Module
+	threads             []process.Thread
+	err                 error
+	info                process.Info
+	handles             []process.Handle
+	stacks              map[uint32][]process.StackFrame
+	handleErr, stackErr error
 }
 
 type Model struct {
@@ -68,6 +71,14 @@ type Model struct {
 	inspection                      chan inspectionResult
 	inspectError                    string
 	inspectedInfo                   process.Info
+	handles                         []process.Handle
+	handleQuery                     string
+	handleLoading                   bool
+	handleErr                       string
+	stacks                          map[uint32][]process.StackFrame
+	stackLoading                    bool
+	stackErr                        string
+	stackThread                     uint32
 	detailTab                       string
 	detailList                      ui.ListState
 	showDetails                     bool
@@ -260,6 +271,16 @@ eventsDone:
 		if r.pid == m.inspectedPID {
 			m.inspectedModules, m.inspectedThreads = r.modules, r.threads
 			m.inspectedInfo = r.info
+			m.handles = r.handles
+			m.handleErr = ""
+			if r.handleErr != nil {
+				m.handleErr = r.handleErr.Error()
+			}
+			m.stacks = r.stacks
+			m.stackErr = ""
+			if r.stackErr != nil {
+				m.stackErr = r.stackErr.Error()
+			}
 			m.inspectError = ""
 			if r.err != nil {
 				m.inspectError = r.err.Error()

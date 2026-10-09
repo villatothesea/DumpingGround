@@ -19,6 +19,7 @@ const (
 	th32csSnapModule               = 0x00000008
 	th32csSnapModule32             = 0x00000010
 	processTerminate               = 0x0001
+	processQueryInformation        = 0x0400
 	processQueryLimitedInformation = 0x1000
 	processVMRead                  = 0x0010
 	maxPath                        = 32768

@@ -16,40 +16,52 @@ type Info struct {
 	WriteBytes uint64
 	ReadRate   uint64
 	WriteRate  uint64
-	Access     string
 	Threads    uint32
 	Handles    uint32
 	Priority   uint32
 	Started    time.Time
 	Elevated   bool
+	Access     string
 }
-
-type Collector interface {
-	Snapshot() ([]Info, error)
-	Terminate(pid uint32, tree bool) error
-}
-
 type Module struct {
-	Name string
-	Path string
-	Size uint64
+	Name, Path string
+	Size       uint64
 }
-
 type Thread struct {
 	ID       uint32
 	OwnerPID uint32
 	Priority int32
 }
-
-type PropertyInspector interface {
-	Properties(pid uint32) (Info, error)
+type Handle struct {
+	PID        uint32
+	Value      uintptr
+	Type, Name string
+	Access     uint32
+	Attributes uint32
 }
-
+type StackFrame struct {
+	ThreadID       uint32
+	Address        uint64
+	Module, Symbol string
+	Offset         uint64
+}
 type Inspector interface {
 	Modules(pid uint32) ([]Module, error)
 	Threads(pid uint32) ([]Thread, error)
 }
-
+type PropertyInspector interface {
+	Properties(pid uint32) (Info, error)
+}
+type HandleInspector interface {
+	SearchHandles(pid uint32, query string, limit int) ([]Handle, error)
+}
+type StackInspector interface {
+	Stack(pid, threadID uint32, maxFrames int) ([]StackFrame, error)
+}
+type Collector interface {
+	Snapshot() ([]Info, error)
+	Terminate(pid uint32, tree bool) error
+}
 type Service struct{ collector Collector }
 
 func NewService() *Service                               { return &Service{collector: newCollector()} }
@@ -61,8 +73,12 @@ func (s *Service) TerminateInfo(info Info, tree bool) error {
 	}
 	return s.collector.Terminate(info.PID, tree)
 }
-
-func (s *Service) Inspect() (Inspector, bool) {
-	inspector, ok := s.collector.(Inspector)
-	return inspector, ok
+func (s *Service) Inspect() (Inspector, bool) { v, ok := s.collector.(Inspector); return v, ok }
+func (s *Service) Handles() (HandleInspector, bool) {
+	v, ok := s.collector.(HandleInspector)
+	return v, ok
+}
+func (s *Service) Stacks() (StackInspector, bool) {
+	v, ok := s.collector.(StackInspector)
+	return v, ok
 }
