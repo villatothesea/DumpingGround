@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -328,7 +329,7 @@ func (m *Model) diskView(c *ui.Context) {
 	}
 	ui.Row(c).Grow(1).Gap(12).Children(func() {
 		ui.Column(c).Width(330).Shrink(0).Gap(8).Children(func() {
-			ui.Text(c, fmt.Sprintf("%s  ·  %s", format.Bytes(m.diskSnapshot.Bytes), m.diskStatus)).FontSize(12).TextColor(t.TextMuted)
+			ui.Text(c, fmt.Sprintf("logical %s · allocated %s · %s", format.Bytes(m.diskSnapshot.Bytes), format.Bytes(m.diskSnapshot.Allocated), m.diskStatus)).FontSize(12).TextColor(t.TextMuted)
 			m.diskTable(c)
 		})
 		m.diskMap(c)
@@ -345,7 +346,7 @@ func (m *Model) diskTable(c *ui.Context) {
 		if col == 0 {
 			ui.Text(c, n.Name).SingleLine()
 		} else {
-			ui.Text(c, format.Bytes(n.Bytes)).SingleLine()
+			ui.Text(c, format.Bytes(nodeSize(n))).SingleLine()
 		}
 	}).Grow(1)
 	if table.Submitted() && m.diskSelected >= 0 && m.diskSelected < len(items) && m.diskSnapshot.Nodes[items[m.diskSelected]].Dir {
@@ -359,16 +360,49 @@ func (m *Model) diskMap(c *ui.Context) {
 	items := m.diskItems[:0]
 	for _, id := range root.Children {
 		n := m.diskSnapshot.Nodes[id]
-		items = append(items, treemap.Item{ID: id, Label: n.Name, Value: n.Bytes})
+		items = append(items, treemap.Item{ID: id, Label: n.Name, Value: nodeSize(n)})
 	}
 	m.diskItems = items
-	ui.Box(c).Grow(1).MinHeight(300).Background(c.Theme().Surface).Radius(8).Draw(func(p *ui.Painter, r ui.Rect) {
-		rects := treemap.Layout(items, r.W-2, r.H-2)
+	t := c.Theme()
+	panel := ui.Box(c).Grow(1).MinHeight(300).Background(t.Surface).Radius(8).Clip()
+	bounds := panel.Bounds()
+	width, height := bounds.W-2, bounds.H-2
+	if width <= 0 {
+		width = 640
+	}
+	if height <= 0 {
+		height = 320
+	}
+	rects := treemap.Layout(items, width, height)
+	panel.Children(func() {
 		for i, rect := range rects {
+			id := rect.ID
+			if rect.W < 2 || rect.H < 2 {
+				continue
+			}
 			color := []ui.Color{ui.Hex("#496A81"), ui.Hex("#6B8F71"), ui.Hex("#9B6B6B"), ui.Hex("#8267A8"), ui.Hex("#B08B57")}[i%5]
-			p.Fill(ui.Rect{X: r.X + 1 + rect.X, Y: r.Y + 1 + rect.Y, W: maxf(rect.W-2, 1), H: maxf(rect.H-2, 1)}, color, 5)
+			item := ui.Box(c).Absolute().Left(rect.X + 1).Top(rect.Y + 1).Width(maxf(rect.W-2, 1)).Height(maxf(rect.H-2, 1)).Radius(5).Background(color).OnClick(func() {
+				n := m.diskSnapshot.Nodes[id]
+				if n.Dir {
+					m.diskRoot, m.diskSelected = id, 0
+				} else {
+					m.diskStatus = fmt.Sprintf("%s · %s", n.Name, format.Bytes(nodeSize(n)))
+				}
+			})
+			if rect.W > 46 && rect.H > 24 {
+				item.Children(func() {
+					ui.Text(c, m.diskSnapshot.Nodes[id].Name).FontSize(11).TextColor(ui.RGB(255, 255, 255)).SingleLine().Padding(6, 6)
+				})
+			}
 		}
 	})
+}
+
+func nodeSize(n disk.Node) uint64 {
+	if n.Allocated > 0 {
+		return n.Allocated
+	}
+	return n.Bytes
 }
 
 func maxf(a, b float32) float32 {
@@ -455,7 +489,11 @@ func (m *Model) startScan() {
 			m.window.Update(func() {
 				m.diskCancel = nil
 				if err != nil {
-					m.diskStatus = err.Error()
+					if errors.Is(err, context.Canceled) {
+						m.diskStatus = "Scan cancelled"
+					} else {
+						m.diskStatus = err.Error()
+					}
 					return
 				}
 				m.diskSnapshot, m.diskRoot, m.diskStatus = snapshot, snapshot.Root, "Scan complete"
@@ -477,7 +515,6 @@ func (m *Model) startScan() {
 func (m *Model) cancelScan() {
 	if m.diskCancel != nil {
 		m.diskCancel()
-		m.diskCancel = nil
 		m.diskStatus = "Cancelling…"
 	}
 }

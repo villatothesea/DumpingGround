@@ -205,13 +205,18 @@ func (c *windowsCollector) readEntry(entry *processEntry32) Info {
 }
 
 func queryPath(h uintptr) string {
-	buf := make([]uint16, maxPath)
-	length := uint32(len(buf))
-	ret, _, _ := procQueryPath.Call(h, 0, uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&length)))
-	if ret == 0 {
-		return ""
+	for size := 512; size <= maxPath; size *= 2 {
+		buf := make([]uint16, size)
+		length := uint32(len(buf))
+		ret, _, _ := procQueryPath.Call(h, 0, uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&length)))
+		if ret != 0 {
+			return syscall.UTF16ToString(buf[:length])
+		}
+		if syscall.GetLastError() != syscall.Errno(122) {
+			return ""
+		}
 	}
-	return syscall.UTF16ToString(buf[:length])
+	return ""
 }
 
 func fileTimeValue(v fileTime) uint64 { return uint64(v.High)<<32 | uint64(v.Low) }

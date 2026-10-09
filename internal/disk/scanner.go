@@ -10,28 +10,30 @@ import (
 )
 
 type Node struct {
-	ID       int
-	Parent   int
-	Name     string
-	Path     string
-	Dir      bool
-	Bytes    uint64
-	Children []int
-	Error    string
+	ID        int
+	Parent    int
+	Name      string
+	Path      string
+	Dir       bool
+	Bytes     uint64
+	Allocated uint64
+	Children  []int
+	Error     string
 }
 
 type Snapshot struct {
-	Root    int
-	Nodes   []Node
-	Files   uint64
-	Dirs    uint64
-	Bytes   uint64
-	Skipped uint64
+	Root      int
+	Nodes     []Node
+	Files     uint64
+	Dirs      uint64
+	Bytes     uint64
+	Allocated uint64
+	Skipped   uint64
 }
 
 type Progress struct {
-	Files, Dirs, Skipped, Bytes uint64
-	Current                     string
+	Files, Dirs, Skipped, Bytes, Allocated uint64
+	Current                                string
 }
 
 type Scanner struct {
@@ -91,8 +93,10 @@ func (s *Scanner) Scan(ctx context.Context, root string, progress chan<- Progres
 			n := Node{ID: len(out.Nodes), Parent: parent, Name: entry.Name(), Path: path, Dir: info.IsDir()}
 			if !n.Dir {
 				n.Bytes = uint64(max(info.Size(), 0))
+				n.Allocated = allocation(path, info.Size())
 				out.Files++
 				out.Bytes += n.Bytes
+				out.Allocated += n.Allocated
 			} else {
 				out.Dirs++
 			}
@@ -100,7 +104,7 @@ func (s *Scanner) Scan(ctx context.Context, root string, progress chan<- Progres
 			out.Nodes = append(out.Nodes, n)
 			if progress != nil {
 				select {
-				case progress <- Progress{Files: out.Files, Dirs: out.Dirs, Skipped: out.Skipped, Bytes: out.Bytes, Current: path}:
+				case progress <- Progress{Files: out.Files, Dirs: out.Dirs, Skipped: out.Skipped, Bytes: out.Bytes, Allocated: out.Allocated, Current: path}:
 				default:
 				}
 			}
@@ -110,11 +114,13 @@ func (s *Scanner) Scan(ctx context.Context, root string, progress chan<- Progres
 				}
 			}
 		}
-		var total uint64
+		var total, allocated uint64
 		for _, child := range out.Nodes[parent].Children {
 			total += out.Nodes[child].Bytes
+			allocated += out.Nodes[child].Allocated
 		}
 		out.Nodes[parent].Bytes = total
+		out.Nodes[parent].Allocated = allocated
 		sort.SliceStable(out.Nodes[parent].Children, func(i, j int) bool {
 			return out.Nodes[out.Nodes[parent].Children[i]].Bytes > out.Nodes[out.Nodes[parent].Children[j]].Bytes
 		})
