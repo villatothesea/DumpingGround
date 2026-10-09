@@ -89,7 +89,7 @@ func TestDiskDrillDownUpAndMapAtSmallSize(t *testing.T) {
 	var x, y float32
 	found := false
 	for _, r := range m.diskRects {
-		if r.ID == 3 {
+		if r.ID == 1 {
 			x = canvas.X + r.X + r.W/2
 			y = canvas.Y + r.Y + r.H/2
 			found = true
@@ -97,15 +97,12 @@ func TestDiskDrillDownUpAndMapAtSmallSize(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatal("file has no map rectangle")
+		t.Fatal("directory has no map rectangle")
 	}
 	tt.Move(x, y)
 	tt.ClickAt(x, y)
 	tt.Frame()
-	if m.diskRoot != 1 || m.diskNode != 3 {
-		t.Fatalf("map did not select file and directory: root=%d node=%d", m.diskRoot, m.diskNode)
-	}
-	if !tt.HasText("large.bin") {
-		t.Fatal("map file is not visible in list")
+	if m.diskRoot != 1 || !tt.HasText("large.bin") {
+		t.Fatalf("map navigation failed: root=%d", m.diskRoot)
 	}
 }

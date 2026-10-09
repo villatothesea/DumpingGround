@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>DumpingGround — 你的电脑，就是个垃圾场。该管管了。</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="DumpingGround 是一款 Windows 原生系统管理工具：进程查看、磁盘空间分析、软件卸载、启动项管理。单文件，双击即用。">
+<meta property="og:title" content="DumpingGround — 你的电脑，就是个垃圾场。该管管了。">
+<meta property="og:description" content="进程、磁盘、软件卸载、启动项，一个 Windows 原生小工具全搞定。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230078d4'/%3E%3Cg transform='translate(4 4) scale(1)' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.4 20.6c1.6-5.4 4.6-8.6 8.2-8.6s6.6 3.2 8.2 8.6z'/%3E%3Cpath d='M2 20.6h20'/%3E%3Cpath d='M10.8 12V3.2'/%3E%3Cpath d='M10.8 3.2l6 2.2-6 2.4'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+*{box-sizing:border-box}
+:root{--bg:#ffffff;--surface:#f4f4f5;--hover:#e9e9ec;--pressed:#dddde1;--border:#d9d9de;--text:#18181b;--muted:#71717a;
+ --accent:#0078d4;--accent-h:#006abb;--accent-p:#005a9f;--accent-t:#fff;--danger:#dc2626;--warn:#d97706;--ok:#16a34a;
+ --sel:rgba(0,120,212,.25);--shadow:rgba(0,0,0,.16);--glow:rgba(0,120,212,.10)}
+[data-theme=dark]{--bg:#18181b;--surface:#27272a;--hover:#323236;--pressed:#3c3c41;--border:#3f3f46;--text:#f4f4f5;--muted:#a1a1aa;
+ --accent-h:#3393dc;--accent-p:#0066b4;--danger:#ef4444;--warn:#f59e0b;--ok:#22c55e;--sel:rgba(0,120,212,.4);--shadow:rgba(0,0,0,.55);--glow:rgba(0,120,212,.18)}
+html,body{overflow-x:hidden}
+html{scroll-behavior:smooth;scroll-padding-top:72px}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.65 "Segoe UI","Microsoft YaHei UI","Microsoft YaHei",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+svg.i{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.wrap{width:min(1120px,calc(100% - 48px));margin:0 auto}
+.muted{color:var(--muted)}
+
+/* nav */
+.nav{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
+.nav .wrap{height:60px;display:flex;align-items:center;gap:28px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px}
+.logo{width:28px;height:28px;border-radius:8px;background:var(--accent);color:#fff;display:grid;place-items:center;flex:none}
+.logo svg{width:18px;height:18px;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.nav nav{display:flex;gap:22px;margin-left:12px;color:var(--muted);font-size:15px}
+.nav nav a:hover{color:var(--text)}
+.nav .sp{flex:1}
+.iconbtn{width:36px;height:36px;border-radius:8px;border:0;background:none;color:var(--text);display:grid;place-items:center;cursor:pointer;font-size:18px}
+.iconbtn:hover{background:var(--hover)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 22px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--hover)}
+.btn.primary{background:var(--accent);border-color:transparent;color:var(--accent-t)}
+.btn.primary:hover{background:var(--accent-h)}
+.btn.primary:active{background:var(--accent-p)}
+.btn.sm{height:36px;padding:0 16px;font-size:14px}
+
+/* hero */
+.hero{position:relative;padding:88px 0 40px;text-align:center;overflow:hidden}
+.hero::before{content:"";position:absolute;left:50%;top:-220px;width:1100px;height:700px;transform:translateX(-50%);background:radial-gradient(closest-side,var(--glow),transparent);pointer-events:none}
+.hero .wrap{position:relative}
+.hero h1{margin:0;font-size:clamp(34px,6vw,64px);line-height:1.15;letter-spacing:-.5px;font-weight:800}
+.hero h1 em{font-style:normal;color:var(--accent)}
+.hero p.lead{margin:22px auto 0;max-width:660px;font-size:clamp(16px,2vw,19px);color:var(--muted)}
+.hero .cta{margin-top:32px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.hero .meta{margin-top:18px;font-size:14px;color:var(--muted);display:flex;gap:6px 18px;justify-content:center;flex-wrap:wrap}
+.hero .meta span{display:inline-flex;align-items:center;gap:6px}
+.hero .meta svg{color:var(--ok)}
+.shot{margin:56px auto 0;max-width:1000px}
+
+/* mock window */
+.mwrap{position:relative;border-radius:12px;box-shadow:0 24px 70px var(--shadow),0 0 0 1px var(--border);overflow:hidden;background:var(--bg);aspect-ratio:1100/620}
+.mwin{position:absolute;left:0;top:0;width:1100px;height:620px;transform-origin:0 0;display:flex;flex-direction:column;font-size:12px;line-height:1.35;color:var(--text);background:var(--bg);user-select:none;text-align:left}
+.m-top{flex:none;height:40px;display:flex;align-items:center;gap:4px;padding-left:12px;background:var(--surface);border-bottom:1px solid var(--border)}
+.m-brand{display:flex;align-items:center;gap:8px;width:150px;font-weight:700;font-size:14px}
+.m-logo{width:22px;height:22px;border-radius:6px;background:var(--accent);display:grid;place-items:center}
+.m-logo svg{width:16px;height:16px;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.m-tabs{display:flex;height:40px}
+.m-tab{position:relative;display:flex;align-items:center;gap:6px;padding:0 12px;color:var(--muted);white-space:nowrap}
+.m-tab.on{color:var(--text);font-weight:600}
+.m-tab.on::after{content:"";position:absolute;left:10px;right:10px;bottom:0;height:3px;border-radius:3px 3px 0 0;background:var(--accent)}
+.m-cnt{font-size:11px;font-weight:400;line-height:16px;padding:0 6px;border-radius:8px;background:var(--hover);color:var(--muted)}
+.m-tab.on .m-cnt{background:var(--sel);color:var(--text)}
+.m-meters{display:flex;gap:2px;margin-left:6px;padding-left:8px;border-left:1px solid var(--border)}
+.m-meter{position:relative;display:flex;gap:5px;height:28px;align-items:center;padding:0 7px 2px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.m-meter .l{color:var(--muted)}
+.m-meter b{min-width:30px;text-align:right}
+.m-meter .bar{position:absolute;left:7px;right:7px;bottom:2px;height:2px;border-radius:1px;background:var(--pressed)}
+.m-meter .bar i{display:block;height:100%;background:var(--accent);border-radius:1px}
+.m-meter .net b{min-width:34px;text-align:right}
+.m-fill{flex:1}
+.m-search{white-space:nowrap;overflow:hidden;display:flex;align-items:center;gap:6px;height:28px;width:150px;padding:0 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--muted)}
+.m-ic{width:34px;height:28px;display:grid;place-items:center;font-size:15px}
+.m-win{display:flex;margin-left:6px}
+.m-win span{width:46px;height:40px;display:grid;place-items:center;font-size:12px}
+.m-body{flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
+.m-status{flex:none;height:26px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:var(--surface);border-top:1px solid var(--border);color:var(--muted)}
+.m-bar{flex:none;height:40px;display:flex;align-items:center;gap:8px;padding:0 12px}
+.m-sel{flex:none;height:36px;display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--surface);border-top:1px solid var(--border)}
+.m-sel .grow,.m-bar .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.m-btn{height:28px;display:inline-flex;align-items:center;gap:6px;padding:0 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);white-space:nowrap}
+.m-sel .m-btn{background:var(--bg)}
+.m-btn.p{background:var(--accent);border-color:transparent;color:#fff}
+.m-btn.d{color:var(--danger)}
+.m-seg{display:inline-flex;gap:2px;height:28px;padding:2px;background:var(--surface);border:1px solid var(--border);border-radius:6px}
+.m-seg span{display:grid;place-items:center;padding:0 10px;border-radius:4px;color:var(--muted)}
+.m-seg span.on{background:var(--bg);color:var(--text);box-shadow:0 0 0 1px var(--border)}
+.m-field{display:flex;align-items:center;gap:6px;height:28px;padding:0 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--muted)}
+.m-tr{display:grid;align-items:center;height:32px}
+.m-tr.h{color:var(--muted);border-bottom:1px solid var(--border)}
+.m-tr.s{background:var(--hover)}
+.m-tr>div{padding:0 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
+.m-tr>div.n{justify-content:flex-end;font-variant-numeric:tabular-nums}
+.m-ico{width:16px;height:16px;border-radius:4px;color:#fff;font-size:9px;font-weight:700;display:grid;place-items:center;flex:none}
+.m-chip{display:flex;align-items:center;gap:8px;height:28px;padding:0 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface)}
+.m-chip.on{border-color:var(--accent);background:var(--sel)}
+.m-chip i{display:block;width:34px;height:4px;border-radius:2px;background:var(--pressed);overflow:hidden;position:relative}
+.m-chip i::after{content:"";position:absolute;left:0;top:0;bottom:0;width:var(--u);background:var(--accent)}
+.m-pb{height:4px;border-radius:2px;background:var(--hover);flex:1;overflow:hidden;min-width:30px}
+.m-pb i{display:block;height:100%;background:var(--accent)}
+.m-tile{position:absolute;color:#fff;font-size:11px;padding:3px 4px;overflow:hidden;white-space:nowrap;border-right:1px solid var(--bg);border-bottom:1px solid var(--bg);line-height:1.25}
+.m-sw{width:30px;height:16px;border-radius:8px;background:var(--pressed);position:relative;flex:none}
+.m-sw::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#fff}
+.m-sw.on{background:var(--accent)}
+.m-sw.on::after{left:16px}
+.m-badge{padding:0 8px;height:18px;line-height:18px;border-radius:9px;font-size:11px;border:1px solid var(--border);color:var(--muted)}
+.m-badge.h{color:var(--danger);border-color:var(--danger)}
+.m-badge.m{color:var(--warn);border-color:var(--warn)}
+
+/* sections */
+section{padding:88px 0}
+.sec-h{text-align:center;max-width:680px;margin:0 auto 44px}
+.sec-h h2{margin:0;font-size:clamp(26px,4vw,38px);line-height:1.25;letter-spacing:-.3px}
+.sec-h p{margin:12px 0 0;color:var(--muted);font-size:17px}
+.alt{background:var(--surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+
+/* showcase */
+.stabs{display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin-bottom:36px}
+.stab{display:inline-flex;align-items:center;gap:8px;height:42px;padding:0 20px;border-radius:21px;border:1px solid var(--border);background:var(--bg);color:var(--muted);font:inherit;font-weight:600;cursor:pointer}
+.stab:hover{color:var(--text);background:var(--hover)}
+.stab.on{background:var(--accent);border-color:transparent;color:#fff}
+.show{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:44px;align-items:center}
+.show h3{margin:0 0 6px;font-size:26px;line-height:1.3}
+.show .sub{color:var(--muted);margin:0 0 20px}
+.show ul{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.show li{display:flex;gap:10px;align-items:flex-start}
+.show li svg{margin-top:5px;color:var(--accent);font-size:16px}
+
+/* highlights */
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:24px}
+.card .ci{width:42px;height:42px;border-radius:10px;background:var(--sel);color:var(--accent);display:grid;place-items:center;font-size:20px;margin-bottom:14px}
+.card h4{margin:0 0 6px;font-size:18px}
+.card p{margin:0;color:var(--muted);font-size:15px;line-height:1.6}
+
+/* name */
+.name{display:grid;grid-template-columns:auto 1fr;gap:40px;align-items:center;max-width:860px;margin:0 auto}
+.bigicon{width:150px;height:150px;border-radius:36px;background:var(--accent);display:grid;place-items:center;box-shadow:0 16px 40px var(--shadow)}
+.bigicon svg{width:96px;height:96px;fill:none;stroke:#fff;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.name h2{margin:0 0 12px;font-size:clamp(24px,3.4vw,34px);line-height:1.3}
+.name p{margin:0 0 10px;color:var(--muted);font-size:17px}
+.name p b{color:var(--text)}
+
+/* download */
+.dl{max-width:760px;margin:0 auto;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:36px;text-align:center}
+.dl .v{display:inline-block;padding:2px 12px;border-radius:12px;background:var(--sel);color:var(--accent);font-weight:600;font-size:14px}
+.dl h2{margin:12px 0 6px;font-size:32px}
+.dl .btn{margin-top:22px;height:52px;padding:0 34px;font-size:17px}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:32px;text-align:left}
+.step{padding:16px;border-radius:10px;background:var(--bg);border:1px solid var(--border);font-size:14px;color:var(--muted)}
+.step b{display:flex;align-items:center;gap:8px;color:var(--text);font-size:15px;margin-bottom:4px}
+.step b span{width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:12px}
+
+/* faq */
+.faq{max-width:760px;margin:0 auto;display:grid;gap:10px}
+details{border:1px solid var(--border);border-radius:10px;background:var(--bg);padding:0 20px}
+summary{cursor:pointer;list-style:none;padding:16px 0;font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:12px}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";font-size:22px;color:var(--muted);line-height:1}
+details[open] summary::after{content:"–"}
+details p{margin:0 0 16px;color:var(--muted);font-size:15px}
+
+footer{border-top:1px solid var(--border);padding:32px 0;color:var(--muted);font-size:14px}
+footer .wrap{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+footer .sp{flex:1}
+footer a:hover{color:var(--text)}
+
+@media(max-width:860px){
+ .nav nav{display:none}
+ .show{grid-template-columns:1fr;gap:28px}
+ .grid3{grid-template-columns:1fr 1fr}
+ .name{grid-template-columns:1fr;text-align:center;justify-items:center}
+ .steps{grid-template-columns:1fr}
+}
+@media(max-width:560px){.grid3{grid-template-columns:1fr}.hero{padding-top:56px}section{padding:60px 0}}
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top"><span class="logo"><svg viewBox="0 0 24 24"><path d="M2.4 20.6c1.6-5.4 4.6-8.6 8.2-8.6s6.6 3.2 8.2 8.6z"/><path d="M2 20.6h20"/><path d="M10.8 12V3.2"/><path d="M10.8 3.2l6 2.2-6 2.4"/><path d="M7.8 17.2h.01M12.4 16.4h.01M14.4 18.6h.01"/></svg></span>DumpingGround</a>
+    <nav><a href="#features">功能</a><a href="#why">为什么叫这个名字</a><a href="#download">下载</a><a href="#faq">常见问题</a></nav>
+    <span class="sp"></span>
+    <button class="iconbtn" id="theme" title="切换明 / 暗主题" aria-label="切换明暗主题"></button>
+    <a class="btn primary sm" href="#download">下载</a>
+  </div>
+</header>
+
+<main id="top">
+<div class="hero">
+  <div class="wrap">
+    <h1>你的电脑，就是个垃圾场。<br><em>该管管了。</em></h1>
+    <p class="lead">DumpingGround 把进程、磁盘空间、软件卸载、启动项放进同一个 Windows 原生小工具。看清谁在占资源，找到谁在占空间，把不用的统统清出去。</p>
+    <div class="cta">
+      <a class="btn primary" href="#download"><svg class="i" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>下载 Windows 版</a>
+      <a class="btn" href="#features">看看能做什么</a>
+    </div>
+    <div class="meta">
+      <span><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>单文件，双击即用</span>
+      <span><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>原生界面，无需 WebView2</span>
+      <span><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>无需管理员权限</span>
+      <span><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>不联网，不上传数据</span>
+    </div>
+    <div class="shot"><div class="mwrap" id="heroShot"></div></div>
+  </div>
+</div>
+
+<section id="features">
+  <div class="wrap">
+    <div class="sec-h"><h2>四个页签，管好一台电脑</h2><p>每个页签只做一件事，操作入口只有一个，不绕路。</p></div>
+    <div class="stabs" id="stabs"></div>
+    <div class="show">
+      <div id="showText"></div>
+      <div class="mwrap" id="showShot"></div>
+    </div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <div class="sec-h"><h2>少一点折腾，多一点掌控</h2></div>
+    <div class="grid3">
+      <div class="card"><div class="ci"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg></div><h4>总量常驻标题栏</h4><p>CPU、内存、磁盘、网络的总量一直在顶栏，切到哪个页签都看得见；过高自动变橙、变红。</p></div>
+      <div class="card"><div class="ci"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></div><h4>一个搜索框，到处能搜</h4><p>进程页搜名称、PID、路径，磁盘页过滤文件名，软件和启动项同样适用，不用到处找输入框。</p></div>
+      <div class="card"><div class="ci"><svg class="i" viewBox="0 0 24 24"><path d="M6 3l14 9-14 9z"/></svg></div><h4>扫描只有一个按钮</h4><p>点盘符、点扫描，扫描中同一个位置变成取消。取消后保留已扫到的部分结果。</p></div>
+      <div class="card"><div class="ci"><svg class="i" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></div><h4>明暗双主题</h4><p>一键切换，随系统强调色。深夜清理磁盘，眼睛也舒服。</p></div>
+      <div class="card"><div class="ci"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></div><h4>危险操作先确认</h4><p>结束进程、卸载软件、禁用启动项都会先确认。结束进程还会核对创建时间，防止 PID 被复用误杀。磁盘分析只读，不会替你删文件。</p></div>
+      <div class="card"><div class="ci"><svg class="i" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg></div><h4>原生、轻、快</h4><p>一个约 12 MB 的 exe，不用安装，不依赖 WebView2。NTFS 整盘扫描在权限允许时走 MFT 快速路径。</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="why">
+  <div class="wrap">
+    <div class="name">
+      <div class="bigicon"><svg viewBox="0 0 24 24"><path d="M2.4 20.6c1.6-5.4 4.6-8.6 8.2-8.6s6.6 3.2 8.2 8.6z"/><path d="M2 20.6h20"/><path d="M10.8 12V3.2"/><path d="M10.8 3.2l6 2.2-6 2.4"/><path d="M7.8 17.2h.01M12.4 16.4h.01M14.4 18.6h.01"/></svg></div>
+      <div>
+        <h2>为什么叫 DumpingGround？</h2>
+        <p><b>Dumping ground，垃圾场。</b>因为大多数人的电脑就是这样：进程越开越多，文件越堆越高，装过的软件从不卸载，开机项悄悄越变越长。</p>
+        <p>图标是一座垃圾山，山顶插着旗：这座山，现在由你接管。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="download" class="alt">
+  <div class="wrap">
+    <div class="dl">
+      <span class="v">v0.1.0</span>
+      <h2>DumpingGround for Windows</h2>
+      <div class="muted">单个 exe，约 12 MB，免安装</div>
+      <a class="btn primary" href="#download" id="dlbtn"><svg class="i" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>下载 DumpingGround.exe</a>
+      <div class="steps">
+        <div class="step"><b><span>1</span>下载</b>保存 DumpingGround.exe 到任意位置。</div>
+        <div class="step"><b><span>2</span>双击运行</b>无需安装；再次启动会激活已打开的窗口。</div>
+        <div class="step"><b><span>3</span>想扫得更快？</b>右键「以管理员身份运行」，NTFS 整盘扫描可使用 MFT 快速路径。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <div class="sec-h"><h2>常见问题</h2></div>
+    <div class="faq">
+      <details><summary>需要安装吗？</summary><p>不需要。下载后双击 exe 即可使用，删除文件即完成卸载。</p></details>
+      <details><summary>需要管理员权限吗？</summary><p>不需要。进程查看、普通目录和盘符扫描都能用。以管理员身份运行时，NTFS 整盘扫描可使用 MFT 快速路径；权限不足会自动回退到普通目录遍历。</p></details>
+      <details><summary>它会自动删除我的文件吗？</summary><p>不会。磁盘分析是只读的，你可以一键定位到资源管理器自行处理。结束进程、卸载软件、禁用启动项都会先弹出确认。</p></details>
+      <details><summary>会联网或上传我的数据吗？</summary><p>不会。所有数据都在本机处理，应用没有联网功能。</p></details>
+      <details><summary>扫描结果准确吗？</summary><p>同时提供“占用空间”和“逻辑大小”两种口径，硬链接的占用空间只计一次。扫描的是运行中的文件系统，不是一致性快照，所以结果可能与卷已用空间略有差异。</p></details>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="#top"><span class="logo"><svg viewBox="0 0 24 24"><path d="M2.4 20.6c1.6-5.4 4.6-8.6 8.2-8.6s6.6 3.2 8.2 8.6z"/><path d="M2 20.6h20"/><path d="M10.8 12V3.2"/><path d="M10.8 3.2l6 2.2-6 2.4"/><path d="M7.8 17.2h.01M12.4 16.4h.01M14.4 18.6h.01"/></svg></span>DumpingGround</a>
+    <span class="muted">你的电脑，就是个垃圾场。该管管了。</span>
+    <span class="sp"></span>
+    <a href="#features">功能</a><a href="#download">下载</a><a href="#faq">常见问题</a>
+    <span>v0.1.0</span>
+  </div>
+</footer>
+
+<script>
+const $=s=>document.querySelector(s);
+const ICON={sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',moon:'<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',check:'<path d="M20 6 9 17l-5-5"/>'};
+const svg=n=>`<svg class="i" viewBox="0 0 24 24">${ICON[n]}</svg>`;
+
+/* ---- theme ---- */
+let theme=localStorage.getItem('dg-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+function setTheme(t){theme=t;document.documentElement.dataset.theme=t;localStorage.setItem('dg-theme',t);$('#theme').innerHTML=svg(t==='dark'?'sun':'moon')}
+$('#theme').onclick=()=>setTheme(theme==='dark'?'light':'dark');
+if(location.hash.includes('dark'))theme='dark';setTheme(theme);
+
+/* ---- mock app window (design width 1100×620) ---- */
+const LOGO='<span class="m-logo"><svg viewBox="0 0 24 24"><path d="M2.4 20.6c1.6-5.4 4.6-8.6 8.2-8.6s6.6 3.2 8.2 8.6z"/><path d="M2 20.6h20"/><path d="M10.8 12V3.2"/><path d="M10.8 3.2l6 2.2-6 2.4"/><path d="M7.8 17.2h.01M12.4 16.4h.01M14.4 18.6h.01"/></svg></span>';
+const COL=['#3178aa','#267d69','#926839','#855a99','#aa5360','#526bb2'];
+const ico=(n,i)=>`<span class="m-ico" style="background:${COL[i%6]}">${n[0].toUpperCase()}</span>`;
+const TABN=[['proc','进程','<span class="m-cnt">539</span>'],['disk','磁盘',''],['uninst','软件卸载',''],['startup','启动项管理','']];
+const SYS={cpu:12,mem:63,disk:4};
+function topbar(tab){
+  const meter=(l,v)=>`<div class="m-meter"><span class="l">${l}</span><b data-k="${l}">${v}%</b><span class="bar"><i data-b="${l}" style="width:${v}%"></i></span></div>`;
+  const hint={proc:'搜索进程…',disk:'过滤文件名',uninst:'搜索软件…',startup:'搜索启动项…'}[tab];
+  return `<div class="m-top"><div class="m-brand">${LOGO}DumpingGround</div>
+   <div class="m-tabs">${TABN.map(t=>`<div class="m-tab ${t[0]===tab?'on':''}">${t[1]}${t[2]}</div>`).join('')}</div>
+   <div class="m-meters">${meter('CPU',SYS.cpu)}${meter('内存',SYS.mem)}${meter('磁盘',SYS.disk)}<div class="m-meter"><span class="l">网络</span><span class="net">↓ <b>1.2M</b></span> <span class="net">↑ <b>310K</b></span></div></div>
+   <div class="m-fill"></div><div class="m-search">⌕ ${hint}</div><div class="m-ic">☾</div><div class="m-ic">⚙</div>
+   <div class="m-win"><span>—</span><span>☐</span><span>✕</span></div></div>`;
+}
+const PROCS=[['System','4','0.1%','0.1 MB','0.1 MB','0 B/s','0 B/s','210'],['explorer.exe','5120','1.0%','142 MB','96.4 MB','32.8 KB/s','400 KB/s','64'],['chrome.exe','9100','5.3%','220 MB','150 MB','1.8 KB/s','2.2 MB/s','46'],['chrome.exe','9140','2.6%','310 MB','260 MB','0 B/s','0 B/s','24'],['Code.exe','8800','2.8%','310 MB','251 MB','4.5 KB/s','11.7 MB/s','38'],['WindowsTerminal.exe','10036','0.1%','29.4 MB','52.8 MB','0 B/s','0 B/s','26'],['Docker Desktop.exe','12120','3.1%','260 MB','210 MB','17.2 KB/s','1.2 MB/s','34'],['DumpingGround.exe','12760','1.1%','48.1 MB','31.2 MB','79.6 KB/s','0 B/s','17'],['svchost.exe','880','0.4%','24.5 MB','10.1 MB','1.2 KB/s','300 B/s','14'],['audiodg.exe','151016','0.3%','24.0 MB','19.1 MB','0 B/s','0 B/s','3'],['Spotify.exe','14400','0.5%','150 MB','98 MB','0 B/s','0 B/s','41'],['go.exe','28156','12.4%','64 MB','48 MB','100 MB/s','40 MB/s','9'],['bash.exe','9804','0.0%','4.6 MB','6.8 MB','0 B/s','0 B/s','4'],['AppInsightsPlugin.exe','3280','0.0%','40.7 MB','73.4 MB','3.3 KB/s','0 B/s','14']];
+function bodyProc(){
+  const cols='minmax(200px,1fr) 70px 72px 100px 104px 92px 92px 72px';
+  return `<div class="m-bar"><div class="m-seg"><span class="on">列表</span><span>树形</span></div><span class="m-btn">❚❚ 暂停</span><span class="grow"></span><span style="color:var(--muted)">每 1 s 自动刷新</span></div>
+   <div class="m-tr h" style="grid-template-columns:${cols}"><div>进程 ⌃</div><div class="n">PID</div><div class="n">CPU %</div><div class="n">工作集</div><div class="n">私有字节</div><div class="n">读取/s</div><div class="n">写入/s</div><div class="n">线程</div></div>
+   <div style="flex:1;min-height:0;overflow:hidden">${PROCS.map((r,i)=>`<div class="m-tr ${i===4?'s':''}" style="grid-template-columns:${cols}"><div>${ico(r[0],i)}${r[0]}</div>${r.slice(1).map(c=>`<div class="n">${c}</div>`).join('')}</div>`).join('')}</div>
+   <div class="m-sel"><span class="grow"><b>Code.exe</b>  <span style="color:var(--muted)">PID 8800  D:\\Programs\\VSCode\\Code.exe</span></span><span class="m-btn">打开位置</span><span class="m-btn">复制路径</span><span class="m-btn d">结束进程 ▾</span><span class="m-btn">详情</span></div>`;
+}
+const SQ=(items,w,h)=>{const tot=items.reduce((a,b)=>a+b.v,0),out=[];let x=0,y=0,W=w,H=h;let rest=items.map(i=>({...i,a:i.v/tot*w*h}));
+ const worst=(r,s)=>{const sum=r.reduce((a,b)=>a+b.a,0),mx=Math.max(...r.map(q=>q.a)),mn=Math.min(...r.map(q=>q.a));return Math.max(s*s*mx/(sum*sum),sum*sum/(s*s*mn))};
+ while(rest.length){const s=Math.min(W,H);let row=[rest[0]],i=1;while(i<rest.length){const nr=row.concat(rest[i]);if(worst(nr,s)<=worst(row,s)){row=nr;i++}else break}
+  const sum=row.reduce((a,b)=>a+b.a,0);
+  if(W>=H){const rw=sum/H;let cy=y;row.forEach(r=>{const rh=r.a/rw;out.push({...r,x,y:cy,w:rw,h:rh});cy+=rh});x+=rw;W-=rw}
+  else{const rh=sum/W;let cx=x;row.forEach(r=>{const rw=r.a/rh;out.push({...r,x:cx,y,w:rw,h:rh});cx+=rw});y+=rh;H-=rh}
+  rest=rest.slice(row.length)}return out};
+function bodyDisk(){
+  const cols='minmax(220px,1fr) 100px 100px 130px';
+  const files=[['Users/','17.0 GB','17.6 GB',45.8],['pagefile.sys','6.3 GB','6.5 GB',16.9],['Program Files/','6.1 GB','6.4 GB',16.5],['hiberfil.sys','3.1 GB','3.3 GB',8.4],['Windows/','3.0 GB','3.1 GB',8.0]];
+  const ext=[['.mp4','2','8.1 GB',0],['.sys','9','10.3 GB',3],['.zip','4','3.3 GB',4],['.dll','9','2.0 GB',1],['.vhdx','1','4.0 GB',5]];
+  const tiles=SQ([{n:'Users/',v:17.6,c:'#65748a'},{n:'pagefile.sys',v:6.5,c:'#3178aa'},{n:'Program Files/',v:6.4,c:'#65748a'},{n:'hiberfil.sys',v:3.3,c:'#526bb2'},{n:'Windows/',v:3.1,c:'#65748a'},{n:'ProgramData/',v:1.4,c:'#65748a'},{n:'swapfile.sys',v:.27,c:'#855a99'}],1100,190);
+  return `<div class="m-bar" style="height:44px"><div class="m-chip on"><b>C:\\</b><i style="--u:68%"></i><span style="color:var(--muted)">126 GB 可用</span></div><div class="m-chip"><b>D:\\</b><i style="--u:45%"></i><span style="color:var(--muted)">512 GB 可用</span></div><div class="m-chip"><b>E:\\</b><i style="--u:35%"></i><span style="color:var(--muted)">1.2 TB 可用</span></div><div class="m-field grow">📁 C:\\</div><span class="m-btn">浏览…</span><span class="m-btn p" style="min-width:84px;justify-content:center">▶ 扫描</span></div>
+   <div class="m-bar" style="border-top:1px solid var(--border)"><span class="m-btn" style="width:28px;padding:0;justify-content:center">↑</span><b class="grow">C:\\</b><span style="color:var(--muted)">占用 <b style="color:var(--text)">38.5 GB</b> · 逻辑 <b style="color:var(--text)">37.0 GB</b></span><div class="m-seg"><span class="on">树形</span><span>平铺</span></div><span class="m-btn">导出 CSV</span></div>
+   <div style="display:flex;height:188px;border-top:1px solid var(--border)"><div style="flex:1;min-width:0;overflow:hidden"><div class="m-tr h" style="grid-template-columns:${cols}"><div>名称</div><div class="n">逻辑大小</div><div class="n">占用空间</div><div>占比</div></div>${files.map((r,i)=>`<div class="m-tr ${i===0?'s':''}" style="grid-template-columns:${cols}"><div><span style="width:8px;height:8px;border-radius:2px;background:${r[0].endsWith('/')?'#65748a':'#3178aa'}"></span>${r[0]}</div><div class="n">${r[1]}</div><div class="n">${r[2]}</div><div><span class="m-pb"><i style="width:${r[3]}%"></i></span><span class="n" style="width:42px">${r[3]}%</span></div></div>`).join('')}</div>
+    <div style="width:270px;border-left:1px solid var(--border);overflow:hidden"><div class="m-tr h" style="grid-template-columns:1fr 56px 80px"><div>文件类型</div><div class="n">文件数</div><div class="n">大小</div></div>${ext.map(r=>`<div class="m-tr" style="grid-template-columns:1fr 56px 80px"><div><span style="width:8px;height:8px;border-radius:2px;background:${COL[r[3]]}"></span>${r[0]}</div><div class="n">${r[1]}</div><div class="n">${r[2]}</div></div>`).join('')}</div></div>
+   <div style="border-top:1px solid var(--border);flex:1;min-height:0;display:flex;flex-direction:column"><div style="height:28px;display:flex;align-items:center;padding:0 12px;gap:10px"><b>空间图</b><span style="color:var(--muted)">点击目录下钻，点击文件在表中定位</span></div><div style="position:relative;flex:1;background:var(--surface)">${tiles.map(t=>`<div class="m-tile" style="left:${t.x}px;top:${t.y}px;width:${t.w}px;height:${t.h}px;background:${t.c}">${t.w>60&&t.h>20?t.n:''}</div>`).join('')}</div></div>`;
+}
+const APPS=[['Adobe Photoshop 2025','Adobe','4.2 GB','2025-03-12'],['Docker Desktop','Docker Inc.','3.9 GB','2025-01-08'],['Microsoft Office 2021','Microsoft','3.1 GB','2024-11-20'],['Visual Studio Build Tools','Microsoft','2.8 GB','2024-09-02'],['Unity Hub','Unity Technologies','1.6 GB','2024-06-17'],['Steam','Valve','1.1 GB','2023-12-01'],['Google Chrome','Google LLC','612 MB','2025-05-30'],['7-Zip','Igor Pavlov','5.4 MB','2023-04-19'],['Spotify','Spotify AB','340 MB','2024-02-11'],['Notepad++','Notepad++ Team','24 MB','2024-08-08']];
+function bodyUninst(){
+  const cols='minmax(240px,1fr) 200px 110px 130px 110px';
+  return `<div class="m-bar"><div class="m-field" style="width:260px">⌕ 在 128 个软件中搜索</div><div class="m-seg"><span class="on">按体积</span><span>按名称</span><span>按安装时间</span></div><span class="grow"></span><span style="color:var(--muted)">共 128 个 · 86.4 GB</span></div>
+   <div class="m-tr h" style="grid-template-columns:${cols}"><div>名称</div><div>发布者</div><div class="n">大小 ⌄</div><div class="n">安装日期</div><div></div></div>
+   <div style="flex:1;min-height:0;overflow:hidden">${APPS.map((r,i)=>`<div class="m-tr ${i===1?'s':''}" style="grid-template-columns:${cols}"><div>${ico(r[0],i)}${r[0]}</div><div style="color:var(--muted)">${r[1]}</div><div class="n">${r[2]}</div><div class="n">${r[3]}</div><div style="justify-content:flex-end"><span class="m-btn" style="height:24px">卸载</span></div></div>`).join('')}</div>
+   <div class="m-sel"><span class="grow"><b>Docker Desktop</b>  <span style="color:var(--muted)">3.9 GB · C:\\Program Files\\Docker</span></span><span class="m-btn">打开安装位置</span><span class="m-btn">在磁盘页查看</span><span class="m-btn d">卸载</span></div>`;
+}
+const STARTS=[['Docker Desktop','注册表','高',1],['Spotify','注册表','中',0],['Steam Client Bootstrapper','启动文件夹','中',0],['OneDrive','注册表','中',1],['Microsoft Teams','注册表','高',0],['Adobe Updater','计划任务','低',0],['Realtek Audio Manager','注册表','低',1],['NVIDIA Display Container','注册表','低',1],['Google Update','计划任务','低',1],['Everything','启动文件夹','低',1]];
+function bodyStartup(){
+  const cols='minmax(240px,1fr) 140px 130px 120px';
+  const b={'高':'h','中':'m','低':''};
+  return `<div class="m-bar"><div class="m-seg"><span class="on">全部</span><span>注册表</span><span>启动文件夹</span><span>计划任务</span></div><span class="grow"></span><span style="color:var(--muted)">开机启动 24 项 · 已启用 17 · 预计拖慢开机 <b style="color:var(--warn)">12 s</b></span></div>
+   <div class="m-tr h" style="grid-template-columns:${cols}"><div>名称</div><div>来源</div><div>启动影响</div><div>启用</div></div>
+   <div style="flex:1;min-height:0;overflow:hidden">${STARTS.map((r,i)=>`<div class="m-tr ${i===0?'s':''}" style="grid-template-columns:${cols}"><div>${ico(r[0],i+2)}${r[0]}</div><div style="color:var(--muted)">${r[1]}</div><div><span class="m-badge ${b[r[2]]}">${r[2]}</span></div><div><span class="m-sw ${r[3]?'on':''}"></span></div></div>`).join('')}</div>
+   <div class="m-sel"><span class="grow"><b>Docker Desktop</b>  <span style="color:var(--muted)">HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run</span></span><span class="m-btn">打开位置</span><span class="m-btn">复制路径</span><span class="m-btn">禁用</span></div>`;
+}
+const BODY={proc:bodyProc,disk:bodyDisk,uninst:bodyUninst,startup:bodyStartup};
+const STATUS={proc:['就绪','F5 刷新 · Enter 详情 · Ctrl+1–4 切换页签'],disk:['扫描完成 · 目录遍历 · 128,430 个文件 · 3.8 s','F5 扫描 · Backspace 上一级 · Ctrl+1–4 切换页签'],uninst:['就绪','F5 刷新 · Ctrl+1–4 切换页签'],startup:['就绪','F5 刷新 · Ctrl+1–4 切换页签']};
+function mount(el,tab){
+  el.innerHTML=`<div class="mwin">${topbar(tab)}<div class="m-body">${BODY[tab]()}</div><div class="m-status"><span>${STATUS[tab][0]}</span><span>${STATUS[tab][1]}</span></div></div>`;
+  fit(el);
+}
+function fit(el){const w=el.querySelector('.mwin');if(w)w.style.transform=`scale(${el.clientWidth/1100})`}
+addEventListener('resize',()=>document.querySelectorAll('.mwrap').forEach(fit));
+
+/* ---- showcase ---- */
+const FEAT={
+ proc:{n:'进程',h:'谁在吃你的资源，一目了然',s:'实时的进程列表，比任务管理器更深一层。',li:['CPU、工作集、私有字节、读写速率、线程数实时刷新，可按任意列排序','列表或树形两种视图，一搜即得：名称、PID、路径都行','查看命令行、用户、提权状态，以及模块、线程、句柄和调用栈','结束进程或整棵进程树前先确认，并核对创建时间，防止 PID 被复用误杀']},
+ disk:{n:'磁盘',h:'找出是谁占了你的硬盘',s:'选好盘符点一下扫描，目录树、文件类型和空间图联动展示。',li:['盘符一点即选，扫描中实时显示文件数、目录数和已统计容量','随时取消，并保留已经扫到的部分结果','目录树、文件类型统计、空间图（treemap）三合一，点击即可下钻','“占用空间”和“逻辑大小”两种口径，扫描结果可导出 CSV','NTFS 整盘扫描在权限允许时使用 MFT 快速路径']},
+ uninst:{n:'软件卸载',h:'装过的软件，一次看全',s:'按体积排序，最占地方的软件排在最前面。',li:['列出全部已安装软件，显示发布者、大小和安装日期','按体积、名称或安装时间排序，搜索即时过滤','卸载前先确认；卸载后可一键跳到磁盘页，检查是否有残留目录','打开安装位置、查看占用，一步到位']},
+ startup:{n:'启动项管理',h:'开机慢？先管住启动项',s:'汇总所有自启动来源，开关一点即生效。',li:['汇总注册表、启动文件夹、计划任务里的自启动项','标出启动影响（高 / 中 / 低），影响最大的排在前面','用开关启用或禁用，不删除任何内容，随时可以恢复','直接打开启动项所在位置，看清它到底是什么']}
+};
+let cur='proc';
+function show(t){
+  cur=t;const f=FEAT[t];
+  $('#stabs').innerHTML=Object.keys(FEAT).map(k=>`<button class="stab ${k===t?'on':''}" data-t="${k}">${FEAT[k].n}</button>`).join('');
+  $('#showText').innerHTML=`<h3>${f.h}</h3><p class="sub">${f.s}</p><ul>${f.li.map(x=>`<li>${svg('check')}<span>${x}</span></li>`).join('')}</ul>`;
+  mount($('#showShot'),t);
+}
+$('#stabs').onclick=e=>{const b=e.target.closest('[data-t]');if(b)show(b.dataset.t)};
+
+/* ---- init ---- */
+mount($('#heroShot'),'proc');
+show((location.hash.match(/t=(\w+)/)||[])[1]||'proc');
+setInterval(()=>{
+  SYS.cpu=Math.max(2,Math.min(60,SYS.cpu+(Math.random()-.5)*8))|0;SYS.mem=Math.max(55,Math.min(70,SYS.mem+(Math.random()-.5)*2))|0;SYS.disk=Math.max(0,Math.min(40,SYS.disk+(Math.random()-.5)*8))|0;
+  const m={CPU:SYS.cpu,'内存':SYS.mem,'磁盘':SYS.disk};
+  document.querySelectorAll('.mwin').forEach(w=>Object.entries(m).forEach(([k,v])=>{const b=w.querySelector(`[data-k="${k}"]`),i=w.querySelector(`[data-b="${k}"]`);if(b)b.textContent=v+'%';if(i)i.style.width=v+'%'}));
+},1500);
+</script>
+</body>
+</html>

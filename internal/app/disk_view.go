@@ -44,6 +44,8 @@ func (m *Model) startScan() {
 	m.extensionSelected = -1
 	m.extensionFilter = ""
 	m.mapHover = ""
+	m.mapMotion = mapMotion{}
+	m.mapAnimating = false
 	m.diskExtensions = nil
 	m.diskStatus = "Scanning…"
 	progress := make(chan disk.Progress, 1)
@@ -117,6 +119,8 @@ func (m *Model) clearDisk() {
 	m.extensionFilter = ""
 	m.diskExtensions = nil
 	m.mapHover = ""
+	m.mapMotion = mapMotion{}
+	m.mapAnimating = false
 	m.diskStatus = "Index cleared"
 }
 func (m *Model) volumeOptions() []string {
@@ -247,6 +251,7 @@ func (m *Model) diskView(c *ui.Context) {
 		ui.Text(c, fmt.Sprintf("%d files · %d skipped · %d estimates", s.Files, s.Skipped, s.Estimated)).TextColor(t.TextMuted)
 	})
 	ui.Row(c).FillWidth().Height(32).Shrink(0).Padding(3, 10).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Checkbox(c, &m.animateMap, "Animate").Tooltip("Animate directory drill-down (respects Windows reduced motion)")
 		label := "Select a file or folder"
 		valid := m.diskNode >= 0 && m.diskNode < len(s.Nodes)
 		if valid {
@@ -282,6 +287,8 @@ func (m *Model) navigateDisk(id int) {
 		return
 	}
 	m.diskRoot = id
+	m.diskMode = "Tree"
+	m.diskQuery = ""
 	m.diskSelected = -1
 	m.diskViewKey = ""
 	m.mapRoot = -1
@@ -414,11 +421,18 @@ func (m *Model) prepareMap() {
 	m.mapMetric = m.diskMetric
 	m.mapWidth = 0
 	m.mapHeight = 0
-	m.diskItems = nil
 	m.diskRects = nil
+	m.diskItems = nil
 	m.diskExtensions = nil
-	stats := map[string]extensionStat{}
 	s := m.diskSnapshot
+	// The map is intentionally one hierarchy level deep: a directory is one
+	// rectangle whose weight is its aggregate size. Entering it reveals its children.
+	for _, id := range s.Nodes[m.diskRoot].Children {
+		if v := m.diskValue(s.Nodes[id]); v > 0 {
+			m.diskItems = append(m.diskItems, treemap.Item{ID: id, Value: v})
+		}
+	}
+	stats := map[string]extensionStat{}
 	stack := []int{m.diskRoot}
 	for len(stack) > 0 {
 		id := stack[len(stack)-1]
@@ -426,33 +440,29 @@ func (m *Model) prepareMap() {
 		n := s.Nodes[id]
 		if n.Dir {
 			stack = append(stack, n.Children...)
-		} else {
-			v := m.diskValue(n)
-			ext := strings.ToLower(filepath.Ext(n.Name))
-			if ext == "" {
-				ext = "(no extension)"
-			}
-			stat := stats[ext]
-			stat.Extension = ext
-			stat.Files++
-			stat.Bytes += v
-			stats[ext] = stat
-
+			continue
 		}
+		ext := fileExtension(n.Name)
+		st := stats[ext]
+		st.Extension = ext
+		st.Files++
+		st.Bytes += m.diskValue(n)
+		stats[ext] = st
 	}
-	for _, stat := range stats {
-		m.diskExtensions = append(m.diskExtensions, stat)
+	for _, st := range stats {
+		m.diskExtensions = append(m.diskExtensions, st)
 	}
 	slices.SortFunc(m.diskExtensions, func(a, b extensionStat) int { return cmp.Compare(b.Bytes, a.Bytes) })
-
 }
+
 func (m *Model) diskMap(c *ui.Context) {
 	m.prepareMap()
 	t := c.Theme()
+	animate := m.animateMap && !c.Preferences().ReduceMotion
 	ui.Column(c).Fill().AlignItems(ui.Stretch).Children(func() {
 		ui.Row(c).FillWidth().Height(26).Shrink(0).PaddingX(10).Gap(12).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, "Space map").Bold()
-			ui.Text(c, "Color = extension · click file to locate its folder").FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, "Current level only · click a folder to zoom · color = file type").FontSize(11).TextColor(t.TextMuted)
 		})
 		canvas := ui.Box(c.Key("space-map")).Grow(1).FillWidth().MinHeight(0).Clip().Background(t.Surface).Label("Treemap canvas")
 		if canvas.Clicked() {
@@ -496,51 +506,94 @@ func (m *Model) diskMap(c *ui.Context) {
 				return
 			}
 			if r.W != m.mapWidth || r.H != m.mapHeight {
-				m.diskRects = nil
-				if m.diskValue(m.diskSnapshot.Nodes[m.diskRoot]) > 0 {
-					m.diskRects = treemap.TreeLayout(m.diskRoot, r.W, r.H, 8192, func(id int) []treemap.Item {
-						kids := m.diskSnapshot.Nodes[id].Children
-						items := make([]treemap.Item, 0, len(kids))
-						for _, kid := range kids {
-							n := m.diskSnapshot.Nodes[kid]
-							items = append(items, treemap.Item{ID: kid, Value: m.diskValue(n)})
-						}
-						return items
-					})
+				m.diskRects = treemap.Layout(m.diskItems, r.W, r.H)
+				sum := 0.0
+				for _, it := range m.diskItems {
+					sum += float64(it.Value)
 				}
+				next := mapScene{Root: m.diskRoot, Items: len(m.diskItems), Sum: sum, Width: r.W, Height: r.H, Rects: m.diskRects}
+				old := m.mapMotion.Scene
+				enter, back := -1, -1
+				if old.Root != m.diskRoot {
+					enter = m.childBelow(m.diskRoot, old.Root)
+					back = m.childBelow(old.Root, m.diskRoot)
+				}
+				// Only a changed scene animates; a resize of the same scene snaps.
+				changed := old.Root != next.Root || old.Items != next.Items || old.Sum != next.Sum
+				m.mapMotion.retarget(next, p.Now(), animate && changed, enter, back)
 				m.mapWidth, m.mapHeight = r.W, r.H
 			}
-			for _, b := range m.diskRects {
-				if b.W < 1 || b.H < 1 {
-					continue
+			progress := m.mapMotion.progress(p.Now(), animate)
+			m.mapAnimating = progress < 1
+			v := mapEase(progress)
+			if m.mapAnimating {
+				p.AnimationFrame()
+				for i, b := range m.mapMotion.Previous {
+					m.paintMapCell(p, r, interpolateRect(b, m.mapMotion.PreviousTo[i], v), 1-v, false)
 				}
-				label := "Other files"
-				color := ui.Hex("#65748a")
-				if b.ID >= 0 {
-					n := m.diskSnapshot.Nodes[b.ID]
-					label = n.Name
-					if n.Dir {
-						label += "/"
-					} else {
-						color = extensionColor(filepath.Ext(n.Name))
-					}
+			}
+			for i, b := range m.diskRects {
+				if m.mapAnimating {
+					b = interpolateRect(m.mapMotion.From[i], b, v)
 				}
-				p.Fill(ui.Rect{X: r.X + b.X, Y: r.Y + b.Y, W: max(b.W-1, 0), H: max(b.H-1, 0)}, color, 0)
-				if b.ID == m.diskNode {
-					p.Stroke(ui.Rect{X: r.X + b.X + 1, Y: r.Y + b.Y + 1, W: max(b.W-3, 0), H: max(b.H-3, 0)}, ui.RGB(255, 255, 255), 0, 2)
-				}
-				if b.W > 90 && b.H > 24 {
-					maxChars := int((b.W - 8) / 7)
-					runes := []rune(label)
-					if len(runes) > maxChars && maxChars > 2 {
-						label = string(runes[:maxChars-1]) + "…"
-					}
-					p.Clip(ui.Rect{X: r.X + b.X, Y: r.Y + b.Y, W: b.W, H: b.H}, 0, func() { p.Text(r.X+b.X+4, r.Y+b.Y+4, label, 11, ui.RGB(255, 255, 255)) })
-				}
+				m.paintMapCell(p, r, b, v, true)
 			}
 		})
 		ui.Text(c, m.mapHover).FillWidth().Height(24).Shrink(0).SingleLine().Padding(3, 10).FontSize(11).TextColor(t.TextMuted)
 	})
+}
+
+// childBelow returns the first level below ancestor containing node.
+func (m *Model) childBelow(node, ancestor int) int {
+	if m.diskSnapshot == nil || node == ancestor {
+		return -1
+	}
+	for steps := 0; steps < len(m.diskSnapshot.Nodes); steps++ {
+		if node < 0 || node >= len(m.diskSnapshot.Nodes) {
+			break
+		}
+		p := m.diskSnapshot.Nodes[node].Parent
+		if p == ancestor {
+			return node
+		}
+		node = p
+	}
+	return -1
+}
+func (m *Model) paintMapCell(p *ui.Painter, viewport ui.Rect, b treemap.Rect, alpha float32, labels bool) {
+	if alpha <= 0 || m.diskSnapshot == nil || b.ID < 0 || b.ID >= len(m.diskSnapshot.Nodes) {
+		return
+	}
+	x, y := max(b.X, 0), max(b.Y, 0)
+	w, h := min(b.X+b.W-1, viewport.W)-x, min(b.Y+b.H-1, viewport.H)-y
+	if w < 1 || h < 1 {
+		return
+	}
+	n := m.diskSnapshot.Nodes[b.ID]
+	color := extensionColor(filepath.Ext(n.Name))
+	label := n.Name
+	if n.Dir {
+		color = extensionColor("folder/" + n.Name)
+		label += "/"
+	}
+	box := ui.Rect{X: viewport.X + x, Y: viewport.Y + y, W: w, H: h}
+	p.Fill(box, color.Alpha(alpha), 2)
+	if b.ID == m.diskNode {
+		p.Stroke(box, ui.RGB(255, 255, 255).Alpha(alpha), 2, 2)
+	}
+	if labels && w > 60 && h > 24 {
+		runes := []rune(label)
+		maxChars := int((w - 10) / 8)
+		if len(runes) > maxChars && maxChars > 1 {
+			label = string(runes[:maxChars-1]) + "…"
+		}
+		p.Clip(box, 0, func() {
+			p.Text(box.X+5, box.Y+5, label, 12, ui.RGB(255, 255, 255).Alpha(alpha))
+			if h > 46 {
+				p.Text(box.X+5, box.Y+24, format.Bytes(m.diskValue(n)), 11, ui.RGB(255, 255, 255).Alpha(alpha*.85))
+			}
+		})
+	}
 }
 
 type extensionStat struct {

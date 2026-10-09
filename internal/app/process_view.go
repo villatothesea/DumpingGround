@@ -199,7 +199,16 @@ func (m *Model) processView(c *ui.Context) {
 		if r.Access != "" && col >= 2 && col <= 6 {
 			text = "—"
 		}
-		ui.Text(c, text).SingleLine().Tooltip(r.Path).ContextMenu(func(menu *ui.Menu) {
+		rowView := ui.Row(c).Gap(6).AlignItems(ui.Center)
+		rowView.Children(func() {
+			if col == 0 {
+				if icon := m.processIcon(r.Path); icon != nil {
+					ui.Image(c, icon).Size(16, 16)
+				}
+			}
+			ui.Text(c, text).SingleLine().Tooltip(r.Path)
+		})
+		rowView.ContextMenu(func(menu *ui.Menu) {
 			if m.processTreeMode {
 				for i := 0; i < m.processTree.Rows(); i++ {
 					if m.processTree.Item(i) == id {
@@ -265,6 +274,40 @@ func (m *Model) processView(c *ui.Context) {
 		m.processDetails(c)
 	}
 }
+func (m *Model) processIcon(path string) *ui.Bitmap {
+	if icon, ok := m.iconCache[path]; ok {
+		return icon
+	}
+	if path != "" && m.window != nil && len(m.iconCache) < 256 && !m.iconPending[path] && !strings.HasPrefix(path, `\\`) {
+		select {
+		case m.iconRequests <- path:
+			m.iconPending[path] = true
+		default:
+		}
+	}
+	return m.iconCache[""]
+}
+
+func (m *Model) loadIcons() {
+	for {
+		select {
+		case path := <-m.iconRequests:
+			icon := systemIcon(path)
+			m.post(func() {
+				delete(m.iconPending, path)
+				if icon == nil {
+					icon = m.iconCache[""]
+				}
+				if len(m.iconCache) < 256 {
+					m.iconCache[path] = icon
+				}
+			})
+		case <-m.ctx.Done():
+			return
+		}
+	}
+}
+
 func (m *Model) requestInspection(pid uint32) {
 	if m.inspectedPID == pid {
 		return

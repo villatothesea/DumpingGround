@@ -87,6 +87,9 @@ type Model struct {
 	lastQuery                       string
 	lastSort                        ui.SortOrder
 	dirtyProcesses                  bool
+	iconCache                       map[string]*ui.Bitmap
+	iconPending                     map[string]bool
+	iconRequests                    chan string
 	status                          string
 	diskScanner                     disk.Scanner
 	diskPath, diskDrive             string
@@ -112,6 +115,9 @@ type Model struct {
 	mapMetric                       string
 	mapWidth, mapHeight             float32
 	mapHover                        string
+	mapMotion                       mapMotion
+	animateMap                      bool
+	mapAnimating                    bool
 	diskSplit                       float32
 	diskLeft                        float32
 	diskExtensions                  []extensionStat
@@ -133,7 +139,9 @@ func New() *Model {
 	return &Model{processSvc: process.NewService(), processByPID: map[uint32]process.Info{}, processSelected: -1,
 		processSort: ui.SortOrder{Column: "name"}, processInterval: "1 s", ctx: ctx, close: cancel,
 		processUpdates: make(chan processResult, 1), refresh: make(chan struct{}, 1), inspection: make(chan inspectionResult, 1), events: make(chan func(), 8),
-		diskStatus: "Choose a drive or folder to scan", diskMode: "Tree", diskMetric: "Allocated", diskSelected: -1, diskNode: -1, extensionSelected: -1, mapRoot: -1, diskSplit: 300, detailTab: "Properties"}
+		iconCache:   make(map[string]*ui.Bitmap),
+		iconPending: make(map[string]bool), iconRequests: make(chan string, 32),
+		diskStatus: "Choose a drive or folder to scan", diskMode: "Tree", diskMetric: "Allocated", diskSelected: -1, diskNode: -1, extensionSelected: -1, mapRoot: -1, diskSplit: 300, animateMap: true, detailTab: "Properties"}
 }
 func (m *Model) Run() error {
 	mygo.App.SetName("DumpingGround")
@@ -145,6 +153,8 @@ func (m *Model) Run() error {
 		if m.InitialPage == "disk" {
 			m.page = diskPage
 		}
+		m.iconCache[""] = systemIcon("")
+		go m.loadIcons()
 		m.window = mygo.NewWindow(mygo.WindowOptions{Title: "DumpingGround", Width: 1180, Height: 760, MinWidth: 880, MinHeight: 580, Content: ui.View(m.view)})
 		mygo.App.OnSecondInstance(func(_ []string, _ string) { m.window.Restore(); m.window.Show(); m.window.Focus() })
 		m.window.OnMinimize(func() { m.minimized = true; m.samplerActive.Store(false) })
