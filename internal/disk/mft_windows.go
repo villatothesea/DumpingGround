@@ -87,6 +87,14 @@ func fastVolumeScan(ctx context.Context, root string, progress chan<- Progress) 
 		return nil, errors.New("incomplete MFT mapping")
 	}
 	stream := io.MultiReader(readers...)
+	return scanMFTRecords(ctx, stream, count, recordBytes, sector, root, progress)
+}
+
+// scanMFTRecords decodes the MFT stream into a snapshot. Individual bad or
+// unusual records are counted like walk skips instead of failing the whole
+// volume; only conditions that make the snapshot meaningless return an error.
+func scanMFTRecords(ctx context.Context, stream io.Reader, count int64, recordBytes, sector int, root string, progress chan<- Progress) (*Snapshot, error) {
+	u32 := binary.LittleEndian.Uint32
 	start := time.Now()
 	out := &Snapshot{Method: "NTFS MFT"}
 	refs := make([]int32, int(count))
@@ -111,7 +119,7 @@ func fastVolumeScan(ctx context.Context, root string, progress chan<- Progress) 
 			break
 		}
 		n := min(int64(len(buf)), (count-index)*int64(recordBytes))
-		if _, e = io.ReadFull(stream, buf[:n]); e != nil {
+		if _, e := io.ReadFull(stream, buf[:n]); e != nil {
 			return nil, e
 		}
 		for offset := 0; offset < int(n); offset += recordBytes {
@@ -123,7 +131,11 @@ func fastVolumeScan(ctx context.Context, root string, progress chan<- Progress) 
 			}
 			r, e := ntfs.Decode(raw, sector)
 			if e != nil {
-				return nil, e
+				// One torn or corrupt record must not abort a scan of
+				// millions: skip it, the way the directory walk skips
+				// entries it cannot open.
+				out.Skipped++
+				continue
 			}
 			if r.Base != 0 {
 				continue
@@ -135,23 +147,29 @@ func fastVolumeScan(ctx context.Context, root string, progress chan<- Progress) 
 				out.Skipped++
 				continue
 			}
-			if !r.Directory && !r.DataKnown {
-				return nil, fmt.Errorf("%w: external data attributes", ntfs.ErrUnsupported)
-			}
 			hasLong := false
 			for _, name := range r.Names {
 				if name.Namespace != 2 {
 					hasLong = true
 				}
 			}
+			// Records without an unnamed $DATA stream keep their data
+			// elsewhere: EFS files, attribute lists held by extension
+			// records, named streams only. They still exist on disk, so
+			// index them at unknown size instead of abandoning the volume.
+			unknownData := !r.Directory && !r.DataKnown
 			physicalCounted := false
 			namesSeen := map[string]bool{}
+			indexed := len(out.Nodes)
 			for _, name := range r.Names {
 				if name.Namespace == 2 && hasLong {
 					continue
 				}
 				if name.Text == "" || strings.ContainsAny(name.Text, `\/:`) {
-					return nil, errors.New("invalid NTFS filename")
+					// An impossible name means a corrupt record; keep the
+					// names already decoded and move to the next record.
+					out.Skipped++
+					break
 				}
 				key := fmt.Sprintf("%d/%s", name.Parent, name.Text)
 				if namesSeen[key] {
@@ -185,6 +203,9 @@ func fastVolumeScan(ctx context.Context, root string, progress chan<- Progress) 
 				out.Nodes = append(out.Nodes, node)
 				parents = append(parents, name.Parent)
 				sequences = append(sequences, r.Sequence)
+			}
+			if unknownData && len(out.Nodes) > indexed {
+				out.Estimated++
 			}
 			report()
 		}
