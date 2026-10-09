@@ -15,6 +15,9 @@ import (
 
 const (
 	th32csSnapProcess              = 0x00000002
+	th32csSnapThread               = 0x00000004
+	th32csSnapModule               = 0x00000008
+	th32csSnapModule32             = 0x00000010
 	processTerminate               = 0x0001
 	processQueryLimitedInformation = 0x1000
 	processVMRead                  = 0x0010
@@ -58,12 +61,39 @@ type ioCounters struct {
 
 type fileTime struct{ Low, High uint32 }
 
+type moduleEntry32 struct {
+	Size         uint32
+	ModuleID     uint32
+	ProcessID    uint32
+	GlobalUsage  uint32
+	ProcessUsage uint32
+	BaseAddress  uintptr
+	BaseSize     uint32
+	Module       uintptr
+	Name         [256]uint16
+	Path         [260]uint16
+}
+
+type threadEntry32 struct {
+	Size           uint32
+	Usage          uint32
+	ThreadID       uint32
+	OwnerProcessID uint32
+	BasePriority   int32
+	DeltaPriority  int32
+	Flags          uint32
+}
+
 var (
 	kernel32           = syscall.NewLazyDLL("kernel32.dll")
 	psapi              = syscall.NewLazyDLL("psapi.dll")
 	procCreateSnapshot = kernel32.NewProc("CreateToolhelp32Snapshot")
 	procFirst          = kernel32.NewProc("Process32FirstW")
 	procNext           = kernel32.NewProc("Process32NextW")
+	procModuleFirst    = kernel32.NewProc("Module32FirstW")
+	procModuleNext     = kernel32.NewProc("Module32NextW")
+	procThreadFirst    = kernel32.NewProc("Thread32First")
+	procThreadNext     = kernel32.NewProc("Thread32Next")
 	procOpen           = kernel32.NewProc("OpenProcess")
 	procClose          = kernel32.NewProc("CloseHandle")
 	procQueryPath      = kernel32.NewProc("QueryFullProcessImageNameW")
@@ -111,6 +141,17 @@ func (c *windowsCollector) Snapshot() ([]Info, error) {
 			break
 		}
 	}
+	seen := make(map[uint32]struct{}, len(result))
+	for _, info := range result {
+		seen[info.PID] = struct{}{}
+	}
+	c.mu.Lock()
+	for pid := range c.previous {
+		if _, ok := seen[pid]; !ok {
+			delete(c.previous, pid)
+		}
+	}
+	c.mu.Unlock()
 	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
 	return result, nil
 }

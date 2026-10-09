@@ -35,6 +35,10 @@ type Model struct {
 	processTree      ui.OutlineState[uint32]
 	processSelected  int
 	processQuery     string
+	inspectedPID     uint32
+	inspectedModules []process.Module
+	inspectedThreads []process.Thread
+	inspectError     string
 	page             page
 	lastProcessError string
 
@@ -280,6 +284,7 @@ func (m *Model) processDetails(c *ui.Context) {
 			ui.Text(c, "Select a process to inspect its path, memory and actions.").TextColor(t.TextMuted)
 			return
 		}
+		m.requestInspection(selected.PID)
 		ui.Text(c, selected.Name).FontSize(18).Bold().SingleLine()
 		ui.Text(c, fmt.Sprintf("PID %d", selected.PID)).TextColor(t.TextMuted)
 		ui.Text(c, "Memory").FontSize(11).TextColor(t.TextMuted)
@@ -287,6 +292,10 @@ func (m *Model) processDetails(c *ui.Context) {
 		ui.Text(c, "CPU").FontSize(11).TextColor(t.TextMuted)
 		ui.Text(c, format.Percent(selected.CPU)).FontSize(15)
 		ui.Text(c, selected.Path).FontSize(12).SingleLine().Tooltip(selected.Path)
+		ui.Text(c, fmt.Sprintf("Threads  %d   Modules  %d", len(m.inspectedThreads), len(m.inspectedModules))).FontSize(12).TextColor(t.TextMuted)
+		if m.inspectError != "" {
+			ui.Text(c, m.inspectError).FontSize(11).TextColor(t.TextMuted).SingleLine()
+		}
 		ui.Spacer(c)
 		if ui.Button(c, "Terminate process").Clicked() {
 			go m.terminate(selected.PID, false)
@@ -367,6 +376,37 @@ func maxf(a, b float32) float32 {
 		return a
 	}
 	return b
+}
+
+func (m *Model) requestInspection(pid uint32) {
+	if m.inspectedPID == pid {
+		return
+	}
+	m.inspectedPID, m.inspectedModules, m.inspectedThreads, m.inspectError = pid, nil, nil, "Loading modules and threads…"
+	inspector, ok := m.processSvc.Inspect()
+	if !ok {
+		m.inspectError = "Detailed inspection is unavailable on this platform"
+		return
+	}
+	go func() {
+		modules, moduleErr := inspector.Modules(pid)
+		threads, threadErr := inspector.Threads(pid)
+		if m.window != nil {
+			m.window.Update(func() {
+				if m.inspectedPID != pid {
+					return
+				}
+				m.inspectedModules, m.inspectedThreads = modules, threads
+				if moduleErr != nil {
+					m.inspectError = moduleErr.Error()
+				} else if threadErr != nil {
+					m.inspectError = threadErr.Error()
+				} else {
+					m.inspectError = ""
+				}
+			})
+		}
+	}()
 }
 
 func (m *Model) refreshOnce() {

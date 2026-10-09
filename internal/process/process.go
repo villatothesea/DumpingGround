@@ -24,8 +24,29 @@ type Collector interface {
 	Terminate(pid uint32, tree bool) error
 }
 
+type Module struct {
+	Name string
+	Path string
+	Size uint64
+}
+
+type Thread struct {
+	ID       uint32
+	OwnerPID uint32
+	Priority int32
+}
+
+type Inspector interface {
+	Modules(pid uint32) ([]Module, error)
+	Threads(pid uint32) ([]Thread, error)
+}
+
 type Service struct{ collector Collector }
 
 func NewService() *Service                               { return &Service{collector: newCollector()} }
 func (s *Service) Snapshot() ([]Info, error)             { return s.collector.Snapshot() }
 func (s *Service) Terminate(pid uint32, tree bool) error { return s.collector.Terminate(pid, tree) }
+func (s *Service) Inspect() (Inspector, bool) {
+	inspector, ok := s.collector.(Inspector)
+	return inspector, ok
+}
