@@ -30,7 +30,7 @@ type systemHandleEntry struct {
 }
 type unicodeString struct {
 	Length, Maximum uint16
-	Buffer          uintptr
+	Buffer          *uint16
 }
 
 var (
@@ -83,15 +83,15 @@ func querySystemHandles() ([]systemHandleEntry, error) {
 	}
 	return nil, errors.New("handle table exceeds safety limit")
 }
-func readUnicode(ptr uintptr, max int) string {
-	if ptr == 0 {
+func readUnicode(p unsafe.Pointer, max int) string {
+	if p == nil {
 		return ""
 	}
-	u := *(*unicodeString)(unsafe.Pointer(ptr))
+	u := *(*unicodeString)(p)
 	if u.Length == 0 || u.Length%2 != 0 || int(u.Length) > max {
 		return ""
 	}
-	raw := unsafe.Slice((*uint16)(unsafe.Pointer(u.Buffer)), int(u.Length)/2)
+	raw := unsafe.Slice(u.Buffer, int(u.Length)/2)
 	return syscall.UTF16ToString(raw)
 }
 func queryObjectString(handle uintptr, class uint32) string {
@@ -101,7 +101,7 @@ func queryObjectString(handle uintptr, class uint32) string {
 		var need uint32
 		status, _, _ := ntQueryObject.Call(handle, uintptr(class), uintptr(unsafe.Pointer(&buf[0])), uintptr(size), uintptr(unsafe.Pointer(&need)))
 		if status == 0 {
-			result := readUnicode(uintptr(unsafe.Pointer(&buf[0])), 64<<10)
+			result := readUnicode(unsafe.Pointer(&buf[0]), 64<<10)
 			runtime.KeepAlive(buf)
 			return result
 		}

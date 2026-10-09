@@ -80,11 +80,11 @@ var (
 	symModuleBase     = dbghelp.NewProc("SymGetModuleBase64")
 	readProcessMemory = kernel32.NewProc("ReadProcessMemory")
 	procOpenThread    = kernel32.NewProc("OpenThread")
-	readCallback      = syscall.NewCallback(func(process, addr, buffer, size, read uintptr) uintptr {
+	readCallback      = syscall.NewCallback(func(process, addr, buffer, size uintptr, read *uintptr) uintptr {
 		var got uintptr
 		ok, _, _ := readProcessMemory.Call(process, addr, buffer, size, uintptr(unsafe.Pointer(&got)))
-		if read != 0 {
-			*(*uintptr)(unsafe.Pointer(read)) = got
+		if read != nil {
+			*read = got
 		}
 		return ok
 	})
