@@ -48,6 +48,7 @@ type memoryCounters struct {
 	QuotaNonPagedPoolUsage     uintptr
 	PagefileUsage              uintptr
 	PeakPagefileUsage          uintptr
+	PrivateUsage               uintptr
 }
 
 type ioCounters struct {
@@ -104,6 +105,7 @@ var (
 )
 
 type sample struct {
+	created     uint64
 	cpu         uint64
 	read, write uint64
 	at          time.Time
@@ -116,6 +118,8 @@ type windowsCollector struct {
 func newCollector() Collector { return &windowsCollector{previous: make(map[uint32]sample)} }
 
 func (c *windowsCollector) Snapshot() ([]Info, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	snapshot, _, err := procCreateSnapshot.Call(th32csSnapProcess, 0)
 	if snapshot == 0 || snapshot == uintptr(syscall.InvalidHandle) {
 		if err == syscall.Errno(0) {
@@ -145,13 +149,11 @@ func (c *windowsCollector) Snapshot() ([]Info, error) {
 	for _, info := range result {
 		seen[info.PID] = struct{}{}
 	}
-	c.mu.Lock()
 	for pid := range c.previous {
 		if _, ok := seen[pid]; !ok {
 			delete(c.previous, pid)
 		}
 	}
-	c.mu.Unlock()
 	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
 	return result, nil
 }
@@ -167,6 +169,7 @@ func (c *windowsCollector) readEntry(entry *processEntry32) Info {
 		h, _, _ = procOpen.Call(processQueryLimitedInformation, 0, uintptr(entry.ProcessID))
 	}
 	if h == 0 {
+		info.Access = "Access denied or process exited"
 		return info
 	}
 	defer procClose.Call(h)
@@ -175,6 +178,7 @@ func (c *windowsCollector) readEntry(entry *processEntry32) Info {
 	memory.Size = uint32(unsafe.Sizeof(memory))
 	if ret, _, _ := procMemory.Call(h, uintptr(unsafe.Pointer(&memory)), uintptr(unsafe.Sizeof(memory))); ret != 0 {
 		info.Memory = uint64(memory.WorkingSetSize)
+		info.Private = uint64(memory.PrivateUsage)
 	}
 	var created, exited, kernel, user fileTime
 	if ret, _, _ := procTimes.Call(h, uintptr(unsafe.Pointer(&created)), uintptr(unsafe.Pointer(&exited)), uintptr(unsafe.Pointer(&kernel)), uintptr(unsafe.Pointer(&user))); ret != 0 {
@@ -183,12 +187,19 @@ func (c *windowsCollector) readEntry(entry *processEntry32) Info {
 		if ret, _, _ := procIO.Call(h, uintptr(unsafe.Pointer(&io))); ret != 0 {
 			info.ReadBytes, info.WriteBytes = io.ReadTransferCount, io.WriteTransferCount
 		}
-		c.mu.Lock()
+		createdID := fileTimeValue(created)
+		info.Started = time.Unix(0, int64(createdID-116444736000000000)*100)
 		prev, ok := c.previous[info.PID]
 		now := time.Now()
-		if ok && now.After(prev.at) {
+		if ok && prev.created == createdID && cpu >= prev.cpu && now.After(prev.at) {
 			elapsed := now.Sub(prev.at).Seconds()
 			if elapsed > 0 {
+				if info.ReadBytes >= prev.read {
+					info.ReadRate = uint64(float64(info.ReadBytes-prev.read) / elapsed)
+				}
+				if info.WriteBytes >= prev.write {
+					info.WriteRate = uint64(float64(info.WriteBytes-prev.write) / elapsed)
+				}
 				info.CPU = float64(cpu-prev.cpu) / 10_000_000 / elapsed / float64(maxInt(runtime.NumCPU(), 1)) * 100
 				if info.CPU < 0 {
 					info.CPU = 0
@@ -198,8 +209,7 @@ func (c *windowsCollector) readEntry(entry *processEntry32) Info {
 				}
 			}
 		}
-		c.previous[info.PID] = sample{cpu: cpu, read: info.ReadBytes, write: info.WriteBytes, at: now}
-		c.mu.Unlock()
+		c.previous[info.PID] = sample{created: createdID, cpu: cpu, read: info.ReadBytes, write: info.WriteBytes, at: now}
 	}
 	return info
 }
@@ -208,11 +218,11 @@ func queryPath(h uintptr) string {
 	for size := 512; size <= maxPath; size *= 2 {
 		buf := make([]uint16, size)
 		length := uint32(len(buf))
-		ret, _, _ := procQueryPath.Call(h, 0, uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&length)))
+		ret, _, callErr := procQueryPath.Call(h, 0, uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&length)))
 		if ret != 0 {
 			return syscall.UTF16ToString(buf[:length])
 		}
-		if syscall.GetLastError() != syscall.Errno(122) {
+		if callErr != syscall.Errno(122) {
 			return ""
 		}
 	}
@@ -273,9 +283,14 @@ func (c *windowsCollector) children() (map[uint32][]uint32, error) {
 
 func descendants(root uint32, children map[uint32][]uint32) []uint32 {
 	var out []uint32
+	seen := map[uint32]bool{root: true}
 	var visit func(uint32)
 	visit = func(id uint32) {
 		for _, child := range children[id] {
+			if seen[child] {
+				continue
+			}
+			seen[child] = true
 			out = append(out, child)
 			visit(child)
 		}
