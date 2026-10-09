@@ -36,6 +36,7 @@ type Model struct {
 	processTree      ui.OutlineState[uint32]
 	processSelected  int
 	processQuery     string
+	processSort      ui.SortOrder
 	inspectedPID     uint32
 	inspectedModules []process.Module
 	inspectedThreads []process.Thread
@@ -269,8 +270,54 @@ func (m *Model) processTable(c *ui.Context) {
 		return
 	}
 	m.processTree.List.Selected = &m.processSelected
+	m.processTree.List.Sort = &m.processSort
 	m.processTree.List.Label = func(i int) string { return m.processByPID[m.processTree.Item(i)].Name }
+	m.sortProcessTree()
 	ui.OutlineTable(c, &m.processTree, cols, m.processRoots, children, cell).Grow(1)
+}
+
+func (m *Model) sortProcessTree() {
+	compare := func(a, b uint32) bool {
+		x, y := m.processByPID[a], m.processByPID[b]
+		cmp := 0
+		switch m.processSort.Column {
+		case "pid":
+			cmp = compareUint64(uint64(x.PID), uint64(y.PID))
+		case "cpu":
+			if x.CPU < y.CPU {
+				cmp = -1
+			} else if x.CPU > y.CPU {
+				cmp = 1
+			}
+		case "memory":
+			cmp = compareUint64(x.Memory, y.Memory)
+		case "io":
+			cmp = compareUint64(x.ReadBytes+x.WriteBytes, y.ReadBytes+y.WriteBytes)
+		default:
+			cmp = strings.Compare(strings.ToLower(x.Name), strings.ToLower(y.Name))
+		}
+		if cmp == 0 {
+			cmp = compareUint64(uint64(x.PID), uint64(y.PID))
+		}
+		if m.processSort.Descending {
+			return cmp > 0
+		}
+		return cmp < 0
+	}
+	sort.SliceStable(m.processRoots, func(i, j int) bool { return compare(m.processRoots[i], m.processRoots[j]) })
+	for parent := range m.processChildren {
+		sort.SliceStable(m.processChildren[parent], func(i, j int) bool { return compare(m.processChildren[parent][i], m.processChildren[parent][j]) })
+	}
+}
+
+func compareUint64(a, b uint64) int {
+	if a < b {
+		return -1
+	}
+	if a > b {
+		return 1
+	}
+	return 0
 }
 
 func (m *Model) processDetails(c *ui.Context) {
@@ -296,6 +343,15 @@ func (m *Model) processDetails(c *ui.Context) {
 		ui.Text(c, fmt.Sprintf("Threads  %d   Modules  %d", len(m.inspectedThreads), len(m.inspectedModules))).FontSize(12).TextColor(t.TextMuted)
 		if m.inspectError != "" {
 			ui.Text(c, m.inspectError).FontSize(11).TextColor(t.TextMuted).SingleLine()
+		}
+		if len(m.inspectedModules) > 0 {
+			ui.Text(c, "Modules").FontSize(11).TextColor(t.TextMuted)
+			for i := 0; i < len(m.inspectedModules) && i < 3; i++ {
+				ui.Text(c, m.inspectedModules[i].Name).FontSize(11).SingleLine()
+			}
+		}
+		if len(m.inspectedThreads) > 0 {
+			ui.Text(c, fmt.Sprintf("Threads: %d", len(m.inspectedThreads))).FontSize(11).TextColor(t.TextMuted)
 		}
 		ui.Spacer(c)
 		if ui.Button(c, "Terminate process").Clicked() {
