@@ -161,6 +161,12 @@ func (m *Model) rebuildProcessTree() {
 }
 
 func (m *Model) view(c *ui.Context) {
+	if c.Shortcut(ui.Ctrl, ui.Key1) {
+		m.page = processPage
+	}
+	if c.Shortcut(ui.Ctrl, ui.Key2) {
+		m.page = diskPage
+	}
 	t := c.Theme()
 	ui.Column(c).Fill().Background(t.Background).Children(func() {
 		m.toolbar(c)
