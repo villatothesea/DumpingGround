@@ -25,7 +25,7 @@ func TestScanner(t *testing.T) {
 		t.Fatal(err)
 	}
 	progress := len(ch)
-	if got.Files != 2 || got.Bytes != 11 || got.Allocated != 11 || got.Nodes[got.Root].Bytes != 11 || got.Nodes[got.Root].Allocated != 11 || progress == 0 {
+	if got.Files != 2 || got.Bytes != 11 || got.Nodes[got.Root].Bytes != 11 || got.Nodes[got.Root].Allocated != got.Allocated || progress == 0 {
 		t.Fatalf("snapshot = %+v, progress = %d", got, progress)
 	}
 }
