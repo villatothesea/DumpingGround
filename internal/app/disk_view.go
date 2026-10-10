@@ -296,6 +296,7 @@ func (m *Model) clearDisk() {
 	m.rustOwnsIndex = false
 	m.rustSel = -1
 	m.rustConfirm = -1
+	m.rustRowConfirm = ""
 	m.diskStatus = "Index cleared"
 	// Dropping the index frees hundreds of MB; return them to the OS now
 	// instead of letting the runtime sit on the released heap. Async so the
@@ -389,6 +390,12 @@ func (m *Model) diskView(c *ui.Context) {
 	}
 	if m.diskSnapshot == nil {
 		m.idleCard(c, t)
+		return
+	}
+	if m.indexIsStale() {
+		// The index belongs to another drive — showing it under this one's
+		// chip would lie about what is scanned.
+		m.unscannedView(c, t)
 		return
 	}
 	m.resultsView(c, t, m.diskSnapshot)
@@ -510,7 +517,31 @@ func (m *Model) driveCard(c *ui.Context, t *ui.Theme, v disk.Volume) {
 func (m *Model) selectDrive(path string) {
 	m.diskDrive = path
 	m.diskPath = path
-	m.rustMode = m.rustReport != nil && m.scanPath == path
+	m.rustMode = m.rustReport != nil && strings.EqualFold(m.scanPath, path)
+}
+
+// indexIsStale reports whether the loaded index was built from a path
+// other than the selected one. An empty scanPath means none was recorded —
+// injected snapshots in tests — and counts as fresh.
+func (m *Model) indexIsStale() bool {
+	return m.scanPath != "" && !strings.EqualFold(m.scanPath, strings.TrimSpace(m.diskPath))
+}
+
+// unscannedView stands in for results while a different drive's index is
+// still loaded — the selected drive just has not been scanned yet.
+func (m *Model) unscannedView(c *ui.Context, t *ui.Theme) {
+	ui.Column(c).Grow(1).MinHeight(0).AlignItems(ui.Center).Children(func() {
+		ui.Spacer(c)
+		ui.Column(c).Width(340).Padding(18, 24).Gap(12).AlignItems(ui.Center).Background(t.Surface).Radius(8).BorderWidth(1).BorderColor(t.Border).Children(func() {
+			icon(c, "hdd", 30).TextColor(t.TextMuted)
+			ui.Text(c, m.diskPath+" hasn't been indexed").FontSize(14).Bold().SingleLine().Ellipsis("…").Tooltip(m.diskPath)
+			ui.Text(c, "Scan it to see what's inside — the previous index stays untouched until you do.").FontSize(11).TextColor(t.TextMuted)
+			if ui.PrimaryButton(c, "Scan "+m.diskPath).Clicked() {
+				m.startScan()
+			}
+		})
+		ui.Spacer(c)
+	})
 }
 
 func (m *Model) stat(c *ui.Context, t *ui.Theme, name, value string) {

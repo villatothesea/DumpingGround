@@ -21,7 +21,7 @@ var rustOrange = ui.RGB(0xF7, 0x4C, 0x00)
 // analyzes once that settles; an index built only for this is released
 // again right after, since the report is self-contained.
 func (m *Model) rustScan() {
-	if m.diskSnapshot == nil || m.scanPath != strings.TrimSpace(m.diskPath) {
+	if m.diskSnapshot == nil || m.indexIsStale() {
 		m.rustPending = true
 		if m.diskCancel == nil {
 			m.startScan()
@@ -36,7 +36,7 @@ func (m *Model) rustScan() {
 // touches every node of a possibly multi-million-node index.
 func (m *Model) rustAnalyze() {
 	s := m.diskSnapshot
-	if s == nil || m.rustBusy || m.scanPath != strings.TrimSpace(m.diskPath) {
+	if s == nil || m.rustBusy || m.indexIsStale() {
 		return
 	}
 	m.rustBusy = true
@@ -50,6 +50,7 @@ func (m *Model) rustAnalyze() {
 			m.rustMode = true
 			m.rustSel = -1
 			m.rustConfirm = -1
+			m.rustRowConfirm = ""
 			if m.rustOwnsIndex {
 				m.rustOwnsIndex = false
 				m.releaseIndexForRust()
@@ -90,7 +91,28 @@ func (m *Model) cleanRust(tier int) {
 	if rep == nil || m.rustBusy || tier < 0 || tier >= len(rep.Tiers) {
 		return
 	}
-	jobs := rep.Tiers[tier].Dirs
+	// Copy: ApplyDeleted rewrites the tier slices underneath, and the
+	// worker goroutine must not share their backing array.
+	m.rustDelete(append([]disk.RustDir{}, rep.Tiers[tier].Dirs...))
+}
+
+// cleanRustItem removes one project's whole target/ dir — the row-level
+// version of tier 3.
+func (m *Model) cleanRustItem(i int) {
+	rep := m.rustReport
+	if rep == nil || m.rustBusy || i < 0 || i >= len(rep.Items) {
+		return
+	}
+	it := rep.Items[i]
+	m.rustDelete([]disk.RustDir{{Path: it.Path, Bytes: it.Total}})
+}
+
+// rustDelete runs the actual removals off the UI goroutine, then folds the
+// outcome back into the report.
+func (m *Model) rustDelete(jobs []disk.RustDir) {
+	if len(jobs) == 0 {
+		return
+	}
 	m.rustBusy = true
 	m.rustMsg = "Deleting…"
 	go func() {
@@ -120,6 +142,7 @@ func (m *Model) cleanRust(tier int) {
 		m.post(func() {
 			m.rustBusy = false
 			m.rustConfirm = -1
+			m.rustRowConfirm = ""
 			m.rustMsg = fmt.Sprintf("Deleted %s dirs, freed about %s", format.Int(uint64(len(deleted))), format.Bytes(freed))
 			if failed > 0 && firstErr != nil {
 				m.rustMsg += fmt.Sprintf(" · %s failed: %s", format.Int(uint64(failed)), firstErr)
@@ -232,14 +255,19 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 			ui.Row(c).Width(70).Shrink(0).Justify(ui.End).Children(func() {
 				ui.Text(c, "%").FontSize(11).Bold().TextColor(t.TextMuted)
 			})
+			ui.Box(c).Width(76).Shrink(0)
 		})
 		total := max(rep.Scanned, 1)
 		ui.List(c, &m.rustList, len(rep.Items), func(i int) {
 			it := rep.Items[i]
 			hit := m.rustSel >= 0 && rustCovers(it, m.rustSel)
-			row := ui.Row(c).FillWidth().Height(26).Padding(0, 10).Gap(6).AlignItems(ui.Center).Radius(4)
-			if hit {
+			row := ui.Row(c).FillWidth().Height(28).Padding(0, 10).Gap(6).AlignItems(ui.Center).Radius(4)
+			hovered := row.Hovered()
+			switch {
+			case hit:
 				row.Background(t.Accent.Alpha(0.12))
+			case hovered:
+				row.Background(t.SurfaceHover)
 			}
 			row.Children(func() {
 				ui.Row(c).Width(56).Shrink(0).Gap(4).Children(func() {
@@ -258,9 +286,48 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 				ui.Row(c).Width(70).Shrink(0).Justify(ui.End).Children(func() {
 					ui.Text(c, fmt.Sprintf("%.1f%%", float64(it.Total)/float64(total)*100)).SingleLine()
 				})
+				ui.Row(c).Width(76).Shrink(0).Justify(ui.End).Children(func() {
+					m.rustRowButton(c, t, i, it)
+				})
 			})
 		}).Grow(1).FillWidth()
 	})
+}
+
+// rustRowButton is the per-row clean control: the first click arms it, the
+// second deletes that project's whole target/ dir. Arms cancel when the
+// report mutates — the key is the target path, not the row index.
+func (m *Model) rustRowButton(c *ui.Context, t *ui.Theme, i int, it disk.RustItem) {
+	armed := m.rustRowConfirm == it.Path
+	label, tip := "Clean", "Delete this project's target/ dir"
+	if armed {
+		label, tip = "Sure?", "Click again to delete "+it.Path
+	}
+	e := ui.Row(c).Height(22).PaddingX(8).Gap(4).AlignItems(ui.Center).Radius(t.Radius).Label("Clean " + it.Path).Tooltip(tip)
+	e.BorderWidth(1).BorderColor(t.Border)
+	if armed {
+		e.Background(t.Danger.Alpha(0.12)).BorderColor(t.Danger)
+	} else {
+		e.Background(t.Surface)
+	}
+	e.Draw(func(p *ui.Painter, r ui.Rect) {
+		if e.Pressed() {
+			p.Fill(r, t.SurfacePressed, t.Radius)
+		} else if e.Hovered() {
+			p.Fill(r, t.SurfaceHover, t.Radius)
+		}
+	})
+	e.Children(func() {
+		icon(c, "trash", 12).TextColor(t.Danger)
+		ui.Text(c, label).FontSize(11).SingleLine().TextColor(t.Danger)
+	})
+	if e.Disabled(m.rustBusy).Clicked() {
+		if armed {
+			m.cleanRustItem(i)
+		} else {
+			m.rustRowConfirm = it.Path
+		}
+	}
 }
 
 // rustTierCard is one cleanup level: its numbered badge, reclaimable size

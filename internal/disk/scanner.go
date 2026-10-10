@@ -105,6 +105,13 @@ func (s *Scanner) Scan(ctx context.Context, root string, progress chan<- Progres
 	if len(root) == 3 && root[1:] == ":\\" {
 		fast, fastErr := fastVolumeScan(ctx, root, progress)
 		if fastErr == nil || errors.Is(fastErr, context.Canceled) || errors.Is(fastErr, context.DeadlineExceeded) {
+			if fast != nil {
+				// The FRN reverse map takes a second or more on a
+				// million-node index; building it here keeps that work off
+				// the UI goroutine, which would otherwise pay it lazily on
+				// the first USN event and stall.
+				fast.frnInit()
+			}
 			return fast, fastErr
 		}
 		fallback, walkErr := s.scanDirectory(ctx, root, progress)
