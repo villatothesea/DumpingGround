@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"slices"
 	"sync/atomic"
 	"time"
 
@@ -115,6 +116,8 @@ type Model struct {
 	diskScanner                     disk.Scanner
 	diskPath, diskDrive             string
 	diskVolumes                     []disk.Volume
+	volsChecked                     time.Time
+	volsChecking                    atomic.Bool
 	diskSnapshot                    *disk.Snapshot
 	diskRoot, diskSelected          int
 	diskTree                        ui.OutlineState[int]
@@ -399,6 +402,9 @@ func (m *Model) view(c *ui.Context) {
 			c.After(50 * time.Millisecond)
 		} else if m.diskLiveDirty {
 			c.After(250 * time.Millisecond)
+		} else {
+			// One slow tick so freshly mounted drives appear on their own.
+			c.After(3 * time.Second)
 		}
 	}
 	if m.dirtyProcesses || m.lastQuery != m.processQuery || m.lastSort != m.processSort {
@@ -579,6 +585,31 @@ func (m *Model) setPage(pg page) {
 	if pg == processPage {
 		m.refreshOnce()
 	}
+	if pg == diskPage {
+		m.refreshVolumes()
+	}
+}
+
+// refreshVolumes re-enumerates the drive chips off the main thread so a
+// USB stick or a removed card reader appears, or disappears, while the
+// disk page sits open — the startup scan alone missed hot-plugged media.
+func (m *Model) refreshVolumes() {
+	m.volsChecked = time.Now()
+	if m.volsChecking.Swap(true) {
+		return
+	}
+	go func() {
+		defer m.volsChecking.Store(false)
+		vols := disk.Volumes()
+		m.post(func() {
+			if len(vols) == 0 || slices.EqualFunc(vols, m.diskVolumes, func(a, b disk.Volume) bool {
+				return a.Path == b.Path && a.Free == b.Free && a.Total == b.Total
+			}) {
+				return
+			}
+			m.diskVolumes = vols
+		})
+	}()
 }
 
 // selActs mirrors the prototype's #selacts: quick actions for the selected

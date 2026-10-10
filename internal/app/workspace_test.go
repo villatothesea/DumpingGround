@@ -54,6 +54,7 @@ func testModel(t *testing.T) *Model {
 	m.diskVolumes = []disk.Volume{{Path: "C:\\", Label: "System", Total: 1000, Free: 400}, {Path: "D:\\", Label: "Data", Total: 2000, Free: 500}}
 	m.diskDrive = "C:\\"
 	m.diskPath = "C:\\"
+	m.volsChecked = time.Now() // don't let a mid-test volume refresh rebuild the toolbar
 	return m
 }
 func visible(t *testing.T, tt *ui.Tester, w, h int, name string) {
@@ -87,7 +88,7 @@ func TestWorkspaceControlsStayInsideWindow(t *testing.T) {
 				for _, name := range []string{"End process", "End process tree", "Details", "Settings"} {
 					visible(t, tt, size[0], size[1], name)
 				}
-				if err := tt.Click("Disk usage"); err != nil {
+				if err := tt.Click("Disk Usage"); err != nil {
 					t.Fatal(err)
 				}
 				if m.page != diskPage {

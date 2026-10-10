@@ -651,6 +651,7 @@ func (m *Model) processDetails(c *ui.Context) {
 				m.showDetails = false
 			}
 		})
+		ui.Box(c).Height(6).Shrink(0)
 		if m.detailTab == "Properties" {
 			i := m.inspectedInfo
 			ui.Column(c).Grow(1).Padding(4, 10).Gap(4).Children(func() {
@@ -693,7 +694,7 @@ func (m *Model) processDetails(c *ui.Context) {
 				})
 			}).Grow(1).FillWidth()
 		} else if m.detailTab == "Handles" {
-			ui.Row(c).Height(28).Shrink(0).PaddingX(10).Gap(6).Children(func() {
+			ui.Row(c).Height(30).Shrink(0).PaddingX(10).Gap(6).AlignItems(ui.Center).Children(func() {
 				ui.SearchField(c, &m.handleQuery).Placeholder("Filter type or name").Width(220)
 				if ui.Button(c, "Search handles").Clicked() {
 					m.requestHandleSearch(m.inspectedPID)
@@ -724,7 +725,7 @@ func (m *Model) processDetails(c *ui.Context) {
 				threadID = m.inspectedThreads[0].ID
 			}
 			frames := m.stacks[threadID]
-			ui.Row(c).Height(28).Shrink(0).PaddingX(10).Gap(6).Children(func() {
+			ui.Row(c).Height(30).Shrink(0).PaddingX(10).Gap(6).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, fmt.Sprintf("Thread %d · %d frames", threadID, len(frames)))
 				if ui.Button(c, "Refresh stack").Clicked() {
 					m.requestStack(m.inspectedPID, threadID)

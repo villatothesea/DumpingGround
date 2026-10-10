@@ -309,11 +309,15 @@ func (m *Model) browse() {
 }
 func (m *Model) diskView(c *ui.Context) {
 	t := c.Theme()
+	if time.Since(m.volsChecked) > 3*time.Second {
+		m.refreshVolumes()
+	}
 	scanning := m.diskCancel != nil
 	ui.Row(c).FillWidth().Height(44).Shrink(0).PaddingX(12).Gap(8).AlignItems(ui.Center).Children(func() {
 		for _, volume := range m.diskVolumes {
 			m.driveChip(c, t, volume, scanning)
 		}
+		ui.Spacer(c)
 		if ui.Button(c, "Browse…").Disabled(scanning).Clicked() {
 			m.browse()
 		}
