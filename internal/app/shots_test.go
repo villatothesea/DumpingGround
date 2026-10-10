@@ -33,6 +33,7 @@ func TestScreenshotStates(t *testing.T) {
 
 	// Dark process page with selection and details dock.
 	m := testModel(t)
+	m.processTreeMode = false
 	m.processRows = []process.Info{
 		{PID: 10, Name: "alpha.exe", Memory: 400, Path: `C:\Windows\alpha.exe`},
 		{PID: 11, PPID: 10, Name: "beta.exe", Memory: 900, Path: `C:\Windows\beta.exe`},

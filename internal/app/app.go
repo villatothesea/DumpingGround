@@ -66,7 +66,6 @@ type Model struct {
 	processSort                     ui.SortOrder
 	processFlat                     []uint32
 	processTreeMode                 bool
-	processPaused                   bool
 	minimized                       bool
 	processInterval                 string
 	processUpdates                  chan processResult
@@ -163,7 +162,7 @@ type Model struct {
 func New() *Model {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Model{processSvc: process.NewService(), processByPID: map[uint32]process.Info{}, processSelected: -1,
-		processSort: ui.SortOrder{Column: "name"}, processInterval: "1 s", ctx: ctx, close: cancel,
+		processSort: ui.SortOrder{Column: "name"}, processInterval: "1 s", processTreeMode: true, ctx: ctx, close: cancel,
 		processUpdates: make(chan processResult, 1), refresh: make(chan struct{}, 1), inspection: make(chan inspectionResult, 1), events: make(chan func(), 8),
 		iconCache:   make(map[string]*ui.Bitmap),
 		iconPending: make(map[string]bool), iconRequests: make(chan string, 32),
@@ -185,7 +184,7 @@ func (m *Model) Run() error {
 		}
 		m.iconCache[""] = systemIcon("")
 		go m.loadIcons()
-		m.window = mygo.NewWindow(mygo.WindowOptions{Title: "DumpingGround", Width: 1180, Height: 760, MinWidth: 880, MinHeight: 580, TitleBarStyle: mygo.TitleBarHidden, TitleBarHeight: 40, Content: ui.View(m.view)})
+		m.window = mygo.NewWindow(mygo.WindowOptions{Title: "DumpingGround", Width: 1180, Height: 760, MinWidth: 960, MinHeight: 580, TitleBarStyle: mygo.TitleBarHidden, TitleBarHeight: 40, Content: ui.View(m.view)})
 		if err := m.window.SetIcon(appIcon); err != nil {
 			log.Print("window icon:", err)
 		}
@@ -193,7 +192,7 @@ func (m *Model) Run() error {
 		m.window.OnMinimize(func() { m.minimized = true; m.samplerActive.Store(false) })
 		m.window.OnRestore(func() {
 			m.minimized = false
-			m.samplerActive.Store(!m.processPaused && m.page == processPage)
+			m.samplerActive.Store(m.page == processPage)
 			m.window.Invalidate()
 		})
 		m.window.OnClosed(func() {
@@ -360,7 +359,7 @@ func (m *Model) view(c *ui.Context) {
 			m.navigateDisk(m.diskSnapshot.Nodes[m.diskRoot].Parent)
 		}
 	}
-	m.samplerActive.Store(!m.processPaused && m.page == processPage && !m.minimized)
+	m.samplerActive.Store(m.page == processPage && !m.minimized)
 	if m.diskCancel != nil {
 		c.After(100 * time.Millisecond)
 	}
@@ -439,7 +438,9 @@ func (m *Model) view(c *ui.Context) {
 func (m *Model) topBar(c *ui.Context, t *ui.Theme) {
 	// Keep the controls clear of the window buttons. A zero TitleBar means
 	// the caption failed to appear: still leave a corner's room or the
-	// window's rounded corner clips the last button.
+	// window's rounded corner clips the last button. The controls in this
+	// strip must also stay narrow enough for the minimum window width —
+	// rigid items overflowing the padding end up under the native caption.
 	right := max(c.TitleBar().Right+4, 48)
 	bar := ui.Row(c).FillWidth().Height(40).Shrink(0).Padding(0, right, 0, 12).Gap(4).AlignItems(ui.Center).Background(t.Surface).DragWindow()
 	bar.Draw(func(p *ui.Painter, r ui.Rect) { p.Fill(ui.Rect{X: r.X, Y: r.Y + r.H - 1, W: r.W, H: 1}, t.Border, 0) })
@@ -457,7 +458,6 @@ func (m *Model) topBar(c *ui.Context, t *ui.Theme) {
 			m.pageTab(c, t, uninstallPage, "Uninstall")
 			m.pageTab(c, t, startupPage, "Startup")
 		})
-		m.selActs(c, t)
 		ui.Spacer(c)
 		switch m.page {
 		case processPage:
@@ -523,50 +523,42 @@ func (m *Model) pageTab(c *ui.Context, t *ui.Theme, pg page, label string) {
 }
 
 // selActs mirrors the prototype's #selacts: quick actions for the selected
-// process live in the top bar right of the tabs and disappear when nothing
-// is selected.
+// process live in the page toolbar and disappear when nothing is selected.
+// Both end actions stay visible — no dropdown — per the workspace layout.
 func (m *Model) selActs(c *ui.Context, t *ui.Theme) {
-	if m.page != processPage {
-		return
-	}
 	selected, ok := m.selectedProcess()
 	if !ok {
 		return
 	}
-	ui.Row(c).Gap(6).PaddingX(8).AlignItems(ui.Center).Shrink(0).Children(func() {
-		ui.Box(c).Width(1).Height(20).Background(t.Border)
-		if m.pactButton(c, "folder", "Open location").Disabled(selected.Path == "").Clicked() {
-			mygo.Shell.ShowItemInFolder(selected.Path)
-		}
-		if m.pactButton(c, "copy", "Copy path").Disabled(selected.Path == "").Clicked() {
-			mygo.Clipboard.WriteText(selected.Path)
-		}
-		exited := selected.Access == "Exited"
-		killTip := "End process"
-		if exited {
-			killTip = "Process already exited"
-		}
-		kill := m.dangerButton(c, "x", "End process").Disabled(selected.PID <= 4 || exited).Tooltip(killTip)
-		if kill.Clicked() {
-			m.terminateTarget = selected
-			m.terminateTree = false
-			m.terminateOpen = true
-		}
-		m.pactButton(c, "down", "More end options").Disabled(selected.PID <= 4 || exited).Menu(func(menu *ui.Menu) {
-			if menu.Item("End process tree").Chosen() {
-				m.terminateTarget = selected
-				m.terminateTree = true
-				m.terminateOpen = true
-			}
-		})
-		det := "chup"
-		if m.showDetails {
-			det = "down"
-		}
-		if m.iconTextButton(c, det, "Details").Clicked() {
-			m.showDetails = !m.showDetails
-		}
-	})
+	ui.Box(c).Width(1).Height(20).Background(t.Border)
+	if m.pactButton(c, "folder", "Open location").Disabled(selected.Path == "").Clicked() {
+		mygo.Shell.ShowItemInFolder(selected.Path)
+	}
+	if m.pactButton(c, "copy", "Copy path").Disabled(selected.Path == "").Clicked() {
+		mygo.Clipboard.WriteText(selected.Path)
+	}
+	exited := selected.Access == "Exited"
+	killTip := "End process"
+	if exited {
+		killTip = "Process already exited"
+	}
+	if m.dangerButton(c, "x", "End process").Disabled(selected.PID <= 4 || exited).Tooltip(killTip).Clicked() {
+		m.terminateTarget, m.terminateTree, m.terminateOpen = selected, false, true
+	}
+	treeTip := "End the process and all its descendants"
+	if exited {
+		treeTip = killTip
+	}
+	if m.dangerButton(c, "x", "End process tree").Disabled(selected.PID <= 4 || exited).Tooltip(treeTip).Clicked() {
+		m.terminateTarget, m.terminateTree, m.terminateOpen = selected, true, true
+	}
+	det := "chup"
+	if m.showDetails {
+		det = "down"
+	}
+	if m.iconTextButton(c, det, "Details").Clicked() {
+		m.showDetails = !m.showDetails
+	}
 }
 
 // pactButton is the prototype's .pact: a 28×28 icon-only toolbar button.

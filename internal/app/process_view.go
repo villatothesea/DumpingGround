@@ -191,42 +191,17 @@ func (m *Model) selectedProcess() (process.Info, bool) {
 func (m *Model) processView(c *ui.Context) {
 	t := c.Theme()
 	ui.Row(c).FillWidth().Height(40).Shrink(0).PaddingX(12).Gap(8).AlignItems(ui.Center).Children(func() {
-		m.modeButton(c, t, "List", !m.processTreeMode, func() {
-			m.processTreeMode = false
-			m.processSelected = -1
-		})
 		m.modeButton(c, t, "Tree", m.processTreeMode, func() {
 			m.processTreeMode = true
 			m.processSelected = -1
 		})
-		pauseGlyph, pauseText := "pause", "Pause"
-		if m.processPaused {
-			pauseGlyph, pauseText = "play", "Resume"
-		}
-		if m.iconTextButton(c, pauseGlyph, pauseText).Clicked() {
-			m.processPaused = !m.processPaused
-		}
-		if m.processPaused && m.iconTextButton(c, "refresh", "Refresh once").Clicked() {
-			m.refreshOnce()
-		}
-		if selected, ok := m.selectedProcess(); ok {
-			path := selected.Path
-			if path == "" {
-				path = "path unavailable"
-			}
-			if selected.Access == "Exited" {
-				path += " · exited (PID retained by an open handle)"
-			} else if selected.Access != "" {
-				path += " · access denied"
-			}
-			ui.Text(c, fmt.Sprintf("%s  PID %d  %s", selected.Name, selected.PID, path)).SingleLine().Grow(1).MinWidth(0).TextColor(t.TextMuted).Tooltip(path)
-		} else {
-			ui.Spacer(c)
-		}
+		m.modeButton(c, t, "List", !m.processTreeMode, func() {
+			m.processTreeMode = false
+			m.processSelected = -1
+		})
+		ui.Spacer(c)
+		m.selActs(c, t)
 		label := "Every " + m.processInterval
-		if m.processPaused {
-			label = "Paused"
-		}
 		if strings.TrimSpace(m.processQuery) != "" {
 			label += fmt.Sprintf("  ·  %d of %d match", len(m.processFlat), len(m.processRows))
 		}

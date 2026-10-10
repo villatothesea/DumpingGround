@@ -71,13 +71,14 @@ func TestWorkspaceControlsStayInsideWindow(t *testing.T) {
 				m.rebuildProcessTree()
 				tt := ui.NewTester(m.view, size[0], size[1])
 				tt.SetScale(scale)
-				for _, name := range []string{"Pause", "fixture.exe", "Search processes"} {
+				for _, name := range []string{"Tree", "List", "fixture.exe", "Search processes", "Settings"} {
 					visible(t, tt, size[0], size[1], name)
 				}
-				// Selection actions move into the top bar once a row is selected.
+				// Selection actions sit in the page toolbar once a row is
+				// selected; the gear must still clear the caption strip.
 				m.processSelected = 0
 				tt.Frame()
-				for _, name := range []string{"End process", "Details"} {
+				for _, name := range []string{"End process", "End process tree", "Details", "Settings"} {
 					visible(t, tt, size[0], size[1], name)
 				}
 				if err := tt.Click("Disk usage"); err != nil {
@@ -241,6 +242,7 @@ func TestDetailsDockDefaultsToThird(t *testing.T) {
 
 func TestProcessSearchAndSort(t *testing.T) {
 	m := testModel(t)
+	m.processTreeMode = false
 	m.processRows = []process.Info{{PID: 10, Name: "alpha.exe", Memory: 400}, {PID: 11, PPID: 10, Name: "beta.exe", Memory: 900}, {PID: 12, Name: "gamma.exe", Memory: 1}}
 	m.rebuildProcessTree()
 	tt := ui.NewTester(m.view, 1100, 760)
@@ -261,5 +263,22 @@ func TestProcessSearchAndSort(t *testing.T) {
 	tt.Frame()
 	if len(m.processFlat) != 1 || m.processFlat[0] != 11 {
 		t.Fatalf("search did not filter: %v", m.processFlat)
+	}
+}
+
+// Regression: the top bar's rigid controls must never be squeezed under the
+// native caption strip (the gear used to land at the window's right edge).
+func TestTopBarControlsClearCaption(t *testing.T) {
+	for _, w := range []int{960, 1100, 1280} {
+		m := testModel(t)
+		m.processRows = []process.Info{{PID: 10, Name: "fixture.exe", Memory: 1024}}
+		m.rebuildProcessTree()
+		m.processSelected = 0
+		tt := ui.NewTester(m.view, w, 700)
+		tt.SetTitleBar(ui.TitleBar{Height: 40, Right: 138})
+		r, ok := tt.Find("Settings")
+		if !ok || r.W < 20 || r.X+r.W > float32(w)-140 {
+			t.Fatalf("w=%d gear clipped by caption: rect=%v", w, r)
+		}
 	}
 }
