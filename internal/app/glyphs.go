@@ -31,6 +31,10 @@ var glyphs = map[string]*ui.SVG{
 	"mem":     glyph(`<rect x="2" y="7" width="20" height="10" rx="1.5"/><path d="M6 17v3M10 17v3M14 17v3M18 17v3M6 11v2M10 11v2M14 11v2M18 11v2"/>`),
 	"dn":      glyph(`<path d="M12 4v14M6 12l6 6 6-6"/>`),
 	"upa":     glyph(`<path d="M12 20V6M6 12l6-6 6 6"/>`),
+	// Logo option 10 of the prototype: a flag planted on a junk hill.
+	"logo": glyph(`<path d="M2.4 20.6c1.6-5.4 4.6-8.6 8.2-8.6s6.6 3.2 8.2 8.6z"/><path d="M2 20.6h20"/><path d="M10.8 12V3.2"/><path d="M10.8 3.2l6 2.2-6 2.4"/><path d="M7.8 17.2h.01M12.4 16.4h.01M14.4 18.6h.01"/>`),
+	"net":  glyph(`<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>`),
+	"end":  glyph(`<path d="M18.4 6.6a8 8 0 1 0 0 10.8"/><path d="M12 8v4"/>`),
 }
 
 func glyph(paths string) *ui.SVG {

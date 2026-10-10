@@ -134,6 +134,11 @@ type Model struct {
 	extensionFilter                 string
 	diskNode                        int
 	errorList                       ui.ListState
+	diskWatcher                     *disk.Watcher
+	diskWatchCancel                 context.CancelFunc
+	diskEvents                      chan []disk.USNEvent
+	diskWatchErr                    chan error
+	diskLive                        bool
 	events                          chan func()
 	// CaptureDir writes only this application's frames during explicit diagnostics.
 	CaptureDir  string
@@ -307,6 +312,7 @@ eventsDone:
 	default:
 	}
 	m.drainScan()
+	m.drainWatch()
 }
 func (m *Model) view(c *ui.Context) {
 	m.drain()
@@ -398,7 +404,7 @@ func (m *Model) topBar(c *ui.Context, t *ui.Theme) {
 		ui.Row(c).Width(168).Shrink(0).Gap(8).AlignItems(ui.Center).Children(func() {
 			logo := ui.Box(c).Size(22, 22).Radius(6).Background(t.Accent).Label("DumpingGround")
 			logo.Draw(func(p *ui.Painter, r ui.Rect) {
-				p.Icon(glyphs["chart"], ui.Rect{X: r.X + 4, Y: r.Y + 4, W: 14, H: 14}, t.AccentText)
+				p.Icon(glyphs["logo"], ui.Rect{X: r.X + 3, Y: r.Y + 3, W: 16, H: 16}, t.AccentText)
 			})
 			ui.Text(c, "DumpingGround").FontSize(14).Bold().SingleLine()
 		})
@@ -408,18 +414,7 @@ func (m *Model) topBar(c *ui.Context, t *ui.Theme) {
 			m.pageTab(c, t, uninstallPage, "Uninstall")
 			m.pageTab(c, t, startupPage, "Startup")
 		})
-		ui.Row(c).Gap(2).PaddingX(8).Shrink(0).AlignItems(ui.Center).Children(func() {
-			ui.Box(c).Width(1).Height(20).Background(t.Border)
-			m.meter(c, t, "CPU", fmt.Sprintf("%.0f%%", m.sys.cpu), m.sys.cpu, fmt.Sprintf("Total CPU usage %.0f%%", m.sys.cpu))
-			tip := fmt.Sprintf("Memory %.1f of %.1f GB used (%d%%)", float64(m.sys.memUsed)/1073741824, float64(m.sys.memTotal)/1073741824, m.sys.memLoad)
-			m.meter(c, t, "MEM", fmt.Sprintf("%d%%", m.sys.memLoad), float64(m.sys.memLoad), tip)
-			var rd, wr uint64
-			for _, r := range m.processRows {
-				rd += r.ReadRate
-				wr += r.WriteRate
-			}
-			m.ioMeter(c, t, rd, wr)
-		})
+		m.selActs(c, t)
 		ui.Spacer(c)
 		switch m.page {
 		case processPage:
@@ -471,41 +466,104 @@ func (m *Model) pageTab(c *ui.Context, t *ui.Theme, pg page, label string) {
 	}
 }
 
-// meter draws one top-bar gauge: muted label, bold value, a 2 DIP accent
-// track under the pair, like the prototype's .meter.
-func (m *Model) meter(c *ui.Context, t *ui.Theme, label, value string, pct float64, tip string) {
-	e := ui.Row(c).Height(28).PaddingX(7).Gap(5).AlignItems(ui.Center).Radius(6).Shrink(0).Tooltip(tip)
-	e.Draw(func(p *ui.Painter, r ui.Rect) {
-		if e.Hovered() {
-			p.Fill(r, t.SurfaceHover, 6)
+// selActs mirrors the prototype's #selacts: quick actions for the selected
+// process live in the top bar right of the tabs and disappear when nothing
+// is selected.
+func (m *Model) selActs(c *ui.Context, t *ui.Theme) {
+	if m.page != processPage {
+		return
+	}
+	selected, ok := m.selectedProcess()
+	if !ok {
+		return
+	}
+	ui.Row(c).Gap(6).PaddingX(8).AlignItems(ui.Center).Shrink(0).Children(func() {
+		ui.Box(c).Width(1).Height(20).Background(t.Border)
+		if m.pactButton(c, "folder", "Open location").Disabled(selected.Path == "").Clicked() {
+			mygo.Shell.ShowItemInFolder(selected.Path)
 		}
-		track := ui.Rect{X: r.X + 7, Y: r.Y + r.H - 3, W: r.W - 14, H: 2}
-		p.Fill(track, t.SurfacePressed, 1)
-		w := track.W * float32(min(max(pct, 0), 100)) / 100
-		p.Fill(ui.Rect{X: track.X, Y: track.Y, W: w, H: 2}, t.Accent, 1)
-	})
-	e.Children(func() {
-		ui.Text(c, label).FontSize(11).TextColor(t.TextMuted)
-		ui.Text(c, value).Bold()
+		if m.pactButton(c, "copy", "Copy path").Disabled(selected.Path == "").Clicked() {
+			mygo.Clipboard.WriteText(selected.Path)
+		}
+		kill := m.iconTextButton(c, "x", "End process").Disabled(selected.PID <= 4).TextColor(t.Danger)
+		if kill.Clicked() {
+			m.terminateTarget = selected
+			m.terminateTree = false
+			m.terminateOpen = true
+		}
+		m.pactButton(c, "down", "More end options").Disabled(selected.PID <= 4).Menu(func(menu *ui.Menu) {
+			if menu.Item("End process tree").Chosen() {
+				m.terminateTarget = selected
+				m.terminateTree = true
+				m.terminateOpen = true
+			}
+		})
+		det := "chup"
+		if m.showDetails {
+			det = "down"
+		}
+		if m.iconTextButton(c, det, "Details").Clicked() {
+			m.showDetails = !m.showDetails
+		}
 	})
 }
 
-func (m *Model) ioMeter(c *ui.Context, t *ui.Theme, rd, wr uint64) {
-	e := ui.Row(c).Height(28).PaddingX(7).Gap(6).AlignItems(ui.Center).Radius(6).Shrink(0).Tooltip(fmt.Sprintf("Process I/O  read %s  ·  write %s", format.Rate(rd), format.Rate(wr)))
+// pactButton is the prototype's .pact: a 28×28 icon-only toolbar button.
+func (m *Model) pactButton(c *ui.Context, name, tip string) ui.Element {
+	t := c.Theme()
+	e := ui.Row(c).Size(28, 28).Radius(t.Radius).AlignItems(ui.Center).Background(t.Surface).Label(tip).Tooltip(tip)
+	e.BorderWidth(1).BorderColor(t.Border)
+	e.Draw(func(p *ui.Painter, r ui.Rect) {
+		if e.Pressed() {
+			p.Fill(r, t.SurfacePressed, t.Radius)
+		} else if e.Hovered() {
+			p.Fill(r, t.SurfaceHover, t.Radius)
+		}
+	})
+	e.Children(func() { icon(c, name, 14).TextColor(t.Text) })
+	return e
+}
+
+// statMeter is the status-bar gauge of the redesign: muted label plus a
+// value that turns orange at 75% and red at 90%.
+func (m *Model) statMeter(c *ui.Context, t *ui.Theme, label, value string, pct float64, tip string) {
+	e := ui.Row(c).Height(22).PaddingX(6).Gap(5).AlignItems(ui.Center).Radius(4).Shrink(0).Tooltip(tip)
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
 		if e.Hovered() {
-			p.Fill(r, t.SurfaceHover, 6)
+			p.Fill(r, t.SurfaceHover, 4)
 		}
 	})
 	e.Children(func() {
-		ui.Text(c, "I/O").FontSize(11).TextColor(t.TextMuted)
+		ui.Text(c, label).FontSize(11).TextColor(t.TextMuted)
+		v := ui.Text(c, value).FontSize(11)
+		switch {
+		case pct >= 90:
+			v.TextColor(t.Danger)
+		case pct >= 75:
+			v.TextColor(t.Warning)
+		default:
+			v.TextColor(t.Text)
+		}
+	})
+}
+
+// rateMeter shows a label with down/up throughput figures.
+func (m *Model) rateMeter(c *ui.Context, t *ui.Theme, label, tip string, down, up uint64) {
+	e := ui.Row(c).Height(22).PaddingX(6).Gap(4).AlignItems(ui.Center).Radius(4).Shrink(0).Tooltip(tip)
+	e.Draw(func(p *ui.Painter, r ui.Rect) {
+		if e.Hovered() {
+			p.Fill(r, t.SurfaceHover, 4)
+		}
+	})
+	e.Children(func() {
+		ui.Text(c, label).FontSize(11).TextColor(t.TextMuted)
 		ui.Row(c).Gap(1).AlignItems(ui.Center).Children(func() {
-			icon(c, "dn", 11).TextColor(t.TextMuted)
-			ui.Text(c, format.Rate(rd)).Bold().FontSize(11)
+			icon(c, "dn", 10).TextColor(t.TextMuted)
+			ui.Text(c, format.Rate(down)).FontSize(11)
 		})
 		ui.Row(c).Gap(1).AlignItems(ui.Center).Children(func() {
-			icon(c, "upa", 11).TextColor(t.TextMuted)
-			ui.Text(c, format.Rate(wr)).Bold().FontSize(11)
+			icon(c, "upa", 10).TextColor(t.TextMuted)
+			ui.Text(c, format.Rate(up)).FontSize(11)
 		})
 	})
 }
@@ -560,8 +618,22 @@ func (m *Model) statusBar(c *ui.Context, t *ui.Theme) {
 		if text == "" {
 			text = "Ready"
 		}
-		ui.Text(c, text).SingleLine().Grow(1).MinWidth(0).TextColor(t.TextMuted)
-		ui.Text(c, "F5 refresh · Ctrl+1–4 pages").FontSize(11).TextColor(t.TextMuted).Shrink(0)
+		ui.Text(c, text).SingleLine().MinWidth(0).TextColor(t.TextMuted)
+		m.statMeter(c, t, "CPU", fmt.Sprintf("%.0f%%", m.sys.cpu), m.sys.cpu, fmt.Sprintf("Total CPU usage %.0f%%", m.sys.cpu))
+		m.statMeter(c, t, "MEM", fmt.Sprintf("%d%%", m.sys.memLoad), float64(m.sys.memLoad), fmt.Sprintf("Memory %.1f of %.1f GB used (%d%%)", float64(m.sys.memUsed)/1073741824, float64(m.sys.memTotal)/1073741824, m.sys.memLoad))
+		var rd, wr uint64
+		for _, r := range m.processRows {
+			rd += r.ReadRate
+			wr += r.WriteRate
+		}
+		m.rateMeter(c, t, "I/O", fmt.Sprintf("Process disk I/O  read %s  ·  write %s", format.Rate(rd), format.Rate(wr)), rd, wr)
+		m.rateMeter(c, t, "NET", fmt.Sprintf("Network  down %s  ·  up %s", format.Rate(m.sys.netInRate), format.Rate(m.sys.netOutRate)), m.sys.netInRate, m.sys.netOutRate)
+		ui.Spacer(c)
+		hint := "F5 refresh · Ctrl+1–4 pages"
+		if m.page == diskPage {
+			hint = "F5 scan · Backspace up · Ctrl+1–4 pages"
+		}
+		ui.Text(c, hint).FontSize(11).TextColor(t.TextMuted).Shrink(0)
 		if m.page == diskPage {
 			icon(c, "info", 14).TextColor(t.TextMuted).Tooltip("Hard-link allocation is counted once per scan. Reparse points and cloud placeholders are skipped; unknown allocation is estimated. Whole-drive scans try the read-only MFT path and fall back to a directory walk.")
 		}

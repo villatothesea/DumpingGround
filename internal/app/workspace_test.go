@@ -71,7 +71,13 @@ func TestWorkspaceControlsStayInsideWindow(t *testing.T) {
 				m.rebuildProcessTree()
 				tt := ui.NewTester(m.view, size[0], size[1])
 				tt.SetScale(scale)
-				for _, name := range []string{"Pause", "fixture.exe", "End process", "Details", "Search processes"} {
+				for _, name := range []string{"Pause", "fixture.exe", "Search processes"} {
+					visible(t, tt, size[0], size[1], name)
+				}
+				// Selection actions move into the top bar once a row is selected.
+				m.processSelected = 0
+				tt.Frame()
+				for _, name := range []string{"End process", "Details"} {
 					visible(t, tt, size[0], size[1], name)
 				}
 				if err := tt.Click("Disk usage"); err != nil {

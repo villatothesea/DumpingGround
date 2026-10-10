@@ -132,8 +132,12 @@ func (m *Model) selectedProcess() (process.Info, bool) {
 func (m *Model) processView(c *ui.Context) {
 	t := c.Theme()
 	ui.Row(c).FillWidth().Height(40).Shrink(0).PaddingX(12).Gap(8).AlignItems(ui.Center).Children(func() {
-		m.segPair(c, t, "Process view", []string{"List", "Tree"}, b2i(m.processTreeMode), func(i int) {
-			m.processTreeMode = i == 1
+		m.modeButton(c, t, "List", !m.processTreeMode, func() {
+			m.processTreeMode = false
+			m.processSelected = -1
+		})
+		m.modeButton(c, t, "Tree", m.processTreeMode, func() {
+			m.processTreeMode = true
 			m.processSelected = -1
 		})
 		pauseGlyph, pauseText := "pause", "Pause"
@@ -146,7 +150,18 @@ func (m *Model) processView(c *ui.Context) {
 		if m.processPaused && m.iconTextButton(c, "refresh", "Refresh once").Clicked() {
 			m.refreshOnce()
 		}
-		ui.Spacer(c)
+		if selected, ok := m.selectedProcess(); ok {
+			path := selected.Path
+			if path == "" {
+				path = "path unavailable"
+			}
+			if selected.Access != "" {
+				path += " · access denied"
+			}
+			ui.Text(c, fmt.Sprintf("%s  PID %d  %s", selected.Name, selected.PID, path)).SingleLine().Grow(1).MinWidth(0).TextColor(t.TextMuted).Tooltip(path)
+		} else {
+			ui.Spacer(c)
+		}
 		label := "Every " + m.processInterval
 		if m.processPaused {
 			label = "Paused"
@@ -238,71 +253,40 @@ func (m *Model) processView(c *ui.Context) {
 	if m.showDetails && ok {
 		m.requestInspection(selected.PID)
 		ui.SplitVertical(c, &m.detailSplit, func() {
-			ui.Column(c).Fill().Children(func() {
-				table()
-				m.processSelBar(c, selected, ok)
-			})
+			table()
 		}, func() {
 			m.processDetails(c)
 		}).Grow(1).MinHeight(0).FillWidth()
 	} else {
 		ui.Column(c).Grow(1).MinHeight(0).FillWidth().Children(func() {
 			table()
-			m.processSelBar(c, selected, ok)
 		})
 	}
 }
 
-// processSelBar is the 36 DIP selection strip of the redesign: icon, name,
-// PID and path on the left, actions on the right.
-func (m *Model) processSelBar(c *ui.Context, selected process.Info, ok bool) {
-	t := c.Theme()
-	bar := ui.Row(c).FillWidth().Height(36).Shrink(0).PaddingX(12).Gap(8).AlignItems(ui.Center).Background(t.Surface)
-	bar.BorderWidth(1, 0, 0, 0).BorderColor(t.Border)
-	bar.Children(func() {
-		if ok {
-			if icon := m.processIcon(selected.Path); icon != nil {
-				ui.Image(c, icon).Size(16, 16)
-			}
-			ui.Text(c, selected.Name).Bold().SingleLine().Shrink(0)
-			ui.Text(c, fmt.Sprintf("PID %d", selected.PID)).TextColor(t.TextMuted).Shrink(0)
-			path := selected.Path
-			if path == "" {
-				path = "(no path)"
-			}
-			if selected.Access != "" {
-				path += " · " + selected.Access
-			}
-			ui.Text(c, path).SingleLine().Grow(1).MinWidth(0).TextColor(t.TextMuted).Tooltip(path)
-		} else {
-			ui.Text(c, "Select a process to inspect or act on").SingleLine().Grow(1).MinWidth(0).TextColor(t.TextMuted)
-		}
-		if m.iconTextButton(c, "folder", "Open location").Disabled(!ok || selected.Path == "").Clicked() {
-			mygo.Shell.ShowItemInFolder(selected.Path)
-		}
-		if m.iconTextButton(c, "copy", "Copy path").Disabled(!ok || selected.Path == "").Clicked() {
-			mygo.Clipboard.WriteText(selected.Path)
-		}
-		if m.iconTextButton(c, "x", "End process").Disabled(!ok || selected.PID <= 4).TextColor(t.Danger).Clicked() {
-			m.terminateTarget = selected
-			m.terminateTree = false
-			m.terminateOpen = true
-		}
-		m.iconButton(c, "more", "More end options").Disabled(!ok || selected.PID <= 4).Menu(func(menu *ui.Menu) {
-			if menu.Item("End process tree").Chosen() {
-				m.terminateTarget = selected
-				m.terminateTree = true
-				m.terminateOpen = true
-			}
-		})
-		det := "chup"
-		if m.showDetails {
-			det = "down"
-		}
-		if m.iconTextButton(c, det, "Details").Clicked() {
-			m.showDetails = !m.showDetails
+// modeButton is the redesign's plain .btn used as a toggle: border, hover,
+// and the selected fill of .btn.on.
+func (m *Model) modeButton(c *ui.Context, t *ui.Theme, label string, on bool, choose func()) {
+	e := ui.Row(c).Height(28).PaddingX(12).AlignItems(ui.Center).Radius(t.Radius).Label(label)
+	e.BorderWidth(1).BorderColor(t.Border)
+	e.Draw(func(p *ui.Painter, r ui.Rect) {
+		if on {
+			p.Fill(r, t.SurfacePressed, t.Radius)
+		} else if e.Hovered() {
+			p.Fill(r, t.SurfaceHover, t.Radius)
 		}
 	})
+	e.Children(func() {
+		tx := ui.Text(c, label).SingleLine()
+		if on {
+			tx.Bold()
+		} else {
+			tx.TextColor(t.TextMuted)
+		}
+	})
+	if e.Clicked() && !on {
+		choose()
+	}
 }
 func (m *Model) processIcon(path string) *ui.Bitmap {
 	if icon, ok := m.iconCache[path]; ok {

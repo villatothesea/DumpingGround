@@ -26,6 +26,7 @@ func (m *Model) startScan() {
 		m.diskStatus = "Select a drive or folder first"
 		return
 	}
+	m.stopWatch()
 	ctx, cancel := context.WithCancel(m.ctx)
 	m.diskCancel = cancel
 	m.diskCancelling = false
@@ -89,8 +90,85 @@ func (m *Model) drainScan() {
 			m.diskStatus = "Scan failed: " + r.err.Error()
 		} else {
 			m.diskStatus = fmt.Sprintf("Complete · %s · %d files · %s · %.1f s · %d skipped", r.snapshot.Method, r.snapshot.Files, format.Bytes(r.snapshot.Allocated), r.snapshot.Duration.Seconds(), r.snapshot.Skipped)
+			m.startWatch()
+			if m.diskLive {
+				m.diskStatus += " · live"
+			}
 		}
 	default:
+	}
+}
+
+// startWatch begins tailing the volume's USN change journal after a scan.
+// Events replay into the snapshot on the UI goroutine, so live filesystem
+// changes update the index without rescanning.
+func (m *Model) startWatch() {
+	m.stopWatch()
+	s := m.diskSnapshot
+	if s == nil {
+		return
+	}
+	w, err := s.WatchJournal()
+	if err != nil {
+		return
+	}
+	ctx, cancel := context.WithCancel(m.ctx)
+	m.diskWatcher = w
+	m.diskWatchCancel = cancel
+	m.diskEvents = make(chan []disk.USNEvent, 4)
+	m.diskWatchErr = make(chan error, 1)
+	m.diskLive = true
+	go func() {
+		defer w.Close()
+		for {
+			if ctx.Err() != nil {
+				return
+			}
+			ev, err := w.Next(ctx)
+			if err != nil {
+				if ctx.Err() == nil {
+					m.diskWatchErr <- err
+				}
+				return
+			}
+			select {
+			case m.diskEvents <- ev:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+}
+func (m *Model) stopWatch() {
+	if m.diskWatchCancel != nil {
+		m.diskWatchCancel()
+		m.diskWatchCancel = nil
+	}
+	m.diskWatcher = nil
+	m.diskLive = false
+}
+func (m *Model) drainWatch() {
+	s := m.diskSnapshot
+	if s == nil {
+		return
+	}
+	changed := false
+	for {
+		select {
+		case ev := <-m.diskEvents:
+			if s.ApplyUSN(ev, nil) {
+				changed = true
+			}
+		case err := <-m.diskWatchErr:
+			m.diskStatus = "Live index lost: " + err.Error()
+			m.stopWatch()
+		default:
+			if changed {
+				m.diskViewKey = ""
+				m.mapRoot = -1
+			}
+			return
+		}
 	}
 }
 func (m *Model) cancelScan() {
@@ -104,6 +182,7 @@ func (m *Model) clearDisk() {
 	if m.diskCancel != nil {
 		return
 	}
+	m.stopWatch()
 	m.diskSnapshot = nil
 	m.diskRows = nil
 	m.diskItems = nil
