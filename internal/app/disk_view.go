@@ -460,33 +460,18 @@ func (m *Model) resultsView(c *ui.Context, t *ui.Theme, s *disk.Snapshot) {
 		if up.Clicked() {
 			m.navigateDisk(s.Nodes[m.diskRoot].Parent)
 		}
-		m.breadcrumbs(c, t, s)
-		// The map's own header row merged into this bar: the selected node
-		// with its actions, or the usage hint while nothing is selected.
+		// The breadcrumb follows the selection: with a node picked it is the
+		// path to that node, clickable segment by segment; otherwise it shows
+		// the directory being browsed.
+		m.breadcrumbs(c, t, s, m.diskNode)
 		if m.diskNode >= 0 && m.diskNode < len(s.Nodes) {
-			n := s.Nodes[m.diskNode]
-			ui.Box(c).Size(8, 8).Radius(2).Background(m.mapColor(m.diskNode)).Shrink(0)
-			name := n.Name
-			if n.Dir {
-				name += "/"
-			}
-			ui.Text(c, name).Bold().SingleLine().Shrink(0)
-			ui.Text(c, format.Bytes(m.diskValue(n))).TextColor(t.TextMuted).Shrink(0)
-			path := s.FullPath(m.diskNode)
-			ui.Text(c, path).SingleLine().Grow(1).MinWidth(0).TextColor(t.TextMuted).Tooltip(path).Ellipsis("…")
-			if m.iconTextButton(c, "folder", "Open location").Clicked() && m.window != nil {
-				mygo.Shell.ShowItemInFolder(path)
-			}
-			if m.iconTextButton(c, "copy", "Copy path").Clicked() && m.window != nil {
-				mygo.Clipboard.WriteText(path)
-			}
+			ui.Text(c, format.Bytes(m.diskValue(s.Nodes[m.diskNode]))).TextColor(t.TextMuted).Shrink(0)
 		} else {
 			hover := m.mapHover
 			if hover == "" {
 				hover = "Click a folder to zoom · click a file to locate its row"
 			}
 			ui.Text(c, hover).SingleLine().Grow(1).MinWidth(0).FontSize(11).TextColor(t.TextMuted).Ellipsis("…")
-			icon(c, "info", 14).TextColor(t.TextMuted).Tooltip("One directory level at a time: folders are single blocks you zoom into. Color follows block size: large blocks trend red, small ones green.")
 		}
 		ui.Spacer(c)
 		root := s.Nodes[m.diskRoot]
@@ -519,6 +504,15 @@ func (m *Model) resultsView(c *ui.Context, t *ui.Theme, s *disk.Snapshot) {
 		})
 		if m.extensionFilter != "" {
 			m.extChip(c, t)
+		}
+		if m.diskNode >= 0 && m.diskNode < len(s.Nodes) {
+			path := s.FullPath(m.diskNode)
+			if m.iconTextButton(c, "folder", "Open location").Clicked() && m.window != nil {
+				mygo.Shell.ShowItemInFolder(path)
+			}
+			if m.iconTextButton(c, "copy", "Copy path").Clicked() && m.window != nil {
+				mygo.Clipboard.WriteText(path)
+			}
 		}
 		flat := m.diskMode == "Files" || m.diskQuery != "" || m.extensionFilter != ""
 		m.segPair(c, t, "Disk view", []string{"Tree", "Flat"}, b2i(flat), func(i int) {
@@ -562,9 +556,12 @@ func (m *Model) resultsView(c *ui.Context, t *ui.Theme, s *disk.Snapshot) {
 }
 
 // breadcrumbs renders the ancestor chain of the current directory.
-func (m *Model) breadcrumbs(c *ui.Context, t *ui.Theme, s *disk.Snapshot) {
+func (m *Model) breadcrumbs(c *ui.Context, t *ui.Theme, s *disk.Snapshot, to int) {
+	if to < 0 || to >= len(s.Nodes) {
+		to = m.diskRoot
+	}
 	var chain []int
-	for id := m.diskRoot; id >= 0 && len(chain) <= len(s.Nodes); id = s.Nodes[id].Parent {
+	for id := to; id >= 0 && len(chain) <= len(s.Nodes); id = s.Nodes[id].Parent {
 		chain = append([]int{id}, chain...)
 		if id == s.Root {
 			break
