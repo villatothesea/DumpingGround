@@ -95,6 +95,9 @@ func (s *Scanner) Scan(ctx context.Context, root string, progress chan<- Progres
 	defer func() {
 		debug.SetGCPercent(prevGC)
 		runtime.GC()
+		// The paused collector let transient parse buffers grow; hand the
+		// released heap back to the OS right away.
+		debug.FreeOSMemory()
 	}()
 	if len(root) == 3 && root[1:] == ":\\" {
 		fast, fastErr := fastVolumeScan(ctx, root, progress)

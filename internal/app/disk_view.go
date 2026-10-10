@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"time"
@@ -273,6 +274,9 @@ func (m *Model) clearDisk() {
 	m.mapMotion = mapMotion{}
 	m.mapAnimating = false
 	m.diskStatus = "Index cleared"
+	// Dropping the index frees hundreds of MB; return them to the OS now
+	// instead of letting the runtime sit on the released heap.
+	debug.FreeOSMemory()
 }
 func (m *Model) browse() {
 	if m.window == nil {
@@ -451,6 +455,33 @@ func (m *Model) resultsView(c *ui.Context, t *ui.Theme, s *disk.Snapshot) {
 			m.navigateDisk(s.Nodes[m.diskRoot].Parent)
 		}
 		m.breadcrumbs(c, t, s)
+		// The map's own header row merged into this bar: the selected node
+		// with its actions, or the usage hint while nothing is selected.
+		if m.diskNode >= 0 && m.diskNode < len(s.Nodes) {
+			n := s.Nodes[m.diskNode]
+			ui.Box(c).Size(8, 8).Radius(2).Background(m.mapColor(m.diskNode)).Shrink(0)
+			name := n.Name
+			if n.Dir {
+				name += "/"
+			}
+			ui.Text(c, name).Bold().SingleLine().Shrink(0)
+			ui.Text(c, format.Bytes(m.diskValue(n))).TextColor(t.TextMuted).Shrink(0)
+			path := s.FullPath(m.diskNode)
+			ui.Text(c, path).SingleLine().Grow(1).MinWidth(0).TextColor(t.TextMuted).Tooltip(path).Ellipsis("…")
+			if m.iconTextButton(c, "folder", "Open location").Clicked() && m.window != nil {
+				mygo.Shell.ShowItemInFolder(path)
+			}
+			if m.iconTextButton(c, "copy", "Copy path").Clicked() && m.window != nil {
+				mygo.Clipboard.WriteText(path)
+			}
+		} else {
+			hover := m.mapHover
+			if hover == "" {
+				hover = "Click a folder to zoom · click a file to locate its row"
+			}
+			ui.Text(c, hover).SingleLine().Grow(1).MinWidth(0).FontSize(11).TextColor(t.TextMuted).Ellipsis("…")
+			icon(c, "info", 14).TextColor(t.TextMuted).Tooltip("One directory level at a time: folders are single blocks you zoom into. Color follows block size: large blocks trend red, small ones green.")
+		}
 		ui.Spacer(c)
 		root := s.Nodes[m.diskRoot]
 		ui.Row(c).Gap(4).AlignItems(ui.Center).Shrink(0).Children(func() {
@@ -469,6 +500,16 @@ func (m *Model) resultsView(c *ui.Context, t *ui.Theme, s *disk.Snapshot) {
 				m.diskInfoOpen = true
 			}
 			ui.Text(c, "· "+format.Int(s.Estimated)+" estimates").FontSize(11).TextColor(t.TextMuted).SingleLine().Tooltip("estimates: files whose on-disk size had to be guessed, e.g. no data attribute read")
+			// Scan facts that used to sit in the status bar: method, duration
+			// and the live-index state.
+			state := s.Method + fmt.Sprintf(" · %.1f s", s.Duration.Seconds())
+			switch {
+			case strings.HasPrefix(m.diskStatus, "Live index lost"):
+				state += " · index lost"
+			case m.diskLive:
+				state += " · live"
+			}
+			ui.Text(c, "· "+state).FontSize(11).TextColor(t.TextMuted).SingleLine().Tooltip(m.diskStatus)
 		})
 		if m.extensionFilter != "" {
 			m.extChip(c, t)
@@ -822,40 +863,6 @@ func (m *Model) diskMap(c *ui.Context) {
 	t := c.Theme()
 	animate := m.animateMap && !c.Preferences().ReduceMotion
 	ui.Column(c).Fill().AlignItems(ui.Stretch).Children(func() {
-		ui.Row(c).FillWidth().Height(36).Shrink(0).PaddingX(12).Gap(8).AlignItems(ui.Center).Children(func() {
-			s := m.diskSnapshot
-			up := m.iconButton(c, "up", "Up one level")
-			up.Label("Up").Disabled(s == nil || m.diskRoot == s.Root)
-			if up.Clicked() && s != nil {
-				m.navigateDisk(s.Nodes[m.diskRoot].Parent)
-			}
-			ui.Text(c, "Space map").Bold().Shrink(0)
-			if s != nil && m.diskNode >= 0 && m.diskNode < len(s.Nodes) {
-				n := s.Nodes[m.diskNode]
-				ui.Box(c).Size(8, 8).Radius(2).Background(m.mapColor(m.diskNode)).Shrink(0)
-				name := n.Name
-				if n.Dir {
-					name += "/"
-				}
-				ui.Text(c, name).Bold().SingleLine().Shrink(0)
-				ui.Text(c, format.Bytes(m.diskValue(n))).TextColor(t.TextMuted).Shrink(0)
-				path := s.FullPath(m.diskNode)
-				ui.Text(c, path).SingleLine().Grow(1).MinWidth(0).TextColor(t.TextMuted).Tooltip(path)
-				if m.iconTextButton(c, "folder", "Open location").Clicked() && m.window != nil {
-					mygo.Shell.ShowItemInFolder(path)
-				}
-				if m.iconTextButton(c, "copy", "Copy path").Clicked() && m.window != nil {
-					mygo.Clipboard.WriteText(path)
-				}
-			} else {
-				hover := m.mapHover
-				if hover == "" {
-					hover = "Click a folder to zoom · click a file to locate its row"
-				}
-				ui.Text(c, hover).SingleLine().Grow(1).MinWidth(0).FontSize(11).TextColor(t.TextMuted).Ellipsis("…")
-				icon(c, "info", 14).TextColor(t.TextMuted).Tooltip("One directory level at a time: folders are single blocks you zoom into. Color follows block size: large blocks trend red, small ones green.")
-			}
-		})
 		canvas := ui.Box(c.Key("space-map")).Grow(1).FillWidth().MinHeight(0).Clip().Background(t.Surface).Label("Treemap canvas")
 		if canvas.Clicked() {
 			if x, y, ok := canvas.PointerPosition(); ok {

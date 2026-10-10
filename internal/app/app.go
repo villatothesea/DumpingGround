@@ -723,7 +723,11 @@ func (m *Model) statusBar(c *ui.Context, t *ui.Theme) {
 		text := m.status
 		switch m.page {
 		case diskPage:
-			text = m.diskStatus
+			// Once a snapshot exists its numbers live in the view bar; the
+			// status bar only carries idle, scanning and error states.
+			if m.diskSnapshot == nil {
+				text = m.diskStatus
+			}
 		case uninstallPage, startupPage:
 			text = "Reserved"
 		}
