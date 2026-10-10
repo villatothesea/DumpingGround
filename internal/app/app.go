@@ -137,6 +137,7 @@ type Model struct {
 	mapMotion                       mapMotion
 	mapLogMin, mapLogMax            float64
 	animateMap                      bool
+	tabStyle                        string
 	mapAnimating                    bool
 	diskSplit                       float32
 	diskLeft                        float32
@@ -483,23 +484,36 @@ func (m *Model) topBar(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-// pageTab is one top-bar underline tab. It is a plain clickable row rather
-// than ui.Tabs so the page change applies in the same frame as the click.
+// pageTab is one top-bar tab. It is a plain clickable row rather than
+// ui.Tabs so the page change applies in the same frame as the click. The
+// prototype ships two styles: "Underline" draws an accent line under the
+// active tab; "Pill" gives it a solid accent face with white text.
 func (m *Model) pageTab(c *ui.Context, t *ui.Theme, pg page, label string) {
 	on := m.page == pg
-	e := ui.Row(c).Height(30).PaddingX(10).AlignItems(ui.Center).Radius(4).Label(label)
+	pill := m.tabStyle == "Pill"
+	height, radius := float32(30), float32(4)
+	if pill {
+		height, radius = 28, 6
+	}
+	e := ui.Row(c).Height(height).PaddingX(10).AlignItems(ui.Center).Radius(radius).Label(label)
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
-		if on {
+		switch {
+		case on && pill:
+			p.Fill(r, t.Accent, radius)
+		case on:
 			p.Fill(ui.Rect{X: r.X + 8, Y: r.Y + r.H - 2, W: r.W - 16, H: 2}, t.Accent, 1)
-		} else if e.Hovered() {
-			p.Fill(r, t.SurfaceHover, 4)
+		case e.Hovered():
+			p.Fill(r, t.SurfaceHover, radius)
 		}
 	})
 	e.Children(func() {
 		tx := ui.Text(c, label).SingleLine()
-		if on {
+		switch {
+		case on && pill:
+			tx.TextColor(t.AccentText)
+		case on:
 			tx.Bold()
-		} else {
+		default:
 			tx.TextColor(t.TextMuted)
 		}
 	})
@@ -757,6 +771,13 @@ func (m *Model) settingsView(c *ui.Context) {
 					ui.Text(c, "Used by the space map and percent column").FontSize(11).TextColor(c.Theme().TextMuted)
 				})
 				ui.Select(c, &m.diskMetric, []string{"Allocated", "Logical"}).Width(100).Label("Size metric")
+			})
+			ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
+				ui.Column(c).Grow(1).MinWidth(0).Children(func() {
+					ui.Text(c, "Tab style")
+					ui.Text(c, "Look of the page tabs in the top bar").FontSize(11).TextColor(c.Theme().TextMuted)
+				})
+				ui.Select(c, &m.tabStyle, []string{"Underline", "Pill"}).Width(100).Label("Tab style")
 			})
 			ui.Checkbox(c, &m.animateMap, "Animate map drill-down").Tooltip("Respects Windows reduced motion")
 		})

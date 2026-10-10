@@ -79,4 +79,13 @@ func TestScreenshotStates(t *testing.T) {
 	tt3.Click("Settings")
 	tt3.Frame()
 	dump(t, tt3, dest, "settings.png")
+
+	// Pill tab style with a light theme and a selected process.
+	m.settingsOpen = false
+	m.tabStyle = "Pill"
+	m.themeMode = 0
+	tt4 := ui.NewTester(m.view, 1180, 760)
+	tt4.SetTitleBar(ui.TitleBar{Height: 40, Right: 138})
+	tt4.Frame()
+	dump(t, tt4, dest, "proc-pill-tabs.png")
 }
