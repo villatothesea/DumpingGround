@@ -1,6 +1,8 @@
 package app
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"image/png"
 	"os"
@@ -56,27 +58,77 @@ func TestIconDebug(t *testing.T) {
 	}
 }
 
-// TestRenderAppIcon renders the product icon once for embedding; run with
-// DG_ICON_OUT set to the PNG destination.
-func TestRenderAppIcon(t *testing.T) {
-	dest := os.Getenv("DG_ICON_OUT")
-	if dest == "" {
-		t.Skip("DG_ICON_OUT not set")
-	}
-	view := func(c *ui.Context) {
+// appIconView draws the product icon (accent tile plus the logo glyph)
+// at a given pixel size.
+func appIconView(size float32) func(c *ui.Context) {
+	return func(c *ui.Context) {
 		t := c.Theme()
-		ui.Box(c).Size(64, 64).Radius(14).Background(t.Accent).Draw(func(p *ui.Painter, r ui.Rect) {
-			p.Icon(glyphs["logo"], ui.Rect{X: r.X + 12, Y: r.Y + 12, W: 40, H: 40}, t.AccentText)
+		pad := size * 12 / 64
+		ui.Box(c).Size(size, size).Radius(size * 14 / 64).Background(t.Accent).Draw(func(p *ui.Painter, r ui.Rect) {
+			p.Icon(glyphs["logo"], ui.Rect{X: r.X + pad, Y: r.Y + pad, W: size - 2*pad, H: size - 2*pad}, t.AccentText)
 		})
 	}
-	tt := ui.NewTester(view, 64, 64)
+}
+
+func renderIconPNG(size int) ([]byte, error) {
+	tt := ui.NewTester(appIconView(float32(size)), size, size)
 	tt.Frame()
-	f, err := os.Create(dest)
-	if err != nil {
-		t.Fatal(err)
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, tt.Image()); err != nil {
+		return nil, err
 	}
-	defer f.Close()
-	if err := png.Encode(f, tt.Image()); err != nil {
+	return buf.Bytes(), nil
+}
+
+// TestRenderAppIcon renders the product icon once for embedding; run with
+// DG_ICON_OUT set to the PNG destination, DG_ICO_OUT to write a
+// multi-size .ico for the executable's resources.
+func TestRenderAppIcon(t *testing.T) {
+	if dest := os.Getenv("DG_ICON_OUT"); dest != "" {
+		data, err := renderIconPNG(256)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(dest, data, 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	dest := os.Getenv("DG_ICO_OUT")
+	if dest == "" {
+		t.Skip("DG_ICO_OUT not set")
+	}
+	sizes := []int{16, 24, 32, 48, 64, 256}
+	pngs := make([][]byte, len(sizes))
+	for i, s := range sizes {
+		var err error
+		if pngs[i], err = renderIconPNG(s); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var out bytes.Buffer
+	binary.Write(&out, binary.LittleEndian, uint16(0))
+	binary.Write(&out, binary.LittleEndian, uint16(1))
+	binary.Write(&out, binary.LittleEndian, uint16(len(pngs)))
+	offset := 6 + 16*len(pngs)
+	for i, e := range pngs {
+		sz := byte(sizes[i])
+		if sizes[i] >= 256 {
+			sz = 0
+		}
+		out.WriteByte(sz)
+		out.WriteByte(sz)
+		out.WriteByte(0)
+		out.WriteByte(0)
+		binary.Write(&out, binary.LittleEndian, uint16(1))
+		binary.Write(&out, binary.LittleEndian, uint16(32))
+		binary.Write(&out, binary.LittleEndian, uint32(len(e)))
+		binary.Write(&out, binary.LittleEndian, uint32(offset))
+		offset += len(e)
+	}
+	for _, e := range pngs {
+		out.Write(e)
+	}
+	if err := os.WriteFile(dest, out.Bytes(), 0644); err != nil {
 		t.Fatal(err)
 	}
 }
