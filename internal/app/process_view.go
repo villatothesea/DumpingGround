@@ -73,6 +73,7 @@ func (m *Model) rebuildProcessTree() {
 			m.processRoots = append(m.processRoots, r.PID)
 		}
 	}
+	m.aggregateProcessTree()
 	m.sortProcessTree()
 	if query != "" {
 		for id := range m.processChildren {
@@ -80,9 +81,64 @@ func (m *Model) rebuildProcessTree() {
 		}
 	}
 }
+
+// aggregateProcessTree sums each subtree's additive columns into its root:
+// in tree mode a row carries its own plus its descendants' CPU, memory, I/O
+// and threads, so collapsed parents — and the top-level rows together —
+// still total the system figures.
+func (m *Model) aggregateProcessTree() {
+	m.processAgg = make(map[uint32]process.Info, len(m.processByPID))
+	var acc func(id uint32) process.Info
+	acc = func(id uint32) process.Info {
+		if r, ok := m.processAgg[id]; ok {
+			return r
+		}
+		r := m.processByPID[id]
+		for _, ch := range m.processChildren[id] {
+			c := acc(ch)
+			r.CPU += c.CPU
+			r.Memory += c.Memory
+			r.Private += c.Private
+			r.ReadRate += c.ReadRate
+			r.WriteRate += c.WriteRate
+			r.Threads += c.Threads
+		}
+		m.processAgg[id] = r
+		return r
+	}
+	for _, id := range m.processRoots {
+		acc(id)
+	}
+}
+
+// displayProcess returns the row to show for id: its own metrics in list
+// mode, the subtree's totals in tree mode.
+func (m *Model) displayProcess(id uint32) process.Info {
+	if m.processTreeMode {
+		if r, ok := m.processAgg[id]; ok {
+			return r
+		}
+	}
+	return m.processByPID[id]
+}
+
+// processDir is the folder containing the process image, empty when the
+// path is unavailable or carries no directory part.
+func processDir(path string) string {
+	path = strings.TrimRight(path, `/\`)
+	switch i := strings.LastIndexAny(path, `/\`); {
+	case i < 0:
+		return ""
+	case i == 2 && path[1] == ':': // a file at a drive root: C:\x.exe → C:\
+		return path[:3]
+	default:
+		return path[:i]
+	}
+}
+
 func (m *Model) sortProcessTree() {
 	compare := func(a, b uint32) int {
-		x, y := m.processByPID[a], m.processByPID[b]
+		x, y := m.displayProcess(a), m.displayProcess(b)
 		n := 0
 		switch m.processSort.Column {
 		case "pid":
@@ -99,6 +155,8 @@ func (m *Model) sortProcessTree() {
 			n = cmp.Compare(x.WriteRate, y.WriteRate)
 		case "threads":
 			n = cmp.Compare(x.Threads, y.Threads)
+		case "dir":
+			n = strings.Compare(strings.ToLower(processDir(x.Path)), strings.ToLower(processDir(y.Path)))
 		default:
 			n = strings.Compare(strings.ToLower(x.Name), strings.ToLower(y.Name))
 		}
@@ -179,9 +237,10 @@ func (m *Model) processView(c *ui.Context) {
 		{ID: "cpu", Title: "CPU %", Width: 75, Align: ui.End, Sortable: true}, {ID: "memory", Title: "Working set", Width: 104, Align: ui.End, Sortable: true},
 		{ID: "private", Title: "Private bytes", Width: 104, Align: ui.End, Sortable: true}, {ID: "read", Title: "Read /s", Width: 96, Align: ui.End, Sortable: true},
 		{ID: "write", Title: "Write /s", Width: 96, Align: ui.End, Sortable: true}, {ID: "threads", Title: "Threads", Width: 74, Align: ui.End, Sortable: true},
+		{ID: "dir", Title: "Directory", Width: 220, Sortable: true},
 	}
 	cell := func(id uint32, col int) {
-		r := m.processByPID[id]
+		r := m.displayProcess(id)
 		text := ""
 		switch col {
 		case 0:
@@ -200,6 +259,8 @@ func (m *Model) processView(c *ui.Context) {
 			text = format.Rate(r.WriteRate)
 		case 7:
 			text = fmt.Sprint(r.Threads)
+		case 8:
+			text = processDir(r.Path)
 		}
 		if r.Access != "" && col >= 2 && col <= 6 {
 			text = "—"
@@ -255,6 +316,12 @@ func (m *Model) processView(c *ui.Context) {
 	}
 	selected, ok := m.selectedProcess()
 	if m.showDetails && ok {
+		if m.detailSplit <= 0 {
+			// The split's size is the top pane's height: two thirds of the
+			// room leaves the details dock its third.
+			_, h := c.Size()
+			m.detailSplit = max(120, (h-41)*2/3)
+		}
 		m.requestInspection(selected.PID)
 		ui.SplitVertical(c, &m.detailSplit, func() {
 			table()

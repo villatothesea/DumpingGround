@@ -183,6 +183,62 @@ func TestScanButtonCompletesAndClearReleasesState(t *testing.T) {
 		t.Fatalf("missing directory did not report error: %s", m.diskStatus)
 	}
 }
+func TestProcessTreeAggregatesSubtrees(t *testing.T) {
+	m := testModel(t)
+	m.processTreeMode = true
+	m.processRows = []process.Info{
+		{PID: 10, Name: "parent.exe", CPU: 5, Memory: 100, Threads: 2},
+		{PID: 11, PPID: 10, Name: "child.exe", CPU: 3, Memory: 50, Threads: 4, Path: `C:\bin\child.exe`},
+		{PID: 12, PPID: 11, Name: "grand.exe", CPU: 2, Memory: 25, Threads: 1},
+		{PID: 13, Name: "lone.exe", CPU: 7, Memory: 10, Threads: 3},
+	}
+	m.rebuildProcessTree()
+	if got := m.displayProcess(10); got.CPU != 10 || got.Memory != 175 || got.Threads != 7 {
+		t.Fatalf("subtree not aggregated: %+v", got)
+	}
+	if got := m.displayProcess(12); got.CPU != 2 || got.Memory != 25 {
+		t.Fatalf("leaf row changed: %+v", got)
+	}
+	m.processTreeMode = false
+	if got := m.displayProcess(10); got.CPU != 5 || got.Memory != 100 {
+		t.Fatalf("list mode shows aggregate: %+v", got)
+	}
+}
+
+func TestProcessDir(t *testing.T) {
+	cases := map[string]string{
+		`C:\Windows\System32\x.exe`: `C:\Windows\System32`,
+		`C:\x.exe`:                  `C:\`,
+		`x.exe`:                     "",
+		"":                          "",
+		`\\server\share\x.exe`:      `\\server\share`,
+	}
+	for in, want := range cases {
+		if got := processDir(in); got != want {
+			t.Errorf("processDir(%q)=%q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestDetailsDockDefaultsToThird(t *testing.T) {
+	m := testModel(t)
+	m.processRows = []process.Info{{PID: 10, Name: "a.exe", Path: `C:\bin\a.exe`}}
+	m.rebuildProcessTree()
+	m.processSelected = 0
+	m.showDetails = true
+	tt := ui.NewTester(m.view, 1180, 760)
+	tt.Frame()
+	tt.Frame()
+	// detailSplit is the top pane's height: the dock below should hold
+	// roughly a third of the page, not nearly all of it.
+	if m.detailSplit < 400 || m.detailSplit > 540 {
+		t.Fatalf("detailSplit=%v does not leave a third for details", m.detailSplit)
+	}
+	if !tt.HasText("Directory") {
+		t.Fatal("directory column missing")
+	}
+}
+
 func TestProcessSearchAndSort(t *testing.T) {
 	m := testModel(t)
 	m.processRows = []process.Info{{PID: 10, Name: "alpha.exe", Memory: 400}, {PID: 11, PPID: 10, Name: "beta.exe", Memory: 900}, {PID: 12, Name: "gamma.exe", Memory: 1}}

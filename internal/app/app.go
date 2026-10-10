@@ -56,6 +56,7 @@ type Model struct {
 	processSvc                      *process.Service
 	processRows                     []process.Info
 	processByPID                    map[uint32]process.Info
+	processAgg                      map[uint32]process.Info
 	processChildren                 map[uint32][]uint32
 	processRoots                    []uint32
 	processTree                     ui.OutlineState[uint32]
@@ -163,7 +164,7 @@ func New() *Model {
 		processUpdates: make(chan processResult, 1), refresh: make(chan struct{}, 1), inspection: make(chan inspectionResult, 1), events: make(chan func(), 8),
 		iconCache:   make(map[string]*ui.Bitmap),
 		iconPending: make(map[string]bool), iconRequests: make(chan string, 32),
-		diskStatus: "Choose a drive or folder to scan", diskMode: "Tree", diskMetric: "Allocated", diskSelected: -1, diskNode: -1, extensionSelected: -1, mapRoot: -1, diskSplit: 300, animateMap: true, detailTab: "Properties", detailSplit: 200}
+		diskStatus: "Choose a drive or folder to scan", diskMode: "Tree", diskMetric: "Allocated", diskSelected: -1, diskNode: -1, extensionSelected: -1, mapRoot: -1, diskSplit: 300, animateMap: true, detailTab: "Properties"}
 }
 func (m *Model) Run() error {
 	mygo.App.SetName("DumpingGround")
@@ -412,10 +413,10 @@ func (m *Model) view(c *ui.Context) {
 // The window's title bar is hidden, so the strip doubles as the drag
 // region and leaves the room c.TitleBar reports to the system buttons.
 func (m *Model) topBar(c *ui.Context, t *ui.Theme) {
-	right := float32(12)
-	if tb := c.TitleBar(); tb.Right > 0 {
-		right = tb.Right + 4
-	}
+	// Keep the controls clear of the window buttons. A zero TitleBar means
+	// the caption failed to appear: still leave a corner's room or the
+	// window's rounded corner clips the last button.
+	right := max(c.TitleBar().Right+4, 48)
 	bar := ui.Row(c).FillWidth().Height(40).Shrink(0).Padding(0, right, 0, 12).Gap(4).AlignItems(ui.Center).Background(t.Surface).DragWindow()
 	bar.Draw(func(p *ui.Painter, r ui.Rect) { p.Fill(ui.Rect{X: r.X, Y: r.Y + r.H - 1, W: r.W, H: 1}, t.Border, 0) })
 	bar.Children(func() {
@@ -503,7 +504,7 @@ func (m *Model) selActs(c *ui.Context, t *ui.Theme) {
 		if m.pactButton(c, "copy", "Copy path").Disabled(selected.Path == "").Clicked() {
 			mygo.Clipboard.WriteText(selected.Path)
 		}
-		kill := m.iconTextButton(c, "x", "End process").Disabled(selected.PID <= 4).TextColor(t.Danger)
+		kill := m.dangerButton(c, "x", "End process").Disabled(selected.PID <= 4)
 		if kill.Clicked() {
 			m.terminateTarget = selected
 			m.terminateTree = false
@@ -604,6 +605,30 @@ func (m *Model) iconTextButton(c *ui.Context, name, label string) ui.Element {
 	e.Children(func() {
 		icon(c, name, 14).TextColor(t.Text)
 		ui.Text(c, label).SingleLine()
+	})
+	return e
+}
+
+// dangerButton is the destructive .btn: a solid danger face with a white
+// label, lighter on hover and darker on press, faded while disabled.
+func (m *Model) dangerButton(c *ui.Context, name, label string) ui.Element {
+	t := c.Theme()
+	e := ui.Row(c).Height(28).PaddingX(12).Gap(6).AlignItems(ui.Center).Radius(t.Radius).Label(label)
+	e.Draw(func(p *ui.Painter, r ui.Rect) {
+		bg := t.Danger
+		switch {
+		case e.IsDisabled():
+			bg = t.Danger.Alpha(0.45)
+		case e.Pressed():
+			bg = t.Danger.Mix(ui.RGB(0, 0, 0), 0.2)
+		case e.Hovered():
+			bg = t.Danger.Mix(ui.RGB(255, 255, 255), 0.12)
+		}
+		p.Fill(r, bg, t.Radius)
+	})
+	e.Children(func() {
+		icon(c, name, 14).TextColor(ui.RGB(255, 255, 255))
+		ui.Text(c, label).SingleLine().TextColor(ui.RGB(255, 255, 255))
 	})
 	return e
 }
