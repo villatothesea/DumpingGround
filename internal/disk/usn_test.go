@@ -110,6 +110,29 @@ func TestApplyUSNHardLinkReattribution(t *testing.T) {
 	t.Fatalf("allocation not reattributed: %+v", sib)
 }
 
+func TestApplyUSNMoveCannotCycleParents(t *testing.T) {
+	// A stale journal record that relinks a directory beneath its own
+	// subtree must not create a parent cycle: every ancestor walk on the
+	// UI goroutine would loop inside it and freeze the app.
+	s := usnFixture()
+	s.Nodes = append(s.Nodes,
+		Node{ID: 3, Parent: 1, Name: "sub", Dir: true, FRN: usnFRN(9)})
+	s.Nodes[1].Children = append(s.Nodes[1].Children, 3)
+	s.Dirs++
+	if !s.ApplyUSN([]USNEvent{{FRN: usnFRN(6), ParentFRN: usnFRN(9), Name: "moved", Reason: usnRenameNewName}}, nil) {
+		t.Fatal("move event was not applied")
+	}
+	if s.Nodes[1].Parent != 0 {
+		t.Fatalf("dir relinked under its own subtree: parent=%d", s.Nodes[1].Parent)
+	}
+	if s.Nodes[1].Name != "moved" {
+		t.Fatalf("rename dropped with the rejected move: %q", s.Nodes[1].Name)
+	}
+	if p := s.FullPath(1); p != `D:\moved` {
+		t.Fatalf("path after kept link: %q", p)
+	}
+}
+
 func TestApplyUSNFilteredCreateSkipped(t *testing.T) {
 	s := usnFixture()
 	ev := USNEvent{FRN: usnFRN(8), ParentFRN: usnFRN(6), Name: "ph", Attrs: 0x1000 | 0x10, Reason: usnFileCreate}

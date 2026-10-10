@@ -544,12 +544,18 @@ func (m *Model) prepareDiskRows() {
 	query := strings.ToLower(m.diskQuery)
 	if m.diskMode == "Files" || query != "" || m.extensionFilter != "" {
 		stack := []int{m.diskRoot}
+		seen := map[int]bool{m.diskRoot: true}
 		for len(stack) > 0 {
 			id := stack[len(stack)-1]
 			stack = stack[:len(stack)-1]
 			n := s.Nodes[id]
 			if n.Dir {
-				stack = append(stack, n.Children...)
+				for _, k := range n.Children {
+					if !seen[k] {
+						seen[k] = true
+						stack = append(stack, k)
+					}
+				}
 			} else if (query == "" || strings.Contains(strings.ToLower(n.Name), query)) && (m.extensionFilter == "" || fileExtension(n.Name) == m.extensionFilter) {
 				m.diskRows = append(m.diskRows, id)
 			}
@@ -690,12 +696,18 @@ func (m *Model) prepareMap() {
 	}
 	stats := map[string]extensionStat{}
 	stack := []int{m.diskRoot}
+	seen := map[int]bool{m.diskRoot: true}
 	for len(stack) > 0 {
 		id := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
 		n := s.Nodes[id]
 		if n.Dir {
-			stack = append(stack, n.Children...)
+			for _, k := range n.Children {
+				if !seen[k] {
+					seen[k] = true
+					stack = append(stack, k)
+				}
+			}
 			continue
 		}
 		ext := fileExtension(n.Name)

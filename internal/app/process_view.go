@@ -89,11 +89,16 @@ func (m *Model) rebuildProcessTree() {
 // still total the system figures.
 func (m *Model) aggregateProcessTree() {
 	m.processAgg = make(map[uint32]process.Info, len(m.processByPID))
+	active := make(map[uint32]bool, len(m.processByPID))
 	var acc func(id uint32) process.Info
 	acc = func(id uint32) process.Info {
 		if r, ok := m.processAgg[id]; ok {
 			return r
 		}
+		if active[id] {
+			return process.Info{}
+		}
+		active[id] = true
 		r := m.processByPID[id]
 		for _, ch := range m.processChildren[id] {
 			c := acc(ch)
@@ -104,6 +109,7 @@ func (m *Model) aggregateProcessTree() {
 			r.WriteRate += c.WriteRate
 			r.Threads += c.Threads
 		}
+		delete(active, id)
 		m.processAgg[id] = r
 		return r
 	}

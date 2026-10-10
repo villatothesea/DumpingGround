@@ -142,13 +142,28 @@ func (s *Snapshot) usnFind(frn, parentFRN uint64, name string) int {
 	return -1
 }
 
-// usnDelta shifts aggregate sizes on every ancestor of id.
+// usnDelta shifts aggregate sizes on every ancestor of id. The walk is
+// bounded: a stale journal record must never leave a parent cycle here,
+// where it would loop forever on the UI goroutine.
 func (s *Snapshot) usnDelta(id int, dBytes, dAlloc int64) {
-	for p := s.Nodes[id].Parent; p >= 0; p = s.Nodes[p].Parent {
+	for p, steps := s.Nodes[id].Parent, 0; p >= 0 && steps < len(s.Nodes); steps++ {
 		n := &s.Nodes[p]
 		n.Bytes = uint64(int64(n.Bytes) + dBytes)
 		n.Allocated = uint64(int64(n.Allocated) + dAlloc)
+		p = n.Parent
 	}
+}
+
+// usnHasAncestor reports whether id is among p's ancestors: the check that
+// keeps a directory from being relinked beneath its own subtree.
+func (s *Snapshot) usnHasAncestor(p, id int) bool {
+	for a, steps := s.Nodes[p].Parent, 0; a >= 0 && steps < len(s.Nodes); steps++ {
+		if a == id {
+			return true
+		}
+		a = s.Nodes[a].Parent
+	}
+	return false
 }
 
 // usnInsert adds a node under the directory identified by e.ParentFRN.
@@ -263,6 +278,15 @@ func (s *Snapshot) usnRename(e, old USNEvent, ok bool, touched map[int]bool) boo
 		return true
 	}
 	if parent != n.Parent {
+		if n.Dir && s.usnHasAncestor(parent, id) {
+			// A move beneath the record's own subtree cannot be real; the
+			// journal's parent FRN resolved to a stale descendant. Keep the
+			// link where it is and apply only the rename, or the parent
+			// chain becomes a cycle every ancestor walk loops inside.
+			n.Name = e.Name
+			touched[n.Parent] = true
+			return true
+		}
 		oldParent := n.Parent
 		s.usnDelta(id, -int64(n.Bytes), -int64(n.Allocated))
 		p := &s.Nodes[oldParent]

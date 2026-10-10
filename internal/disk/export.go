@@ -13,6 +13,7 @@ func (s *Snapshot) WriteCSV(w io.Writer) error {
 		return err
 	}
 	stack := []int{s.Root}
+	seen := map[int]bool{s.Root: true}
 	for len(stack) > 0 {
 		id := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
@@ -20,7 +21,12 @@ func (s *Snapshot) WriteCSV(w io.Writer) error {
 		kind := "File"
 		if n.Dir {
 			kind = "Directory"
-			stack = append(stack, n.Children...)
+			for _, k := range n.Children {
+				if !seen[k] {
+					seen[k] = true
+					stack = append(stack, k)
+				}
+			}
 		}
 		if err := out.Write([]string{s.FullPath(id), kind, strconv.FormatUint(n.Bytes, 10), strconv.FormatUint(n.Allocated, 10), strconv.FormatBool(n.Shared), n.Error}); err != nil {
 			return err

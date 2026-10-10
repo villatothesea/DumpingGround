@@ -39,6 +39,10 @@ type Snapshot struct {
 	frns       map[uint64][]int
 }
 
+// maxPathDepth bounds parent-chain walks; a corrupt snapshot must degrade
+// a path, never hang the caller.
+const maxPathDepth = 256
+
 func (s *Snapshot) FullPath(id int) string {
 	if id < 0 || id >= len(s.Nodes) {
 		return ""
@@ -47,7 +51,21 @@ func (s *Snapshot) FullPath(id int) string {
 	if n.Path != "" {
 		return n.Path
 	}
-	return filepath.Join(s.FullPath(n.Parent), n.Name)
+	if n.Parent < 0 || n.Parent == id {
+		return n.Name
+	}
+	return s.fullPath(id, 0)
+}
+
+func (s *Snapshot) fullPath(id, depth int) string {
+	n := s.Nodes[id]
+	if n.Path != "" {
+		return n.Path
+	}
+	if depth >= maxPathDepth || n.Parent < 0 || n.Parent == id {
+		return n.Name
+	}
+	return filepath.Join(s.fullPath(n.Parent, depth+1), n.Name)
 }
 
 type Progress struct {
