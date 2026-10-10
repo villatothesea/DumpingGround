@@ -165,8 +165,10 @@ type Model struct {
 	diskMapFlush                    time.Time
 	diskWatchErr                    chan error
 	diskLive                        bool
+	scanPath                        string // the path the current snapshot was built from
 	rustPending                     bool // analyze for Rust artifacts once a running scan settles
 	rustBusy                        bool // analysis or deletion in flight
+	rustOwnsIndex                   bool // the index was built for a Rust scan and is released after it
 	rustReport                      *disk.RustReport
 	rustMode                        bool // the disk page shows the artifact report
 	rustSel                         int  // the cleanup tier previewing its files, -1 none

@@ -28,6 +28,7 @@ func (m *Model) startScan() {
 		m.diskStatus = "Select a drive or folder first"
 		return
 	}
+	m.scanPath = path
 	m.rustMode = false
 	m.rustReport = nil
 	m.stopWatch()
@@ -291,17 +292,44 @@ func (m *Model) clearDisk() {
 	m.mapHover = ""
 	m.mapMotion = mapMotion{}
 	m.mapAnimating = false
-	m.rustReport = nil
-	m.rustMode = false
 	m.rustPending = false
+	m.rustOwnsIndex = false
 	m.rustSel = -1
 	m.rustConfirm = -1
-	m.rustMsg = ""
-	m.rustGone = map[string]bool{}
 	m.diskStatus = "Index cleared"
 	// Dropping the index frees hundreds of MB; return them to the OS now
 	// instead of letting the runtime sit on the released heap. Async so the
 	// sweep does not stall the UI.
+	go debug.FreeOSMemory()
+}
+
+// releaseIndexForRust drops the index a Rust-only scan built while keeping
+// the self-contained report up — the report's paths and sizes do not need
+// the tree that measured them, and neither does deleting the dirs.
+func (m *Model) releaseIndexForRust() {
+	m.stopWatch()
+	m.diskPending = nil
+	m.diskLiveDirty = false
+	m.diskSnapshot = nil
+	m.diskRows = nil
+	m.diskItems = nil
+	m.diskRects = nil
+	m.diskTree = ui.OutlineState[int]{}
+	m.diskFiles = ui.ListState{}
+	m.diskRoot = 0
+	m.diskSelected = -1
+	m.diskViewKey = ""
+	m.mapRoot = -1
+	m.diskNode = -1
+	m.extensionSelected = -1
+	m.extensionFilter = ""
+	m.diskExtensions = nil
+	m.extPending = nil
+	m.extStats = nil
+	m.mapHover = ""
+	m.mapMotion = mapMotion{}
+	m.mapAnimating = false
+	m.diskStatus = "Rust report ready · index released"
 	go debug.FreeOSMemory()
 }
 func (m *Model) browse() {
@@ -353,6 +381,12 @@ func (m *Model) diskView(c *ui.Context) {
 	}
 	if m.rustMode && m.rustReport != nil {
 		m.rustResultsView(c, t)
+		return
+	}
+	if m.rustBusy && m.rustReport == nil {
+		// The scan just settled and artifact analysis is running — skip the
+		// one-frame treemap flash before the report lands.
+		m.rustAnalyzingView(c, t)
 		return
 	}
 	m.resultsView(c, t, m.diskSnapshot)
@@ -469,11 +503,12 @@ func (m *Model) driveCard(c *ui.Context, t *ui.Theme, v disk.Volume) {
 
 // selectDrive picks a volume without starting a scan — leaving results up
 // (or picking another drive mid-review) never rescans on its own; the
-// Scan button does.
+// Scan button does. Returning to the drive whose index produced the Rust
+// report puts that report back up.
 func (m *Model) selectDrive(path string) {
 	m.diskDrive = path
 	m.diskPath = path
-	m.rustMode = false
+	m.rustMode = m.rustReport != nil && m.scanPath == path
 }
 
 func (m *Model) stat(c *ui.Context, t *ui.Theme, name, value string) {

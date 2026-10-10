@@ -15,13 +15,17 @@ import (
 // white glyph on orange.
 var rustOrange = ui.RGB(0xF7, 0x4C, 0x00)
 
-// rustScan analyzes the current snapshot for Rust build artifacts, or kicks
-// off a scan first when there is nothing indexed yet.
+// rustScan analyzes the current snapshot for Rust build artifacts. When
+// the index is missing or belongs to another path — the user picked a
+// different drive after scanning — it scans the selected path first and
+// analyzes once that settles; an index built only for this is released
+// again right after, since the report is self-contained.
 func (m *Model) rustScan() {
-	if m.diskSnapshot == nil {
+	if m.diskSnapshot == nil || m.scanPath != strings.TrimSpace(m.diskPath) {
 		m.rustPending = true
 		if m.diskCancel == nil {
 			m.startScan()
+			m.rustOwnsIndex = m.diskCancel != nil
 		}
 		return
 	}
@@ -32,7 +36,7 @@ func (m *Model) rustScan() {
 // touches every node of a possibly multi-million-node index.
 func (m *Model) rustAnalyze() {
 	s := m.diskSnapshot
-	if s == nil || m.rustBusy {
+	if s == nil || m.rustBusy || m.scanPath != strings.TrimSpace(m.diskPath) {
 		return
 	}
 	m.rustBusy = true
@@ -46,6 +50,10 @@ func (m *Model) rustAnalyze() {
 			m.rustMode = true
 			m.rustSel = -1
 			m.rustConfirm = -1
+			if m.rustOwnsIndex {
+				m.rustOwnsIndex = false
+				m.releaseIndexForRust()
+			}
 		})
 	}()
 }
@@ -75,54 +83,53 @@ func (m *Model) rustGoneFn() func(string) bool {
 }
 
 // cleanRust removes every directory in the tier after a re-check that each
-// path still is the expected artifact directory.
+// path still is the expected artifact directory. The report is
+// self-contained, so this works with or without an index.
 func (m *Model) cleanRust(tier int) {
 	rep := m.rustReport
-	s := m.diskSnapshot
-	if rep == nil || s == nil || m.rustBusy || tier < 0 || tier >= len(rep.Tiers) {
+	if rep == nil || m.rustBusy || tier < 0 || tier >= len(rep.Tiers) {
 		return
 	}
-	type job struct {
-		path  string
-		bytes uint64
-	}
-	jobs := make([]job, 0, len(rep.Tiers[tier].Dirs))
-	for _, id := range rep.Tiers[tier].Dirs {
-		jobs = append(jobs, job{s.FullPath(id), s.Nodes[id].Allocated})
-	}
+	jobs := rep.Tiers[tier].Dirs
 	m.rustBusy = true
 	m.rustMsg = "Deleting…"
 	go func() {
 		var freed uint64
-		var done, failed int
+		var failed int
 		var firstErr error
+		deleted := map[string]uint64{}
 		for _, j := range jobs {
-			if err := disk.SafeRustDelete(j.path); err != nil {
+			if err := disk.SafeRustDelete(j.Path); err != nil {
 				failed++
 				if firstErr == nil {
 					firstErr = err
 				}
 				continue
 			}
-			if err := os.RemoveAll(j.path); err != nil {
+			if err := os.RemoveAll(j.Path); err != nil {
 				failed++
 				if firstErr == nil {
 					firstErr = err
 				}
 				continue
 			}
-			done++
-			freed += j.bytes
-			m.post(func() { m.rustGone[j.path] = true })
+			deleted[j.Path] = j.Bytes
+			freed += j.Bytes
+			m.post(func() { m.rustGone[j.Path] = true })
 		}
 		m.post(func() {
 			m.rustBusy = false
 			m.rustConfirm = -1
-			m.rustMsg = fmt.Sprintf("Deleted %s dirs, freed about %s", format.Int(uint64(done)), format.Bytes(freed))
+			m.rustMsg = fmt.Sprintf("Deleted %s dirs, freed about %s", format.Int(uint64(len(deleted))), format.Bytes(freed))
 			if failed > 0 && firstErr != nil {
 				m.rustMsg += fmt.Sprintf(" · %s failed: %s", format.Int(uint64(failed)), firstErr)
 			}
-			m.rustAnalyze()
+			if m.rustReport != nil {
+				m.rustReport.ApplyDeleted(deleted)
+			}
+			if m.diskSnapshot != nil {
+				m.rustAnalyze()
+			}
 		})
 	}()
 }
@@ -146,6 +153,19 @@ func (m *Model) rustButton(c *ui.Context, off bool) ui.Element {
 	})
 	e.Children(func() { icon(c, "rust", 16).TextColor(ui.RGB(255, 255, 255)) })
 	return e.Disabled(off)
+}
+
+// rustAnalyzingView is the brief placeholder between a finished scan and
+// the completed artifact analysis.
+func (m *Model) rustAnalyzingView(c *ui.Context, t *ui.Theme) {
+	ui.Column(c).Grow(1).MinHeight(0).AlignItems(ui.Center).Children(func() {
+		ui.Spacer(c)
+		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+			icon(c, "rust", 22)
+			ui.Text(c, "Analyzing Rust build artifacts…").TextColor(t.TextMuted)
+		})
+		ui.Spacer(c)
+	})
 }
 
 // rustCovers reports whether cleaning the given tier removes parts of the
@@ -177,7 +197,6 @@ func tierBadge(c *ui.Context, t *ui.Theme, n int, dim bool) ui.Element {
 // per cleanup tier, then every target/ dir in the shared table.
 func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 	rep := m.rustReport
-	s := m.diskSnapshot
 	ui.Column(c).Fill().Padding(4, 12).Gap(8).Children(func() {
 		ui.Row(c).FillWidth().Height(30).AlignItems(ui.Center).Gap(8).Children(func() {
 			icon(c, "rust", 18)
@@ -214,7 +233,7 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 				ui.Text(c, "%").FontSize(11).Bold().TextColor(t.TextMuted)
 			})
 		})
-		total := max(s.Allocated, 1)
+		total := max(rep.Scanned, 1)
 		ui.List(c, &m.rustList, len(rep.Items), func(i int) {
 			it := rep.Items[i]
 			hit := m.rustSel >= 0 && rustCovers(it, m.rustSel)
@@ -229,7 +248,7 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 						tierBadge(c, t, tier+1, dim)
 					}
 				})
-				path := s.FullPath(s.Nodes[it.Target].Parent)
+				path := filepath.Dir(it.Path)
 				ui.Text(c, path).SingleLine().Tooltip(path).Grow(1).MinWidth(0)
 				for _, v := range []uint64{it.Incr, it.Debug, it.Total} {
 					ui.Row(c).Width(110).Shrink(0).Justify(ui.End).Children(func() {

@@ -33,7 +33,7 @@ func TestFindRustTargetsTiers(t *testing.T) {
 	if got := rep.Tiers[2].Bytes; got != 100 {
 		t.Fatalf("target=%d, want 100", got)
 	}
-	if len(rep.Tiers[0].Dirs) != 1 || rep.Tiers[0].Dirs[0] != 6 {
+	if len(rep.Tiers[0].Dirs) != 1 || rep.Tiers[0].Dirs[0].Path != `C:\ws\proj\target\debug\incremental` {
 		t.Fatalf("incremental dirs=%v", rep.Tiers[0].Dirs)
 	}
 }
@@ -44,5 +44,26 @@ func TestFindRustTargetsSkipsDeleted(t *testing.T) {
 	})
 	if rep.Projects != 0 || rep.Tiers[2].Bytes != 0 {
 		t.Fatalf("deleted target still reported: %+v", rep)
+	}
+}
+
+func TestApplyDeletedCascades(t *testing.T) {
+	rep := FindRustTargets(rustSnapshot(), nil)
+	// Deleting target/debug also takes its incremental dir with it.
+	rep.ApplyDeleted(map[string]uint64{`C:\ws\proj\target\debug`: 70})
+	if rep.Projects != 1 {
+		t.Fatalf("projects=%d, want 1", rep.Projects)
+	}
+	it := rep.Items[0]
+	if it.Incr != 0 || it.Debug != 0 || it.Total != 30 {
+		t.Fatalf("item after debug delete: %+v", it)
+	}
+	if rep.Tiers[0].Bytes != 0 || rep.Tiers[1].Bytes != 0 || rep.Tiers[2].Bytes != 100 {
+		t.Fatalf("tiers after debug delete: %+v", rep.Tiers)
+	}
+	// Deleting the whole target removes the project row entirely.
+	rep.ApplyDeleted(map[string]uint64{`C:\ws\proj\target`: 30})
+	if rep.Projects != 0 || len(rep.Items) != 0 || rep.Tiers[2].Bytes != 0 {
+		t.Fatalf("target delete left residue: %+v", rep)
 	}
 }
