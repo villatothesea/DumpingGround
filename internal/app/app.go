@@ -145,6 +145,8 @@ type Model struct {
 	diskSplit                       float32
 	diskLeft                        float32
 	diskExtensions                  []extensionStat
+	extPending                      []int
+	extStats                        map[string]extensionStat
 	extensionList                   ui.ListState
 	extensionSelected               int
 	extensionFilter                 string

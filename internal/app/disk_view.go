@@ -50,6 +50,8 @@ func (m *Model) startScan() {
 	m.mapMotion = mapMotion{}
 	m.mapAnimating = false
 	m.diskExtensions = nil
+	m.extPending = nil
+	m.extStats = nil
 	m.diskStatus = "Scanning…"
 	progress := make(chan disk.Progress, 1)
 	done := make(chan scanResult, 1)
@@ -275,6 +277,8 @@ func (m *Model) clearDisk() {
 	m.extensionSelected = -1
 	m.extensionFilter = ""
 	m.diskExtensions = nil
+	m.extPending = nil
+	m.extStats = nil
 	m.mapHover = ""
 	m.mapMotion = mapMotion{}
 	m.mapAnimating = false
@@ -833,33 +837,48 @@ func (m *Model) prepareMap() {
 			m.mapLogMax = lv
 		}
 	}
-	stats := map[string]extensionStat{}
-	stack := []int{m.diskRoot}
-	seen := map[int]bool{m.diskRoot: true}
-	for len(stack) > 0 {
-		id := stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-		n := s.Nodes[id]
-		if n.Dir {
-			for _, k := range n.Children {
-				if !seen[k] {
-					seen[k] = true
-					stack = append(stack, k)
-				}
-			}
+	// The extension table needs a full subtree walk — far too slow for one
+	// frame at a big root. Seed the walk here and let pumpExtensions chew
+	// through it a bounded slice per frame.
+	m.extStats = map[string]extensionStat{}
+	m.extPending = m.extPending[:0]
+	m.extPending = append(m.extPending, m.diskRoot)
+}
+
+// pumpExtensions advances the subtree walk feeding the extension table by
+// a bounded slice per frame. A node has exactly one parent, so no seen-set
+// is needed — a directory can never appear twice in a children traversal.
+func (m *Model) pumpExtensions(c *ui.Context) {
+	s := m.diskSnapshot
+	if s == nil || len(m.extPending) == 0 {
+		return
+	}
+	const budget = 150_000
+	for n := 0; n < budget && len(m.extPending) > 0; n++ {
+		id := m.extPending[len(m.extPending)-1]
+		m.extPending = m.extPending[:len(m.extPending)-1]
+		node := s.Nodes[id]
+		if node.Dir {
+			m.extPending = append(m.extPending, node.Children...)
 			continue
 		}
-		ext := fileExtension(n.Name)
-		st := stats[ext]
+		ext := fileExtension(node.Name)
+		st := m.extStats[ext]
 		st.Extension = ext
 		st.Files++
-		st.Bytes += m.diskValue(n)
-		stats[ext] = st
+		st.Bytes += m.diskValue(node)
+		m.extStats[ext] = st
 	}
-	for _, st := range stats {
+	if len(m.extPending) > 0 {
+		c.AnimationFrame()
+		return
+	}
+	m.diskExtensions = m.diskExtensions[:0]
+	for _, st := range m.extStats {
 		m.diskExtensions = append(m.diskExtensions, st)
 	}
 	slices.SortFunc(m.diskExtensions, func(a, b extensionStat) int { return cmp.Compare(b.Bytes, a.Bytes) })
+	m.extStats = nil
 }
 
 func (m *Model) diskMap(c *ui.Context) {
@@ -1050,6 +1069,7 @@ func fileExtension(name string) string {
 }
 
 func (m *Model) extensionTable(c *ui.Context) {
+	m.pumpExtensions(c)
 	cols := []ui.TableColumn{{Title: "Extension", Width: 100}, {Title: "Files", Width: 70, Align: ui.End}, {Title: "Size", Width: 95, Align: ui.End}}
 	m.extensionList.Selected = &m.extensionSelected
 	m.extensionList.Key = func(i int) any { return m.diskExtensions[i].Extension }
