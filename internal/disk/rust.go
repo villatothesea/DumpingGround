@@ -124,22 +124,37 @@ func FindRustTargets(s *Snapshot, gone func(string) bool) *RustReport {
 		rep.Tiers[2].Dirs = append(rep.Tiers[2].Dirs, RustDir{s.FullPath(i), n.Allocated})
 		rep.Tiers[2].Bytes += n.Allocated
 		item := RustItem{Path: s.FullPath(i), Total: n.Allocated}
-		for _, prof := range n.Children {
-			p := &s.Nodes[prof]
-			if !p.Dir {
-				continue
-			}
-			if strings.EqualFold(p.Name, "debug") && !dead(prof) {
-				rep.Tiers[1].Dirs = append(rep.Tiers[1].Dirs, RustDir{s.FullPath(prof), p.Allocated})
-				rep.Tiers[1].Bytes += p.Allocated
-				item.Debug += p.Allocated
-			}
-			for _, sub := range p.Children {
-				if d := &s.Nodes[sub]; d.Dir && strings.EqualFold(d.Name, "incremental") && !dead(sub) {
+		// Cargo puts incremental/ under every profile dir — and profiles
+		// themselves can nest under a target triple or a nested
+		// CARGO_TARGET_DIR (check62/debug/incremental,
+		// aarch64-linux-android/mobile/incremental), so the name search has
+		// to cover the whole subtree, not just one profile level. "debug"
+		// stays at depth ≤2: deeper dirs named debug are more likely a
+		// build script's than a profile's.
+		type frame struct {
+			id, depth int
+		}
+		stack := []frame{{i, 0}}
+		for len(stack) > 0 {
+			f := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			for _, sub := range s.Nodes[f.id].Children {
+				d := &s.Nodes[sub]
+				if !d.Dir || dead(sub) {
+					continue
+				}
+				switch {
+				case strings.EqualFold(d.Name, "incremental"):
 					rep.Tiers[0].Dirs = append(rep.Tiers[0].Dirs, RustDir{s.FullPath(sub), d.Allocated})
 					rep.Tiers[0].Bytes += d.Allocated
 					item.Incr += d.Allocated
+					continue // incremental dirs nest nothing worth listing
+				case f.depth < 2 && strings.EqualFold(d.Name, "debug"):
+					rep.Tiers[1].Dirs = append(rep.Tiers[1].Dirs, RustDir{s.FullPath(sub), d.Allocated})
+					rep.Tiers[1].Bytes += d.Allocated
+					item.Debug += d.Allocated
 				}
+				stack = append(stack, frame{sub, f.depth + 1})
 			}
 		}
 		rep.Items = append(rep.Items, item)
