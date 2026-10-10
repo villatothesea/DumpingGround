@@ -269,11 +269,11 @@ func (m *Model) processView(c *ui.Context) {
 			m.processTreeMode = false
 			m.processSelected = -1
 		})
-		ui.Spacer(c)
 		m.selActs(c, t)
+		ui.Spacer(c)
 		label := "Every " + m.processInterval
 		if strings.TrimSpace(m.processQuery) != "" {
-			label += fmt.Sprintf("  ·  %d of %d match", len(m.processFlat), len(m.processRows))
+			label += fmt.Sprintf("  ·  %s of %s match", format.Int(uint64(len(m.processFlat))), format.Int(uint64(len(m.processRows))))
 		}
 		ui.Text(c, label).FontSize(11).TextColor(t.TextMuted).Shrink(0)
 	})
@@ -285,7 +285,7 @@ func (m *Model) processView(c *ui.Context) {
 		{ID: "cpu", Title: "CPU %", Width: 75, Align: ui.End, Sortable: true}, {ID: "memory", Title: "Working set", Width: 104, Align: ui.End, Sortable: true},
 		{ID: "private", Title: "Private bytes", Width: 104, Align: ui.End, Sortable: true}, {ID: "read", Title: "Read /s", Width: 96, Align: ui.End, Sortable: true},
 		{ID: "write", Title: "Write /s", Width: 96, Align: ui.End, Sortable: true}, {ID: "threads", Title: "Threads", Width: 74, Align: ui.End, Sortable: true},
-		{ID: "dir", Title: "Directory", Width: 220, Sortable: true},
+		{ID: "dir", Title: "Directory", MinWidth: 160, Sortable: true},
 	}
 	cell := func(id uint32, col int) {
 		r := m.displayProcess(id)
@@ -306,7 +306,7 @@ func (m *Model) processView(c *ui.Context) {
 		case 6:
 			text = format.Rate(r.WriteRate)
 		case 7:
-			text = fmt.Sprint(r.Threads)
+			text = format.Int(uint64(r.Threads))
 		case 8:
 			text = processDir(r.Path)
 		}
@@ -597,7 +597,7 @@ func (m *Model) processDetails(c *ui.Context) {
 					m.detailPill(c, t, name)
 				}
 			})
-			ui.Text(c, fmt.Sprintf("%d modules · %d threads", len(m.inspectedModules), len(m.inspectedThreads))).FontSize(11).TextColor(t.TextMuted).Shrink(0)
+			ui.Text(c, fmt.Sprintf("%s modules · %s threads", format.Int(uint64(len(m.inspectedModules))), format.Int(uint64(len(m.inspectedThreads))))).FontSize(11).TextColor(t.TextMuted).Shrink(0)
 			ui.Text(c, m.inspectError).SingleLine().Grow(1).MinWidth(0).TextColor(t.TextMuted)
 			if m.iconButton(c, "x", "Close details").Clicked() {
 				m.showDetails = false
@@ -650,7 +650,7 @@ func (m *Model) processDetails(c *ui.Context) {
 				if ui.Button(c, "Search handles").Clicked() {
 					m.requestHandleSearch(m.inspectedPID)
 				}
-				ui.Text(c, fmt.Sprintf("%d results", len(m.handles))).TextColor(c.Theme().TextMuted)
+				ui.Text(c, fmt.Sprintf("%s results", format.Int(uint64(len(m.handles))))).TextColor(c.Theme().TextMuted)
 			})
 			cols := []ui.TableColumn{{Title: "Handle", Width: 90}, {Title: "Type", Width: 130}, {Title: "Name"}, {Title: "Access", Width: 90, Align: ui.End}}
 			tableChrome(c, func() ui.Element {

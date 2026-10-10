@@ -90,7 +90,7 @@ func (m *Model) drainScan() {
 		} else if r.err != nil {
 			m.diskStatus = "Scan failed: " + r.err.Error()
 		} else {
-			m.diskStatus = fmt.Sprintf("Complete · %s · %d files · %s · %.1f s · %d skipped", r.snapshot.Method, r.snapshot.Files, format.Bytes(r.snapshot.Allocated), r.snapshot.Duration.Seconds(), r.snapshot.Skipped)
+			m.diskStatus = fmt.Sprintf("Complete · %s · %s files · %s · %.1f s · %s skipped", r.snapshot.Method, format.Int(r.snapshot.Files), format.Bytes(r.snapshot.Allocated), r.snapshot.Duration.Seconds(), format.Int(r.snapshot.Skipped))
 			m.startWatch()
 			if m.diskLive {
 				m.diskStatus += " · live"
@@ -351,11 +351,11 @@ func (m *Model) scanningCard(c *ui.Context, t *ui.Theme) {
 			}
 			ui.Text(c, title).FontSize(14).Bold()
 			ui.Row(c).Gap(28).FillWidth().Children(func() {
-				m.stat(c, t, "Files", fmt.Sprintf("%d files", p.Files))
-				m.stat(c, t, "Folders", fmt.Sprint(p.Dirs))
+				m.stat(c, t, "Files", format.Int(p.Files)+" files")
+				m.stat(c, t, "Folders", format.Int(p.Dirs))
 				m.stat(c, t, "Tallied", format.Bytes(p.Allocated))
 				m.stat(c, t, "Elapsed", fmt.Sprintf("%.1f s", time.Since(m.diskStarted).Seconds()))
-				m.stat(c, t, "Skipped", fmt.Sprint(p.Skipped))
+				m.stat(c, t, "Skipped", format.Int(p.Skipped))
 			})
 			ui.Text(c, p.Current).SingleLine().Ellipsis("…").Tooltip(p.Current).TextColor(t.TextMuted)
 			ui.Progress(c, -1).FillWidth().Height(4)
@@ -383,7 +383,7 @@ func (m *Model) resultsView(c *ui.Context, t *ui.Theme, s *disk.Snapshot) {
 		ui.Spacer(c)
 		root := s.Nodes[m.diskRoot]
 		ui.Row(c).Gap(4).AlignItems(ui.Center).Shrink(0).Children(func() {
-			ui.Text(c, fmt.Sprintf("Allocated %s · Logical %s · %d files ·", format.Bytes(root.Allocated), format.Bytes(root.Bytes), s.Files)).FontSize(11).TextColor(t.TextMuted).SingleLine()
+			ui.Text(c, fmt.Sprintf("Allocated %s · Logical %s · %s files ·", format.Bytes(root.Allocated), format.Bytes(root.Bytes), format.Int(s.Files))).FontSize(11).TextColor(t.TextMuted).SingleLine()
 			skip := ui.Row(c).Gap(3).Padding(1, 5).Radius(4).AlignItems(ui.Center).Label("What is skipped").Tooltip("Entries the scan could not index — click for details")
 			skip.Draw(func(p *ui.Painter, r ui.Rect) {
 				if skip.Hovered() {
@@ -391,13 +391,13 @@ func (m *Model) resultsView(c *ui.Context, t *ui.Theme, s *disk.Snapshot) {
 				}
 			})
 			skip.Children(func() {
-				ui.Text(c, fmt.Sprintf("%d skipped", s.Skipped)).FontSize(11).TextColor(t.TextMuted).SingleLine()
+				ui.Text(c, format.Int(s.Skipped)+" skipped").FontSize(11).TextColor(t.TextMuted).SingleLine()
 				icon(c, "info", 11).TextColor(t.Accent)
 			})
 			if skip.Clicked() {
 				m.diskInfoOpen = true
 			}
-			ui.Text(c, fmt.Sprintf("· %d estimates", s.Estimated)).FontSize(11).TextColor(t.TextMuted).SingleLine().Tooltip("estimates: files whose on-disk size had to be guessed, e.g. no data attribute read")
+			ui.Text(c, "· "+format.Int(s.Estimated)+" estimates").FontSize(11).TextColor(t.TextMuted).SingleLine().Tooltip("estimates: files whose on-disk size had to be guessed, e.g. no data attribute read")
 		})
 		if m.extensionFilter != "" {
 			m.extChip(c, t)
@@ -934,7 +934,7 @@ func (m *Model) extensionTable(c *ui.Context) {
 				})
 				return
 			}
-			text := fmt.Sprint(s.Files)
+			text := format.Int(s.Files)
 			if col == 2 {
 				text = format.Bytes(s.Bytes)
 			}

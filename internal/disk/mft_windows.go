@@ -15,6 +15,7 @@ import (
 	"unsafe"
 
 	"github.com/dumpingground/dumpingground/internal/disk/ntfs"
+	"github.com/dumpingground/dumpingground/internal/format"
 )
 
 var deviceIO = syscall.NewLazyDLL("kernel32.dll").NewProc("DeviceIoControl")
@@ -111,7 +112,7 @@ func scanMFTRecords(ctx context.Context, stream io.Reader, count int64, recordBy
 	report := func() {
 		if progress != nil && time.Since(last) > 100*time.Millisecond {
 			last = time.Now()
-			p := Progress{Files: out.Files, Dirs: out.Dirs, Bytes: out.Bytes, Allocated: out.Allocated, Skipped: out.Skipped, Current: fmt.Sprintf("%s · NTFS records %d / %d", root, index, count), Elapsed: time.Since(start), Method: "NTFS MFT"}
+			p := Progress{Files: out.Files, Dirs: out.Dirs, Bytes: out.Bytes, Allocated: out.Allocated, Skipped: out.Skipped, Current: fmt.Sprintf("%s · NTFS records %s / %s", root, format.Int(uint64(index)), format.Int(uint64(count))), Elapsed: time.Since(start), Method: "NTFS MFT"}
 			select {
 			case progress <- p:
 			default:
