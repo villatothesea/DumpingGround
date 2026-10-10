@@ -540,13 +540,7 @@ func (m *Model) resultsView(c *ui.Context, t *ui.Theme, s *disk.Snapshot) {
 		if m.iconTextButton(c, "trash", "Clear index").Tooltip("Drop the index and return its memory to Windows").Clicked() {
 			m.clearDisk()
 		}
-		anim := m.iconTextButton(c, "zap", "Animate").Tooltip("Zoom transitions when drilling the space map")
-		if m.animateMap {
-			anim.BorderColor(t.Accent).Background(t.Accent.Alpha(0.12))
-		}
-		if anim.Clicked() {
-			m.animateMap = !m.animateMap
-		}
+		ui.Checkbox(c, &m.animateMap, "Animate").Tooltip("Zoom transitions when drilling the space map")
 	})
 	m.prepareDiskRows()
 	m.prepareMap()
