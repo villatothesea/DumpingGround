@@ -89,4 +89,59 @@ func TestScreenshotStates(t *testing.T) {
 	tt4.SetTitleBar(ui.TitleBar{Height: 40, Right: 138})
 	tt4.Frame()
 	dump(t, tt4, dest, "proc-pill-tabs.png")
+
+	// The Rust report: presets, collapsed category picker, project rows.
+	m3 := testModel(t)
+	m3.page = diskPage
+	m3.rustMode = true
+	m3.rustReport = testRustReport()
+	tt5 := ui.NewTester(m3.view, 1180, 760)
+	tt5.SetDark(true)
+	tt5.Frame()
+	dump(t, tt5, dest, "rust-report.png")
+	m3.rustAdvanced = true
+	m3.rustChecked[disk.RustCatIncr] = true
+	m3.rustChecked[disk.RustCatOrphans] = true
+	m3.rustSel = 100 + disk.RustCatIncr
+	// Let the collapsible finish opening before capturing.
+	for i := 0; i < 40; i++ {
+		tt5.Frame()
+	}
+	dump(t, tt5, dest, "rust-advanced.png")
+}
+
+// testRustReport fabricates a report resembling a real scan for shot tests.
+func testRustReport() *disk.RustReport {
+	rep := &disk.RustReport{Projects: 3, Scanned: 400 << 30}
+	for i, c := range []struct{ name, note string; risk int }{
+		{"Incremental caches", "Compiler fingerprints", disk.RustRiskSafe},
+		{"Doc builds", "cargo doc output", disk.RustRiskSafe},
+		{"Debug builds", "target/debug dirs", disk.RustRiskModerate},
+		{"Release builds", "Optimized binaries", disk.RustRiskCareful},
+		{"Stray files", "Loose files inside target/", disk.RustRiskReview},
+		{"Registry cache", "~/.cargo/registry", disk.RustRiskSafe},
+		{"Git checkouts", "~/.cargo/git", disk.RustRiskSafe},
+		{"Old toolchains", "non-default toolchains", disk.RustRiskModerate},
+		{"Orphan targets", "target dirs, no project", disk.RustRiskReview},
+	} {
+		rep.Cats[i].Name, rep.Cats[i].Note, rep.Cats[i].Risk = c.name, c.note, c.risk
+	}
+	add := func(cat int, path string, bytes uint64) {
+		rep.Cats[cat].Dirs = append(rep.Cats[cat].Dirs, disk.RustDir{Path: path, Bytes: bytes, Base: filepath.Base(path)})
+		rep.Cats[cat].Bytes += bytes
+	}
+	add(disk.RustCatIncr, `D:\ws\pith\target\debug\incremental`, 33<<30)
+	add(disk.RustCatDebug, `D:\ws\pith\target\debug`, 144<<30)
+	add(disk.RustCatRelease, `D:\ws\pith\target\release`, 10<<30)
+	add(disk.RustCatStray, `D:\ws\pith\target\debug.log`, 5<<20)
+	add(disk.RustCatRegistry, `C:\Users\me\.cargo\registry`, 3<<30)
+	add(disk.RustCatGit, `C:\Users\me\.cargo\git`, 900<<20)
+	add(disk.RustCatToolchains, `C:\Users\me\.rustup\toolchains\1.98.0-x86_64-pc-windows-msvc`, 1300<<20)
+	add(disk.RustCatOrphans, `D:\ws\gone\target`, 2<<30)
+	rep.Items = []disk.RustItem{
+		{Path: `D:\ws\pith\target`, Incr: 33 << 30, Debug: 144 << 30, Rel: 10 << 30, Stray: 5 << 20, Total: 155 << 30, Idle: 0},
+		{Path: `D:\ws\zeron\target`, Incr: 2 << 30, Debug: 24 << 30, Total: 34 << 30, Idle: 4},
+		{Path: `D:\ws\old-thing\target`, Debug: 8 << 30, Rel: 1 << 30, Total: 9 << 30, Idle: 400},
+	}
+	return rep
 }

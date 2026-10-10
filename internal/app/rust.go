@@ -360,9 +360,18 @@ func (m *Model) rustConfirmText(jobs []disk.RustDir) string {
 	return fmt.Sprintf("Delete %s items, free %s?", format.Int(uint64(n)), format.Bytes(b))
 }
 
-// rustResultsView fills the disk page with the artifact report: three
-// preset plans on top, a collapsible advanced panel with all nine
-// categories, then every project target dir in the shared table.
+// rustSectionLabel is a muted caption with a hairline — the page's
+// visual skeleton: Pick a plan / Or pick exactly / Projects.
+func rustSectionLabel(c *ui.Context, t *ui.Theme, s string) {
+	ui.Row(c).FillWidth().Gap(10).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, s).FontSize(11).Bold().TextColor(t.TextMuted).Shrink(0)
+		ui.Box(c).Grow(1).Height(1).Background(t.Border)
+	})
+}
+
+// rustResultsView fills the disk page with the artifact report, organized
+// as one decision: pick a preset plan up top, or open the category
+// picker, or work the project table below.
 func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 	rep := m.rustReport
 	ui.Column(c).Fill().Padding(4, 12).Gap(8).Children(func() {
@@ -388,6 +397,7 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 				m.rustMode = false
 			}
 		})
+		rustSectionLabel(c, t, "Pick a plan — or click one to preview what it removes")
 		ui.Row(c).FillWidth().Gap(10).Children(func() {
 			for p := range rustPresets {
 				m.rustPresetCard(c, t, p)
@@ -397,6 +407,7 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 		if rep.Projects == 0 {
 			ui.Text(c, "No Cargo target/ directories in this index.").TextColor(t.TextMuted)
 		} else {
+			rustSectionLabel(c, t, "Projects — or clean them one by one")
 			// Header matching the row layout below.
 			ui.Row(c).FillWidth().Height(24).Shrink(0).Padding(0, 10).Gap(6).AlignItems(ui.Center).Children(func() {
 				ui.Box(c).Width(100).Shrink(0)
@@ -492,12 +503,9 @@ func (m *Model) rustPresetCard(c *ui.Context, t *ui.Theme, p int) {
 			ui.Spacer(c)
 			ui.Text(c, pre.tag).FontSize(10).Bold().TextColor(tagColor)
 		})
-		ui.Text(c, pre.includes).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
-		ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
-			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-				ui.Text(c, format.Bytes(bytes)).FontSize(16).Bold()
-				ui.Text(c, pre.rebuild).FontSize(10).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Tooltip(pre.rebuild)
-			})
+		ui.Text(c, format.Bytes(bytes)).FontSize(18).Bold()
+		ui.Text(c, pre.includes+" — "+pre.rebuild).FontSize(10).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Tooltip(pre.includes + " — " + pre.rebuild)
+		ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
 			if m.dangerButton(c, "trash", "Clean").Disabled(bytes == 0 || m.rustBusy).Clicked() {
 				m.rustConfirm = p
 			}
@@ -523,48 +531,20 @@ func (m *Model) rustPresetCard(c *ui.Context, t *ui.Theme, p int) {
 	}
 }
 
-// rustAdvancedPanel is the collapsible category picker: every one of the
-// nine cleanup categories with its own checkbox, risk tag, path count and
-// size — the precise tool for users who do not want a preset.
+// rustAdvancedPanel is the collapsible category picker: the nine cleanup
+// categories grouped by where they live — inside project targets versus
+// shared cargo/rustup locations — each with a checkbox, a risk tag, a
+// path-list button and its size. Closed by default; presets cover the
+// common cases.
 func (m *Model) rustAdvancedPanel(c *ui.Context, t *ui.Theme) {
-	rep := m.rustReport
-	ui.Collapsible(c, "Choose exactly what to remove", &m.rustAdvanced, func() {
-		ui.Column(c).Gap(2).PaddingY(4).Children(func() {
-			for i := range rep.Cats {
-				cat := &rep.Cats[i]
-				row := ui.Row(c).FillWidth().Height(26).Padding(0, 10).Gap(8).AlignItems(ui.Center).Radius(4).Cursor(ui.CursorPointer)
-				if row.Hovered() {
-					row.Background(t.SurfaceHover)
-				}
-				i := i
-				row.Children(func() {
-					ui.CheckboxBase(c, &m.rustChecked[i])
-					tierBadge(c, t, i+1, false)
-					ui.Text(c, cat.Name).FontSize(12).Shrink(0).Width(130)
-					ui.Text(c, cat.Note).FontSize(11).TextColor(t.TextMuted).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").Tooltip(cat.Note)
-					ui.Text(c, rustRiskLabel(cat.Risk)).FontSize(10).Bold().TextColor(rustRiskColor(t, cat.Risk)).Shrink(0)
-					if len(cat.Dirs) > 0 {
-						if ui.Button(c, fmt.Sprintf("%s paths", format.Int(uint64(len(cat.Dirs))))).Clicked() {
-							m.rustPathsCat = i
-							m.rustPathsOpen = true
-						}
-					}
-					ui.Row(c).Width(80).Shrink(0).Justify(ui.End).Children(func() {
-						ui.Text(c, format.Bytes(cat.Bytes)).FontSize(12).SingleLine()
-					})
-				})
-				if row.Clicked() {
-					m.rustChecked[i] = !m.rustChecked[i]
-					if m.rustChecked[i] {
-						m.rustSel = 100 + i
-					} else if m.rustSel == 100+i {
-						m.rustSel = -1
-					}
-				}
-			}
+	ui.Collapsible(c, "Or pick exactly what to remove", &m.rustAdvanced, func() {
+		ui.Column(c).Gap(2).Padding(2, 0, 4, 0).Children(func() {
+			m.rustCatGroup(c, t, "Inside project targets", disk.RustCatIncr, disk.RustCatStray)
+			m.rustCatGroup(c, t, "Shared caches & leftovers", disk.RustCatRegistry, disk.RustCatOrphans)
+			ui.Divider(c)
 			ui.Row(c).FillWidth().Height(30).Padding(0, 10).Gap(8).AlignItems(ui.Center).Children(func() {
 				jobs := m.rustCheckedJobs()
-				ui.Text(c, fmt.Sprintf("%s items · %s", format.Int(uint64(len(jobs))), format.Bytes(rustJobsBytes(jobs)))).FontSize(11).TextColor(t.TextMuted).Grow(1).MinWidth(0)
+				ui.Text(c, fmt.Sprintf("%s items · %s selected", format.Int(uint64(len(jobs))), format.Bytes(rustJobsBytes(jobs)))).FontSize(11).TextColor(t.TextMuted).Grow(1).MinWidth(0)
 				if m.dangerButton(c, "trash", "Clean selected").Disabled(len(jobs) == 0 || m.rustBusy).Clicked() {
 					m.rustAdvConfirm = true
 				}
@@ -583,6 +563,86 @@ func (m *Model) rustAdvancedPanel(c *ui.Context, t *ui.Theme) {
 			}
 		})
 	})
+}
+
+// rustCatGroup is one group header plus its category rows in the
+// advanced picker.
+func (m *Model) rustCatGroup(c *ui.Context, t *ui.Theme, title string, from, to int) {
+	ui.Text(c, title).FontSize(10).Bold().TextColor(t.TextMuted).Padding(4, 10, 0, 0)
+	for i := from; i <= to; i++ {
+		m.rustCatRow(c, t, i)
+	}
+}
+
+// rustCatRow is one checkable cleanup category: checkbox, numbered badge
+// matching the project rows, name, what it is, risk tag, a path-list
+// button and the bytes it frees. Empty categories dim out — "none found"
+// is itself information.
+func (m *Model) rustCatRow(c *ui.Context, t *ui.Theme, i int) {
+	cat := &m.rustReport.Cats[i]
+	empty := len(cat.Dirs) == 0
+	row := ui.Row(c).FillWidth().Height(26).Padding(0, 10).Gap(8).AlignItems(ui.Center).Radius(4).Cursor(ui.CursorPointer)
+	if row.Hovered() {
+		row.Background(t.SurfaceHover)
+	}
+	row.Children(func() {
+		ui.Checkbox(c, &m.rustChecked[i], "").Disabled(empty)
+		tierBadge(c, t, i+1, empty)
+		nameT := ui.Text(c, cat.Name).FontSize(12).Shrink(0).Width(130)
+		noteT := ui.Text(c, cat.Note).FontSize(11).TextColor(t.TextMuted).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").Tooltip(cat.Note)
+		ui.Row(c).Width(72).Shrink(0).Justify(ui.End).Children(func() {
+			riskT := ui.Text(c, rustRiskLabel(cat.Risk)).FontSize(10).Bold()
+			if empty {
+				riskT.TextColor(t.TextMuted.Alpha(0.6))
+			} else {
+				riskT.TextColor(rustRiskColor(t, cat.Risk))
+			}
+		})
+		ui.Row(c).Width(66).Shrink(0).Justify(ui.End).Children(func() {
+			if !empty {
+				m.rustPathsLink(c, t, i)
+			}
+		})
+		ui.Row(c).Width(80).Shrink(0).Justify(ui.End).Children(func() {
+			sizeT := ui.Text(c, format.Bytes(cat.Bytes)).FontSize(12).SingleLine()
+			if empty {
+				sizeT.TextColor(t.TextMuted.Alpha(0.6))
+			}
+		})
+		if empty {
+			nameT.TextColor(t.TextMuted)
+			noteT.TextColor(t.TextMuted.Alpha(0.6))
+		}
+	})
+	if row.Clicked() && !empty {
+		m.rustChecked[i] = !m.rustChecked[i]
+		if m.rustChecked[i] {
+			m.rustSel = 100 + i
+		} else if m.rustSel == 100+i {
+			m.rustSel = -1
+		}
+	}
+}
+
+// rustPathsLink is the quiet "N paths" affordance opening the category's
+// path-list modal — a muted text link, not a button.
+func (m *Model) rustPathsLink(c *ui.Context, t *ui.Theme, i int) {
+	cat := &m.rustReport.Cats[i]
+	e := ui.Row(c).Shrink(0).Gap(3).AlignItems(ui.Center).Cursor(ui.CursorPointer).Label("Show paths in " + cat.Name)
+	e.Children(func() {
+		label := "path"
+		if len(cat.Dirs) != 1 {
+			label = "paths"
+		}
+		ui.Text(c, fmt.Sprintf("%s %s", format.Int(uint64(len(cat.Dirs))), label)).FontSize(11).TextColor(t.Accent)
+	})
+	if e.Hovered() {
+		e.Background(t.SurfaceHover)
+	}
+	if e.Clicked() {
+		m.rustPathsCat = i
+		m.rustPathsOpen = true
+	}
 }
 
 // rustCatPathsModal lists every path inside a category — the "check what
