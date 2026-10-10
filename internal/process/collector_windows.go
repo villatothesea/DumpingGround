@@ -116,9 +116,18 @@ type sample struct {
 type windowsCollector struct {
 	mu       sync.Mutex
 	previous map[uint32]sample
+	// A process never changes owner, so its account is resolved once and
+	// cached by PID + start time; a reused PID re-resolves.
+	users map[uint32]userEntry
+}
+type userEntry struct {
+	created uint64
+	name    string
 }
 
-func newCollector() Collector { return &windowsCollector{previous: make(map[uint32]sample)} }
+func newCollector() Collector {
+	return &windowsCollector{previous: make(map[uint32]sample), users: make(map[uint32]userEntry)}
+}
 
 func (c *windowsCollector) Snapshot() ([]Info, error) {
 	c.mu.Lock()
@@ -155,6 +164,7 @@ func (c *windowsCollector) Snapshot() ([]Info, error) {
 	for pid := range c.previous {
 		if _, ok := seen[pid]; !ok {
 			delete(c.previous, pid)
+			delete(c.users, pid)
 		}
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
@@ -204,6 +214,10 @@ func (c *windowsCollector) readEntry(entry *processEntry32) Info {
 		}
 		createdID := fileTimeValue(created)
 		info.Started = time.Unix(0, int64(createdID-116444736000000000)*100)
+		if u, ok := c.users[info.PID]; !ok || u.created != createdID {
+			c.users[info.PID] = userEntry{created: createdID, name: processUser(h)}
+		}
+		info.User = c.users[info.PID].name
 		prev, ok := c.previous[info.PID]
 		now := time.Now()
 		if ok && prev.created == createdID && cpu >= prev.cpu && now.After(prev.at) {

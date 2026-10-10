@@ -170,6 +170,8 @@ func (m *Model) sortProcessTree() {
 			n = cmp.Compare(x.WriteRate, y.WriteRate)
 		case "threads":
 			n = cmp.Compare(x.Threads, y.Threads)
+		case "user":
+			n = strings.Compare(strings.ToLower(x.User), strings.ToLower(y.User))
 		case "dir":
 			n = strings.Compare(strings.ToLower(processDir(x.Path)), strings.ToLower(processDir(y.Path)))
 		default:
@@ -323,6 +325,7 @@ func (m *Model) processView(c *ui.Context) {
 		{ID: "cpu", Title: "CPU %", Width: 75, Align: ui.End, Sortable: true}, {ID: "memory", Title: "Working set", Width: 104, Align: ui.End, Sortable: true},
 		{ID: "private", Title: "Private bytes", Width: 104, Align: ui.End, Sortable: true}, {ID: "read", Title: "Read /s", Width: 96, Align: ui.End, Sortable: true},
 		{ID: "write", Title: "Write /s", Width: 96, Align: ui.End, Sortable: true}, {ID: "threads", Title: "Threads", Width: 74, Align: ui.End, Sortable: true},
+		{ID: "user", Title: "User", Width: 130, Sortable: true},
 		{ID: "dir", Title: "Directory", MinWidth: 160, Sortable: true},
 	}
 	cell := func(id uint32, col int) {
@@ -346,6 +349,8 @@ func (m *Model) processView(c *ui.Context) {
 		case 7:
 			text = format.Int(uint64(r.Threads))
 		case 8:
+			text = r.User
+		case 9:
 			text = processDir(r.Path)
 		}
 		if r.Access != "" && col >= 2 && col <= 6 {

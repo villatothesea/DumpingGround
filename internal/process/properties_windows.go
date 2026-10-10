@@ -28,14 +28,7 @@ func (c *windowsCollector) Properties(pid uint32) (Info, error) {
 	var token syscall.Token
 	if syscall.OpenProcessToken(syscall.Handle(h), syscall.TOKEN_QUERY, &token) == nil {
 		defer token.Close()
-		if user, e := token.GetTokenUser(); e == nil {
-			if name, domain, _, e := user.User.Sid.LookupAccount(""); e == nil {
-				info.User = name
-				if domain != "" {
-					info.User = domain + "\\" + name
-				}
-			}
-		}
+		info.User = tokenUser(token)
 		var elevated uint32
 		var length uint32
 		if syscall.GetTokenInformation(token, 20, (*byte)(unsafe.Pointer(&elevated)), 4, &length) == nil {
@@ -67,4 +60,28 @@ func (c *windowsCollector) Properties(pid uint32) (Info, error) {
 	}
 	runtime.KeepAlive(buf)
 	return info, nil
+}
+
+// processUser resolves the account owning the process, "DOMAIN\name".
+func processUser(h uintptr) string {
+	var token syscall.Token
+	if syscall.OpenProcessToken(syscall.Handle(h), syscall.TOKEN_QUERY, &token) != nil {
+		return ""
+	}
+	defer token.Close()
+	return tokenUser(token)
+}
+func tokenUser(token syscall.Token) string {
+	user, err := token.GetTokenUser()
+	if err != nil {
+		return ""
+	}
+	name, domain, _, err := user.User.Sid.LookupAccount("")
+	if err != nil {
+		return ""
+	}
+	if domain != "" {
+		return domain + "\\" + name
+	}
+	return name
 }
