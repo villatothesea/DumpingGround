@@ -387,36 +387,68 @@ func (m *Model) driveChip(c *ui.Context, t *ui.Theme, v disk.Volume, scanning bo
 func (m *Model) idleCard(c *ui.Context, t *ui.Theme) {
 	ui.Column(c).Grow(1).MinHeight(0).AlignItems(ui.Center).Children(func() {
 		ui.Spacer(c)
-		card := ui.Column(c).Width(460).Padding(16, 20).Gap(10).Background(t.Surface).Radius(8)
-		card.BorderWidth(1).BorderColor(t.Border)
-		card.Children(func() {
-			ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
-				icon(c, "hdd", 26).TextColor(t.TextMuted)
-				ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-					title, note := "Custom folder", m.diskPath
-					for _, v := range m.diskVolumes {
-						if v.Path == m.diskPath {
-							title, note = v.Path+"  "+v.Label, "NTFS · whole-drive scans try the read-only MFT path"
-						}
-					}
-					ui.Text(c, title).FontSize(14).Bold().SingleLine()
-					ui.Text(c, note).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
-				})
-			})
+		custom := true
+		ui.Row(c).Gap(12).AlignItems(ui.Stretch).Children(func() {
 			for _, v := range m.diskVolumes {
 				if v.Path == m.diskPath {
-					ui.Row(c).Gap(28).Children(func() {
-						m.stat(c, t, "Used", format.Bytes(v.Total-v.Free))
-						m.stat(c, t, "Free", format.Bytes(v.Free))
-						m.stat(c, t, "Total", format.Bytes(v.Total))
-					})
-					ui.Progress(c, float64(v.Total-v.Free)/float64(max(v.Total, 1))).FillWidth().Height(6)
+					custom = false
 				}
+				m.driveCard(c, t, v)
+			}
+			if custom {
+				card := ui.Column(c).Width(280).Padding(16, 20).Gap(10).Background(t.Surface).Radius(8)
+				card.BorderWidth(1).BorderColor(t.Accent)
+				card.Children(func() {
+					ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+						icon(c, "folder", 26).TextColor(t.TextMuted)
+						ui.Column(c).Grow(1).MinWidth(0).Children(func() {
+							ui.Text(c, "Custom folder").FontSize(14).Bold().SingleLine()
+							ui.Text(c, m.diskPath).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
+						})
+					})
+				})
 			}
 		})
 		ui.Text(c, "Pick a drive or browse for a folder, then Scan (F5). Scans run in the background and can be cancelled.").PaddingY(12).TextColor(t.TextMuted).SingleLine()
 		ui.Spacer(c)
 	})
+}
+
+// driveCard is one big volume card on the idle page: title, Used/Free/Total
+// and a fill bar. Clicking selects the drive, like its chip above.
+func (m *Model) driveCard(c *ui.Context, t *ui.Theme, v disk.Volume) {
+	on := m.diskPath == v.Path
+	card := ui.Column(c).Width(280).Padding(16, 20).Gap(10).Background(t.Surface).Radius(8)
+	card.BorderWidth(1).BorderColor(t.Border).Cursor(ui.CursorPointer)
+	if on {
+		card.BorderColor(t.Accent)
+	}
+	card.Label("Drive card " + v.Path).Tooltip("Scan " + v.Path)
+	card.Children(func() {
+		ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+			icon(c, "hdd", 26).TextColor(t.TextMuted)
+			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
+				ui.Text(c, v.Path+"  "+v.Label).FontSize(14).Bold().SingleLine()
+				note := v.FS + " · directory walk"
+				if v.FS == "NTFS" {
+					note = "NTFS · read-only MFT path"
+				} else if v.FS == "" {
+					note = "Directory walk"
+				}
+				ui.Text(c, note).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
+			})
+		})
+		ui.Row(c).Gap(24).Children(func() {
+			m.stat(c, t, "Used", format.Bytes(v.Total-v.Free))
+			m.stat(c, t, "Free", format.Bytes(v.Free))
+			m.stat(c, t, "Total", format.Bytes(v.Total))
+		})
+		ui.Progress(c, float64(v.Total-v.Free)/float64(max(v.Total, 1))).FillWidth().Height(6)
+	})
+	if card.Clicked() {
+		m.diskDrive = v.Path
+		m.diskPath = v.Path
+	}
 }
 
 func (m *Model) stat(c *ui.Context, t *ui.Theme, name, value string) {

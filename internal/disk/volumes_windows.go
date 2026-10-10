@@ -36,7 +36,7 @@ func Volumes() []Volume {
 		filesystem := make([]uint16, 64)
 		var serial, maxComponent, flags uint32
 		getVolumeInfoProc.Call(uintptr(unsafe.Pointer(ptr)), uintptr(unsafe.Pointer(&label[0])), uintptr(len(label)), uintptr(unsafe.Pointer(&serial)), uintptr(unsafe.Pointer(&maxComponent)), uintptr(unsafe.Pointer(&flags)), uintptr(unsafe.Pointer(&filesystem[0])), uintptr(len(filesystem)))
-		volumes = append(volumes, Volume{Path: path, Label: syscall.UTF16ToString(label), Total: total, Free: free})
+		volumes = append(volumes, Volume{Path: path, Label: syscall.UTF16ToString(label), FS: syscall.UTF16ToString(filesystem), Total: total, Free: free})
 	}
 	return volumes
 }
