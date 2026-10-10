@@ -309,13 +309,12 @@ func (m *Model) processView(c *ui.Context) {
 			m.processTreeMode = false
 			m.processSelected = -1
 		})
-		m.selActs(c, t)
 		ui.Spacer(c)
-		label := "Every " + m.processInterval
 		if strings.TrimSpace(m.processQuery) != "" {
-			label += fmt.Sprintf("  ·  %s of %s match", format.Int(uint64(len(m.processFlat))), format.Int(uint64(len(m.processRows))))
+			label := fmt.Sprintf("%s of %s match", format.Int(uint64(len(m.processFlat))), format.Int(uint64(len(m.processRows))))
+			ui.Text(c, label).FontSize(11).TextColor(t.TextMuted).Shrink(0)
 		}
-		ui.Text(c, label).FontSize(11).TextColor(t.TextMuted).Shrink(0)
+		m.selActs(c, t)
 	})
 	if m.lastProcessError != "" {
 		ui.Text(c, m.lastProcessError).Padding(2, 12).TextColor(t.Danger).SingleLine()
