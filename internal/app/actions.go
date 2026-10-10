@@ -53,12 +53,13 @@ func (m *Model) processMenu(menu *ui.Menu, r process.Info) {
 		mygo.Clipboard.WriteText(fmt.Sprint(r.PID))
 	}
 	menu.Separator()
-	if menu.Item("End process…").Disabled(r.PID <= 4).Chosen() {
+	exited := r.Access == "Exited"
+	if menu.Item("End process…").Disabled(r.PID <= 4 || exited).Chosen() {
 		m.terminateTarget = r
 		m.terminateTree = false
 		m.terminateOpen = true
 	}
-	if menu.Item("End process tree…").Disabled(r.PID <= 4).Chosen() {
+	if menu.Item("End process tree…").Disabled(r.PID <= 4 || exited).Chosen() {
 		m.terminateTarget = r
 		m.terminateTree = true
 		m.terminateOpen = true

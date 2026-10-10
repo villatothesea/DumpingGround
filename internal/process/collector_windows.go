@@ -22,6 +22,7 @@ const (
 	processQueryInformation        = 0x0400
 	processQueryLimitedInformation = 0x1000
 	processVMRead                  = 0x0010
+	stillActive                    = 259
 	maxPath                        = 32768
 )
 
@@ -101,6 +102,7 @@ var (
 	procQueryPath      = kernel32.NewProc("QueryFullProcessImageNameW")
 	procTimes          = kernel32.NewProc("GetProcessTimes")
 	procTerminate      = kernel32.NewProc("TerminateProcess")
+	procExitCode       = kernel32.NewProc("GetExitCodeProcess")
 	procMemory         = psapi.NewProc("GetProcessMemoryInfo")
 	procIO             = kernel32.NewProc("GetProcessIoCounters")
 )
@@ -170,10 +172,22 @@ func (c *windowsCollector) readEntry(entry *processEntry32) Info {
 		h, _, _ = procOpen.Call(processQueryLimitedInformation, 0, uintptr(entry.ProcessID))
 	}
 	if h == 0 {
-		info.Access = "Access denied or process exited"
+		if entry.Threads == 0 {
+			info.Access = "Exited"
+		} else {
+			info.Access = "Access denied or process exited"
+		}
 		return info
 	}
 	defer procClose.Call(h)
+	// A process object outlives its threads while another process holds a
+	// handle to it: the PID still enumerates but nothing can be queried or
+	// terminated. Mark it so the row reads as exited instead of live.
+	var exitCode uint32
+	if ret, _, _ := procExitCode.Call(h, uintptr(unsafe.Pointer(&exitCode))); ret != 0 && exitCode != stillActive {
+		info.Access = "Exited"
+		return info
+	}
 	info.Path = queryPath(h)
 	var memory memoryCounters
 	memory.Size = uint32(unsafe.Sizeof(memory))
@@ -249,9 +263,17 @@ func (c *windowsCollector) Terminate(pid uint32, tree bool) error {
 	}
 	var failures []error
 	for i := len(ids) - 1; i >= 0; i-- {
-		h, _, err := procOpen.Call(processTerminate, 0, uintptr(ids[i]))
+		h, _, err := procOpen.Call(processTerminate|processQueryLimitedInformation, 0, uintptr(ids[i]))
 		if h == 0 {
 			failures = append(failures, fmt.Errorf("PID %d: %w", ids[i], err))
+			continue
+		}
+		// TerminateProcess answers an already-exited PID with a bare
+		// access-denied; report what actually happened instead.
+		var exitCode uint32
+		if ret, _, _ := procExitCode.Call(h, uintptr(unsafe.Pointer(&exitCode))); ret != 0 && exitCode != stillActive {
+			procClose.Call(h)
+			failures = append(failures, fmt.Errorf("PID %d: process already exited (a lingering handle keeps the PID listed)", ids[i]))
 			continue
 		}
 		ret, _, termErr := procTerminate.Call(h, 1)

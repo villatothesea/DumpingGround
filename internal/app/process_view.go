@@ -213,7 +213,9 @@ func (m *Model) processView(c *ui.Context) {
 			if path == "" {
 				path = "path unavailable"
 			}
-			if selected.Access != "" {
+			if selected.Access == "Exited" {
+				path += " · exited (PID retained by an open handle)"
+			} else if selected.Access != "" {
 				path += " · access denied"
 			}
 			ui.Text(c, fmt.Sprintf("%s  PID %d  %s", selected.Name, selected.PID, path)).SingleLine().Grow(1).MinWidth(0).TextColor(t.TextMuted).Tooltip(path)

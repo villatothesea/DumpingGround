@@ -508,13 +508,18 @@ func (m *Model) selActs(c *ui.Context, t *ui.Theme) {
 		if m.pactButton(c, "copy", "Copy path").Disabled(selected.Path == "").Clicked() {
 			mygo.Clipboard.WriteText(selected.Path)
 		}
-		kill := m.dangerButton(c, "x", "End process").Disabled(selected.PID <= 4)
+		exited := selected.Access == "Exited"
+		killTip := "End process"
+		if exited {
+			killTip = "Process already exited"
+		}
+		kill := m.dangerButton(c, "x", "End process").Disabled(selected.PID <= 4 || exited).Tooltip(killTip)
 		if kill.Clicked() {
 			m.terminateTarget = selected
 			m.terminateTree = false
 			m.terminateOpen = true
 		}
-		m.pactButton(c, "down", "More end options").Disabled(selected.PID <= 4).Menu(func(menu *ui.Menu) {
+		m.pactButton(c, "down", "More end options").Disabled(selected.PID <= 4 || exited).Menu(func(menu *ui.Menu) {
 			if menu.Item("End process tree").Chosen() {
 				m.terminateTarget = selected
 				m.terminateTree = true
