@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -412,7 +413,6 @@ func (m *Model) resultsView(c *ui.Context, t *ui.Theme, s *disk.Snapshot) {
 		ui.SplitVertical(c, &m.diskSplit, func() {
 			ui.Split(c, &m.diskLeft, func() { m.diskTable(c) }, func() { m.extensionTable(c) }).Fill()
 		}, func() { m.diskMap(c) }).Grow(1).MinHeight(0).FillWidth()
-		m.diskSelBar(c, t, s)
 	})
 }
 
@@ -479,35 +479,6 @@ func (m *Model) extChip(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-// diskSelBar mirrors the selection state and its actions under the map.
-func (m *Model) diskSelBar(c *ui.Context, t *ui.Theme, s *disk.Snapshot) {
-	bar := ui.Row(c).FillWidth().Height(36).Shrink(0).PaddingX(12).Gap(8).AlignItems(ui.Center).Background(t.Surface)
-	bar.BorderWidth(1, 0, 0, 0).BorderColor(t.Border)
-	bar.Children(func() {
-		valid := m.diskNode >= 0 && m.diskNode < len(s.Nodes)
-		label := ""
-		if valid {
-			n := s.Nodes[m.diskNode]
-			ui.Box(c).Size(8, 8).Radius(2).Background(extensionColor(fileExtension(n.Name)))
-			name := n.Name
-			if n.Dir {
-				name += "/"
-			}
-			ui.Text(c, name).Bold().SingleLine().Shrink(0)
-			ui.Text(c, format.Bytes(m.diskValue(n))).TextColor(t.TextMuted).Shrink(0)
-			label = s.FullPath(m.diskNode)
-			ui.Text(c, label).SingleLine().Grow(1).MinWidth(0).TextColor(t.TextMuted).Tooltip(label)
-		} else {
-			ui.Text(c, "Select a file or folder for its path and actions · double-click a folder to open it").SingleLine().Grow(1).MinWidth(0).TextColor(t.TextMuted)
-		}
-		if m.iconTextButton(c, "folder", "Open location").Disabled(!valid).Clicked() && m.window != nil {
-			mygo.Shell.ShowItemInFolder(label)
-		}
-		if m.iconTextButton(c, "copy", "Copy path").Disabled(!valid).Clicked() && m.window != nil {
-			mygo.Clipboard.WriteText(label)
-		}
-	})
-}
 func (m *Model) navigateDisk(id int) {
 	if m.diskSnapshot == nil || id < 0 || id >= len(m.diskSnapshot.Nodes) || !m.diskSnapshot.Nodes[id].Dir {
 		return
@@ -614,7 +585,9 @@ func (m *Model) diskTable(c *ui.Context) {
 	if m.diskMode == "Tree" && m.diskQuery == "" && m.extensionFilter == "" {
 		m.diskTree.List.Selected = &m.diskSelected
 		m.diskTree.List.Sort = &m.diskSort
-		submitted = ui.OutlineTable(c, &m.diskTree, cols, m.diskRows, func(id int) []int { return s.Nodes[id].Children }, cell).Fill().Label("Disk table").Submitted()
+		submitted = tableChrome(c, func() ui.Element {
+			return ui.OutlineTable(c, &m.diskTree, cols, m.diskRows, func(id int) []int { return s.Nodes[id].Children }, cell)
+		}).Fill().Label("Disk table").Submitted()
 		if m.diskSelected >= 0 && m.diskSelected < m.diskTree.Rows() {
 			selectedID = m.diskTree.Item(m.diskSelected)
 		}
@@ -622,7 +595,9 @@ func (m *Model) diskTable(c *ui.Context) {
 		m.diskFiles.Selected = &m.diskSelected
 		m.diskFiles.Sort = &m.diskSort
 		m.diskFiles.Key = func(i int) any { return m.diskRows[i] }
-		submitted = ui.Table(c, &m.diskFiles, cols, len(m.diskRows), func(i, col int) { cell(m.diskRows[i], col) }).Fill().Label("Disk table").Submitted()
+		submitted = tableChrome(c, func() ui.Element {
+			return ui.Table(c, &m.diskFiles, cols, len(m.diskRows), func(i, col int) { cell(m.diskRows[i], col) })
+		}).Fill().Label("Disk table").Submitted()
 		if m.diskSelected >= 0 && m.diskSelected < len(m.diskRows) {
 			selectedID = m.diskRows[m.diskSelected]
 		}
@@ -664,9 +639,19 @@ func (m *Model) prepareMap() {
 	m.diskExtensions = nil
 	// The map is intentionally one hierarchy level deep: a directory is one
 	// rectangle whose weight is its aggregate size. Entering it reveals its children.
+	m.mapLogMin, m.mapLogMax = 0, 0
 	for _, id := range s.Nodes[m.diskRoot].Children {
 		if v := m.diskValue(s.Nodes[id]); v > 0 {
 			m.diskItems = append(m.diskItems, treemap.Item{ID: id, Value: v})
+		}
+	}
+	for i, it := range m.diskItems {
+		lv := math.Log(float64(it.Value) + 1)
+		if i == 0 || lv < m.mapLogMin {
+			m.mapLogMin = lv
+		}
+		if i == 0 || lv > m.mapLogMax {
+			m.mapLogMax = lv
 		}
 	}
 	stats := map[string]extensionStat{}
@@ -697,14 +682,34 @@ func (m *Model) diskMap(c *ui.Context) {
 	t := c.Theme()
 	animate := m.animateMap && !c.Preferences().ReduceMotion
 	ui.Column(c).Fill().AlignItems(ui.Stretch).Children(func() {
-		ui.Row(c).FillWidth().Height(28).Shrink(0).PaddingX(12).Gap(10).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).FillWidth().Height(36).Shrink(0).PaddingX(12).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, "Space map").Bold().Shrink(0)
-			hover := m.mapHover
-			if hover == "" {
-				hover = "Click a folder to zoom · click a file to locate its row"
+			s := m.diskSnapshot
+			if s != nil && m.diskNode >= 0 && m.diskNode < len(s.Nodes) {
+				n := s.Nodes[m.diskNode]
+				ui.Box(c).Size(8, 8).Radius(2).Background(m.mapColor(m.diskNode)).Shrink(0)
+				name := n.Name
+				if n.Dir {
+					name += "/"
+				}
+				ui.Text(c, name).Bold().SingleLine().Shrink(0)
+				ui.Text(c, format.Bytes(m.diskValue(n))).TextColor(t.TextMuted).Shrink(0)
+				path := s.FullPath(m.diskNode)
+				ui.Text(c, path).SingleLine().Grow(1).MinWidth(0).TextColor(t.TextMuted).Tooltip(path)
+				if m.iconTextButton(c, "folder", "Open location").Clicked() && m.window != nil {
+					mygo.Shell.ShowItemInFolder(path)
+				}
+				if m.iconTextButton(c, "copy", "Copy path").Clicked() && m.window != nil {
+					mygo.Clipboard.WriteText(path)
+				}
+			} else {
+				hover := m.mapHover
+				if hover == "" {
+					hover = "Click a folder to zoom · click a file to locate its row"
+				}
+				ui.Text(c, hover).SingleLine().Grow(1).MinWidth(0).FontSize(11).TextColor(t.TextMuted).Ellipsis("…")
+				icon(c, "info", 14).TextColor(t.TextMuted).Tooltip("One directory level at a time: folders are single blocks you zoom into. Color follows block size: large blocks trend red, small ones green.")
 			}
-			ui.Text(c, hover).SingleLine().Grow(1).MinWidth(0).FontSize(11).TextColor(t.TextMuted).Ellipsis("…")
-			icon(c, "info", 14).TextColor(t.TextMuted).Tooltip("One directory level at a time: folders are single blocks you zoom into. Color follows file type, matching the File types panel.")
 		})
 		canvas := ui.Box(c.Key("space-map")).Grow(1).FillWidth().MinHeight(0).Clip().Background(t.Surface).Label("Treemap canvas")
 		if canvas.Clicked() {
@@ -811,11 +816,9 @@ func (m *Model) paintMapCell(p *ui.Painter, viewport ui.Rect, b treemap.Rect, al
 		return
 	}
 	n := m.diskSnapshot.Nodes[b.ID]
-	color := extensionColor(filepath.Ext(n.Name))
+	color := m.mapColor(b.ID)
 	label := n.Name
 	if n.Dir {
-		// Folders get one neutral slate so file-type colors stay readable.
-		color = ui.Hex("#65748a")
 		label += "/"
 	}
 	box := ui.Rect{X: viewport.X + x, Y: viewport.Y + y, W: w, H: h}
@@ -824,15 +827,21 @@ func (m *Model) paintMapCell(p *ui.Painter, viewport ui.Rect, b treemap.Rect, al
 		p.Stroke(box, ui.RGB(255, 255, 255).Alpha(alpha), 2, 2)
 	}
 	if labels && w > 60 && h > 24 {
+		// The muted tiles sit around mid luminance: light tiles take dark
+		// text, dark ones white.
+		ink := ui.RGB(255, 255, 255)
+		if float32(color.R)*0.2126+float32(color.G)*0.7152+float32(color.B)*0.0722 > 140 {
+			ink = ui.RGB(43, 43, 48)
+		}
 		runes := []rune(label)
 		maxChars := int((w - 10) / 8)
 		if len(runes) > maxChars && maxChars > 1 {
 			label = string(runes[:maxChars-1]) + "…"
 		}
 		p.Clip(box, 0, func() {
-			p.Text(box.X+5, box.Y+5, label, 12, ui.RGB(255, 255, 255).Alpha(alpha))
+			p.Text(box.X+5, box.Y+5, label, 12, ink.Alpha(alpha))
 			if h > 46 {
-				p.Text(box.X+5, box.Y+24, format.Bytes(m.diskValue(n)), 11, ui.RGB(255, 255, 255).Alpha(alpha*.85))
+				p.Text(box.X+5, box.Y+24, format.Bytes(m.diskValue(n)), 11, ink.Alpha(alpha*.85))
 			}
 		})
 	}
@@ -855,20 +864,22 @@ func (m *Model) extensionTable(c *ui.Context) {
 	cols := []ui.TableColumn{{Title: "Extension", Width: 100}, {Title: "Files", Width: 70, Align: ui.End}, {Title: "Size", Width: 95, Align: ui.End}}
 	m.extensionList.Selected = &m.extensionSelected
 	m.extensionList.Key = func(i int) any { return m.diskExtensions[i].Extension }
-	table := ui.Table(c, &m.extensionList, cols, len(m.diskExtensions), func(i, col int) {
-		s := m.diskExtensions[i]
-		if col == 0 {
-			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-				ui.Box(c).Size(8, 8).Radius(2).Background(extensionColor(s.Extension))
-				ui.Text(c, s.Extension).SingleLine()
-			})
-			return
-		}
-		text := fmt.Sprint(s.Files)
-		if col == 2 {
-			text = format.Bytes(s.Bytes)
-		}
-		ui.Text(c, text).SingleLine()
+	table := tableChrome(c, func() ui.Element {
+		return ui.Table(c, &m.extensionList, cols, len(m.diskExtensions), func(i, col int) {
+			s := m.diskExtensions[i]
+			if col == 0 {
+				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+					ui.Box(c).Size(8, 8).Radius(2).Background(extensionColor(s.Extension))
+					ui.Text(c, s.Extension).SingleLine()
+				})
+				return
+			}
+			text := fmt.Sprint(s.Files)
+			if col == 2 {
+				text = format.Bytes(s.Bytes)
+			}
+			ui.Text(c, text).SingleLine()
+		})
 	}).Fill().Label("File types")
 	if table.Changed() && m.extensionSelected >= 0 && m.extensionSelected < len(m.diskExtensions) {
 		m.extensionFilter = m.diskExtensions[m.extensionSelected].Extension
@@ -885,4 +896,43 @@ func extensionColor(ext string) ui.Color {
 		h = (h ^ uint32(ch)) * 16777619
 	}
 	return palette[h%uint32(len(palette))]
+}
+
+// mapColor colors a treemap block by its size among the visible blocks:
+// the largest sit in dusty reds, the smallest in sage green, with a muted
+// rainbow in between (log scale, so moderate differences stay readable).
+func (m *Model) mapColor(id int) ui.Color {
+	if m.diskSnapshot == nil || id < 0 || id >= len(m.diskSnapshot.Nodes) {
+		return ui.Hex("#9a9aa0")
+	}
+	lv := math.Log(float64(m.diskValue(m.diskSnapshot.Nodes[id])) + 1)
+	pos := 0.5
+	if m.mapLogMax > m.mapLogMin {
+		pos = (lv - m.mapLogMin) / (m.mapLogMax - m.mapLogMin)
+	}
+	return morandiRamp(pos)
+}
+
+// morandiRamp interpolates a muted palette from small (sage green) to
+// large (dusty red): the colors a Morandi still life would use, nothing
+// saturated.
+func morandiRamp(t float64) ui.Color {
+	anchors := []ui.Color{
+		ui.Hex("#84a58a"), // smallest · sage green
+		ui.Hex("#a3ad7c"), // olive
+		ui.Hex("#c4ab74"), // mustard
+		ui.Hex("#c08d6b"), // terracotta
+		ui.Hex("#b4736e"), // dusty red
+		ui.Hex("#a26570"), // largest · deep muted red
+	}
+	t = max(0, min(1, t))
+	pos := t * float64(len(anchors)-1)
+	i := min(int(pos), len(anchors)-2)
+	f := float32(pos - float64(i))
+	a, b := anchors[i], anchors[i+1]
+	return ui.RGB(
+		uint8(float32(a.R)+(float32(b.R)-float32(a.R))*f),
+		uint8(float32(a.G)+(float32(b.G)-float32(a.G))*f),
+		uint8(float32(a.B)+(float32(b.B)-float32(a.B))*f),
+	)
 }

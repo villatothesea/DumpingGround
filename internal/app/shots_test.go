@@ -53,17 +53,17 @@ func TestScreenshotStates(t *testing.T) {
 	m2.diskSnapshot = &disk.Snapshot{
 		Root: 0,
 		Nodes: []disk.Node{
-			{ID: 0, Parent: -1, Name: `C:\root`, Path: `C:\root`, Dir: true, Bytes: 100, Allocated: 100, Children: []int{1, 2, 4}},
-			{ID: 1, Parent: 0, Name: "alpha", Path: `C:\root\alpha`, Dir: true, Bytes: 60, Allocated: 60, Children: []int{3, 5}},
+			{ID: 0, Parent: -1, Name: `C:\root`, Path: `C:\root`, Dir: true, Bytes: 1200, Allocated: 1200, Children: []int{1, 2, 4}},
+			{ID: 1, Parent: 0, Name: "alpha", Path: `C:\root\alpha`, Dir: true, Bytes: 700, Allocated: 700, Children: []int{3, 5}},
 			{ID: 2, Parent: 0, Name: "readme.txt", Path: `C:\root\readme.txt`, Bytes: 10, Allocated: 10},
-			{ID: 3, Parent: 1, Name: "data.bin", Path: `C:\root\alpha\data.bin`, Bytes: 40, Allocated: 40},
-			{ID: 4, Parent: 0, Name: "beta", Path: `C:\root\beta`, Dir: true, Bytes: 30, Allocated: 30},
-			{ID: 5, Parent: 1, Name: "log.txt", Path: `C:\root\alpha\log.txt`, Bytes: 20, Allocated: 20},
+			{ID: 3, Parent: 1, Name: "data.bin", Path: `C:\root\alpha\data.bin`, Bytes: 640, Allocated: 640},
+			{ID: 4, Parent: 0, Name: "beta", Path: `C:\root\beta`, Dir: true, Bytes: 490, Allocated: 490},
+			{ID: 5, Parent: 1, Name: "log.txt", Path: `C:\root\alpha\log.txt`, Bytes: 60, Allocated: 60},
 		},
-		Bytes: 100, Allocated: 100, Files: 3, Method: "Directory walk",
+		Bytes: 1200, Allocated: 1200, Files: 3, Method: "Directory walk",
 	}
 	m2.diskRoot = 0
-	m2.diskNode = -1
+	m2.diskNode = 1
 	tt2 := ui.NewTester(m2.view, 1180, 760)
 	tt2.SetDark(true)
 	tt2.Frame()

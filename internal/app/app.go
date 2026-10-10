@@ -132,6 +132,7 @@ type Model struct {
 	mapWidth, mapHeight             float32
 	mapHover                        string
 	mapMotion                       mapMotion
+	mapLogMin, mapLogMax            float64
 	animateMap                      bool
 	mapAnimating                    bool
 	diskSplit                       float32
@@ -709,6 +710,25 @@ func (m *Model) reservedView(c *ui.Context, glyphName, title, desc string) {
 		ui.Spacer(c)
 	})
 }
+
+// tableChrome hides a Table's column separator lines and its header
+// divider (both draw in the theme's Border color), then redraws the
+// header's bottom line itself at a crisp pixel. The header's resize grip
+// still works: hovering it shows the accent line, dragging resizes the
+// column and a double click fits it to its cells.
+func tableChrome(c *ui.Context, build func() ui.Element) ui.Element {
+	orig := c.Theme()
+	plain := *orig
+	plain.Border = orig.Border.Alpha(0)
+	c.SetTheme(&plain)
+	e := build()
+	c.SetTheme(orig)
+	e.Draw(func(p *ui.Painter, r ui.Rect) {
+		p.Fill(ui.Rect{X: r.X, Y: r.Y + orig.Space(8), W: r.W, H: 1}, orig.Border, 0)
+	})
+	return e
+}
+
 func (m *Model) captureFrames() {
 	os.MkdirAll(m.CaptureDir, 0755)
 	for i := 0; i < 3; i++ {

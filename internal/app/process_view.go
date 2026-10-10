@@ -232,7 +232,9 @@ func (m *Model) processView(c *ui.Context) {
 			if m.processTreeMode {
 				m.processTree.List.Selected = &m.processSelected
 				m.processTree.List.Sort = &m.processSort
-				ui.OutlineTable(c, &m.processTree, columns, m.processRoots, func(id uint32) []uint32 { return m.processChildren[id] }, cell).FillWidth().Grow(1).Label("Process table")
+				tableChrome(c, func() ui.Element {
+					return ui.OutlineTable(c, &m.processTree, columns, m.processRoots, func(id uint32) []uint32 { return m.processChildren[id] }, cell)
+				}).FillWidth().Grow(1).Label("Process table")
 			} else {
 				m.processList.Selected = &m.processSelected
 				m.processList.Sort = &m.processSort
@@ -243,7 +245,9 @@ func (m *Model) processView(c *ui.Context) {
 						Started int64
 					}{r.PID, r.Started.UnixNano()}
 				}
-				if ui.Table(c, &m.processList, columns, len(m.processFlat), func(row, col int) { cell(m.processFlat[row], col) }).FillWidth().Grow(1).Label("Process table").Submitted() {
+				if tableChrome(c, func() ui.Element {
+					return ui.Table(c, &m.processList, columns, len(m.processFlat), func(row, col int) { cell(m.processFlat[row], col) })
+				}).FillWidth().Grow(1).Label("Process table").Submitted() {
 					m.showDetails = true
 				}
 			}
@@ -467,27 +471,31 @@ func (m *Model) processDetails(c *ui.Context) {
 			})
 		} else if m.detailTab == "Modules" {
 			cols := []ui.TableColumn{{Title: "Module", Width: 200}, {Title: "Image size", Width: 100}, {Title: "Path"}}
-			ui.Table(c, &m.detailList, cols, len(m.inspectedModules), func(i, col int) {
-				r := m.inspectedModules[i]
-				s := r.Name
-				if col == 1 {
-					s = format.Bytes(r.Size)
-				} else if col == 2 {
-					s = r.Path
-				}
-				ui.Text(c, s).SingleLine().Tooltip(r.Path)
+			tableChrome(c, func() ui.Element {
+				return ui.Table(c, &m.detailList, cols, len(m.inspectedModules), func(i, col int) {
+					r := m.inspectedModules[i]
+					s := r.Name
+					if col == 1 {
+						s = format.Bytes(r.Size)
+					} else if col == 2 {
+						s = r.Path
+					}
+					ui.Text(c, s).SingleLine().Tooltip(r.Path)
+				})
 			}).Grow(1).FillWidth()
 		} else if m.detailTab == "Threads" {
 			cols := []ui.TableColumn{{Title: "Thread ID", Width: 140}, {Title: "Owner PID", Width: 140}, {Title: "Base priority"}}
-			ui.Table(c, &m.detailList, cols, len(m.inspectedThreads), func(i, col int) {
-				r := m.inspectedThreads[i]
-				s := fmt.Sprint(r.ID)
-				if col == 1 {
-					s = fmt.Sprint(r.OwnerPID)
-				} else if col == 2 {
-					s = fmt.Sprint(r.Priority)
-				}
-				ui.Text(c, s)
+			tableChrome(c, func() ui.Element {
+				return ui.Table(c, &m.detailList, cols, len(m.inspectedThreads), func(i, col int) {
+					r := m.inspectedThreads[i]
+					s := fmt.Sprint(r.ID)
+					if col == 1 {
+						s = fmt.Sprint(r.OwnerPID)
+					} else if col == 2 {
+						s = fmt.Sprint(r.Priority)
+					}
+					ui.Text(c, s)
+				})
 			}).Grow(1).FillWidth()
 		} else if m.detailTab == "Handles" {
 			ui.Row(c).Height(28).Shrink(0).PaddingX(10).Gap(6).Children(func() {
@@ -498,17 +506,19 @@ func (m *Model) processDetails(c *ui.Context) {
 				ui.Text(c, fmt.Sprintf("%d results", len(m.handles))).TextColor(c.Theme().TextMuted)
 			})
 			cols := []ui.TableColumn{{Title: "Handle", Width: 90}, {Title: "Type", Width: 130}, {Title: "Name"}, {Title: "Access", Width: 90, Align: ui.End}}
-			ui.Table(c, &m.detailList, cols, len(m.handles), func(i, col int) {
-				h := m.handles[i]
-				s := fmt.Sprintf("0x%x", h.Value)
-				if col == 1 {
-					s = h.Type
-				} else if col == 2 {
-					s = h.Name
-				} else if col == 3 {
-					s = fmt.Sprintf("0x%x", h.Access)
-				}
-				ui.Text(c, s).SingleLine().Tooltip(h.Name)
+			tableChrome(c, func() ui.Element {
+				return ui.Table(c, &m.detailList, cols, len(m.handles), func(i, col int) {
+					h := m.handles[i]
+					s := fmt.Sprintf("0x%x", h.Value)
+					if col == 1 {
+						s = h.Type
+					} else if col == 2 {
+						s = h.Name
+					} else if col == 3 {
+						s = fmt.Sprintf("0x%x", h.Access)
+					}
+					ui.Text(c, s).SingleLine().Tooltip(h.Name)
+				})
 			}).Grow(1).FillWidth()
 			if m.handleErr != "" {
 				ui.Text(c, m.handleErr).FontSize(11).TextColor(c.Theme().TextMuted).SingleLine()
@@ -526,18 +536,20 @@ func (m *Model) processDetails(c *ui.Context) {
 				}
 			})
 			cols := []ui.TableColumn{{Title: "Address", Width: 150}, {Title: "Symbol"}, {Title: "Offset", Width: 100, Align: ui.End}}
-			ui.Table(c, &m.detailList, cols, len(frames), func(i, col int) {
-				f := frames[i]
-				s := fmt.Sprintf("0x%x", f.Address)
-				if col == 1 {
-					s = f.Symbol
-					if s == "" {
-						s = "(unresolved)"
+			tableChrome(c, func() ui.Element {
+				return ui.Table(c, &m.detailList, cols, len(frames), func(i, col int) {
+					f := frames[i]
+					s := fmt.Sprintf("0x%x", f.Address)
+					if col == 1 {
+						s = f.Symbol
+						if s == "" {
+							s = "(unresolved)"
+						}
+					} else if col == 2 {
+						s = fmt.Sprintf("0x%x", f.Offset)
 					}
-				} else if col == 2 {
-					s = fmt.Sprintf("0x%x", f.Offset)
-				}
-				ui.Text(c, s).SingleLine()
+					ui.Text(c, s).SingleLine()
+				})
 			}).Grow(1).FillWidth()
 			if m.stackErr != "" {
 				ui.Text(c, m.stackErr).FontSize(11).TextColor(c.Theme().TextMuted).SingleLine()
