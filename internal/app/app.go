@@ -152,6 +152,8 @@ type Model struct {
 	diskWatcher                     *disk.Watcher
 	diskWatchCancel                 context.CancelFunc
 	diskEvents                      chan []disk.USNEvent
+	diskLiveDirty                   bool
+	diskLiveFlush                   time.Time
 	diskWatchErr                    chan error
 	diskLive                        bool
 	events                          chan func()

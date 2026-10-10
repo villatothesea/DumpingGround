@@ -118,6 +118,8 @@ func (m *Model) startWatch() {
 	m.diskWatchCancel = cancel
 	m.diskEvents = make(chan []disk.USNEvent, 4)
 	m.diskWatchErr = make(chan error, 1)
+	m.diskLiveDirty = false
+	m.diskLiveFlush = time.Now()
 	m.diskLive = true
 	go func() {
 		defer w.Close()
@@ -165,8 +167,16 @@ func (m *Model) drainWatch() {
 			m.stopWatch()
 		default:
 			if changed {
+				m.diskLiveDirty = true
+			}
+			// The journal chatters under load; rebuilding the row list and
+			// the map's extension walk per batch stalls every frame. Flush
+			// the invalidation at a human pace instead.
+			if m.diskLiveDirty && time.Since(m.diskLiveFlush) >= 750*time.Millisecond {
 				m.diskViewKey = ""
 				m.mapRoot = -1
+				m.diskLiveDirty = false
+				m.diskLiveFlush = time.Now()
 			}
 			return
 		}
