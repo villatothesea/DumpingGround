@@ -19,13 +19,24 @@ type Node struct {
 	Children         []int
 	Error            string
 	Shared           bool
+	FRN              uint64 // NTFS file reference number: record | sequence<<48.
 }
 type Snapshot struct {
 	Root                                              int
 	Nodes                                             []Node
 	Files, Dirs, Bytes, Allocated, Skipped, Estimated uint64
-	Duration                                          time.Duration
-	Method, Fallback                                  string
+	// AttrFiltered counts records skipped for offline/reparse/recall flags;
+	// Unlinked counts names dropped because the parent record was missing or
+	// carried a stale sequence number. Both are zero for directory walks.
+	AttrFiltered, Unlinked uint64
+	Duration               time.Duration
+	Method, Fallback       string
+	// JournalID and JournalUSN capture the USN change journal's position at
+	// scan start on Windows; WatchJournal can replay everything since.
+	// Zero for directory walks.
+	JournalID  uint64
+	JournalUSN int64
+	frns       map[uint64][]int
 }
 
 func (s *Snapshot) FullPath(id int) string {

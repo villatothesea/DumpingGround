@@ -58,7 +58,8 @@ func TestDecodeResidentUnicodeFile(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if r.Sequence != 7 || !r.DataKnown || r.Logical != 5 || r.Allocated != 0 || len(r.Names) != 1 || r.Names[0].Text != "文件.txt" || r.Names[0].Parent != 5|uint64(9)<<48 {
+	// Resident allocation is the 8-byte-aligned resident footprint.
+	if r.Sequence != 7 || !r.DataKnown || r.Logical != 5 || r.Allocated != 8 || len(r.Names) != 1 || r.Names[0].Text != "文件.txt" || r.Names[0].Parent != 5|uint64(9)<<48 {
 		t.Fatalf("record=%+v", r)
 	}
 	if binary.LittleEndian.Uint16(b[510:]) != 0xabba {

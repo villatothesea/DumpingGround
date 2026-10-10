@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -21,10 +22,13 @@ type VerifyDifference struct {
 	MFTLogical, MFTAllocated, WalkLogical, WalkAllocated uint64
 }
 type VerifyReport struct {
-	Status                    VerifyStatus
-	Root                      string
-	MFT, Walk                 *Snapshot
-	Differences               []VerifyDifference
+	Status      VerifyStatus
+	Root        string
+	MFT, Walk   *Snapshot
+	Differences []VerifyDifference
+	// MetadataOnly counts MFT-visible system entries ($Quota, $Extend,
+	// System Volume Information, ...) that a directory walk cannot list.
+	MetadataOnly              int
 	MFTDuration, WalkDuration time.Duration
 	Error                     string
 }
@@ -59,10 +63,18 @@ func VerifyMFT(ctx context.Context, root string) (*VerifyReport, error) {
 	for path, m := range mftFiles {
 		w, ok := walkFiles[path]
 		if !ok {
+			if metadataOnly(path) {
+				report.MetadataOnly++
+				continue
+			}
 			report.Differences = append(report.Differences, VerifyDifference{Path: path, Kind: "missing from directory walk", MFTLogical: m.Bytes, MFTAllocated: m.Allocated})
 			continue
 		}
-		if m.Bytes != w.Bytes || m.Allocated != w.Allocated {
+		// A hard link's allocation is counted once per file, attributed to
+		// whichever name each scan visited first; comparing it per path only
+		// produces inverse 0/N pairs.
+		allocMismatch := !m.Shared && !w.Shared && m.Allocated != w.Allocated
+		if m.Bytes != w.Bytes || allocMismatch {
 			report.Differences = append(report.Differences, VerifyDifference{Path: path, Kind: "size mismatch", MFTLogical: m.Bytes, MFTAllocated: m.Allocated, WalkLogical: w.Bytes, WalkAllocated: w.Allocated})
 		}
 	}
@@ -78,6 +90,19 @@ func VerifyMFT(ctx context.Context, root string) (*VerifyReport, error) {
 	}
 	return report, nil
 }
+
+// metadataOnly reports whether a path is NTFS-internal metadata: reserved
+// $-files, $Extend, or System Volume Information. The MFT enumerates them;
+// a directory walk cannot, so they must not fail comparison.
+func metadataOnly(path string) bool {
+	for c := range strings.SplitSeq(filepath.Clean(path), string(filepath.Separator)) {
+		if strings.HasPrefix(c, "$") || strings.EqualFold(c, "System Volume Information") {
+			return true
+		}
+	}
+	return false
+}
+
 func fileMap(s *Snapshot) map[string]Node {
 	out := map[string]Node{}
 	if s == nil {

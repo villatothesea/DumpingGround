@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strings"
 	"syscall"
@@ -27,23 +26,17 @@ func fastVolumeScan(ctx context.Context, root string, progress chan<- Progress) 
 	if len(root) != 3 || root[1:] != ":\\" {
 		return nil, errors.New("folder scan")
 	}
-	name, e := syscall.UTF16PtrFromString(`\\.\` + root[:2])
-	if e != nil {
-		return nil, e
-	}
-	h, e := syscall.CreateFile(name, syscall.GENERIC_READ, syscall.FILE_SHARE_READ|syscall.FILE_SHARE_WRITE, nil, syscall.OPEN_EXISTING, 0, 0)
+	volume, e := openVolume(root)
 	if e != nil {
 		return nil, fmt.Errorf("MFT access unavailable: %w", e)
 	}
-	volume := os.NewFile(uintptr(h), root)
-	if volume == nil {
-		syscall.CloseHandle(h)
-		return nil, errors.New("invalid volume handle")
-	}
 	defer volume.Close()
+	// Capture the change-journal position before scanning so a watcher can
+	// replay everything that moved during the scan.
+	journal, _ := queryJournal(volume)
 	var data [96]byte
 	var returned uint32
-	ok, _, e := deviceIO.Call(uintptr(h), 0x90064, 0, 0, uintptr(unsafe.Pointer(&data[0])), 96, uintptr(unsafe.Pointer(&returned)), 0)
+	ok, _, e := deviceIO.Call(volume.Fd(), 0x90064, 0, 0, uintptr(unsafe.Pointer(&data[0])), 96, uintptr(unsafe.Pointer(&returned)), 0)
 	if ok == 0 || returned < 80 {
 		return nil, fmt.Errorf("NTFS volume information unavailable: %v", e)
 	}
@@ -87,7 +80,19 @@ func fastVolumeScan(ctx context.Context, root string, progress chan<- Progress) 
 		return nil, errors.New("incomplete MFT mapping")
 	}
 	stream := io.MultiReader(readers...)
-	return scanMFTRecords(ctx, stream, count, recordBytes, sector, root, progress)
+	snap, err := scanMFTRecords(ctx, stream, count, recordBytes, sector, root, progress)
+	if snap != nil && journal.ID != 0 {
+		snap.JournalID = journal.ID
+		snap.JournalUSN = journal.NextUSN
+	}
+	return snap, err
+}
+
+// ProbeMFT exposes the strict MFT read for diagnostics: it never walks the
+// directory tree and never falls back, so permission or parsing failures
+// surface verbatim.
+func ProbeMFT(ctx context.Context, root string) (*Snapshot, error) {
+	return fastVolumeScan(ctx, root, nil)
 }
 
 // scanMFTRecords decodes the MFT stream into a snapshot. Individual bad or
@@ -145,6 +150,7 @@ func scanMFTRecords(ctx context.Context, stream io.Reader, count int64, recordBy
 			}
 			if r.Attributes&(0x400|0x1000|0x40000|0x400000) != 0 {
 				out.Skipped++
+				out.AttrFiltered++
 				continue
 			}
 			hasLong := false
@@ -177,7 +183,7 @@ func scanMFTRecords(ctx context.Context, stream io.Reader, count int64, recordBy
 				}
 				namesSeen[key] = true
 				id := len(out.Nodes)
-				node := Node{ID: id, Parent: -1, Name: name.Text, Dir: r.Directory}
+				node := Node{ID: id, Parent: -1, Name: name.Text, Dir: r.Directory, FRN: uint64(number) | uint64(r.Sequence)<<48}
 				if number == 5 {
 					out.Root = id
 					node.Name = root
@@ -222,11 +228,13 @@ func scanMFTRecords(ctx context.Context, stream io.Reader, count int64, recordBy
 		pnum := ref & 0x0000ffffffffffff
 		if pnum >= uint64(len(refs)) || refs[pnum] == 0 {
 			out.Skipped++
+			out.Unlinked++
 			continue
 		}
 		parent := int(refs[pnum]) - 1
 		if parent == i || !out.Nodes[parent].Dir || sequences[parent] != uint16(ref>>48) {
 			out.Skipped++
+			out.Unlinked++
 			continue
 		}
 		out.Nodes[i].Parent = parent

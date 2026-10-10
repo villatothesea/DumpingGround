@@ -108,8 +108,10 @@ func Decode(raw []byte, sector int) (Record, error) {
 					if len(a) < 64 {
 						return r, errors.New("short nonresident attribute")
 					}
+					// Heavily fragmented data can occupy several attribute
+					// segments in one record: the first reports the file's
+					// logical size, every segment carries its own allocation.
 					if u64(a[16:]) == 0 {
-						r.Allocated = u64(a[40:])
 						r.Logical = u64(a[48:])
 						r.DataKnown = true
 						offset := int(u16(a[32:]))
@@ -121,17 +123,22 @@ func Decode(raw []byte, sector int) (Record, error) {
 						if err != nil {
 							return r, err
 						}
-						// Sparse/compressed allocation is stored separately in extended headers.
-						if u16(a[12:])&0x8001 != 0 {
-							if len(a) < 72 || offset < 72 {
-								return r, ErrUnsupported
-							}
-							r.Allocated = u64(a[64:])
+					}
+					// Sparse/compressed allocation is stored separately in extended headers.
+					if u16(a[12:])&0x8001 != 0 {
+						if len(a) < 72 {
+							return r, ErrUnsupported
 						}
+						r.Allocated += u64(a[64:])
+					} else {
+						r.Allocated += u64(a[40:])
 					}
 				} else {
 					r.Logical = uint64(len(value))
-					r.Allocated = 0
+					// Resident data sits 8-byte aligned inside the MFT
+					// record; FileStandardInfo reports that footprint as
+					// AllocationSize, so mirror it rather than counting 0.
+					r.Allocated = (r.Logical + 7) &^ 7
 					r.DataKnown = true
 				}
 			}
