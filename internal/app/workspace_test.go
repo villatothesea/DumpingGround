@@ -9,6 +9,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -203,6 +204,29 @@ func TestProcessTreeAggregatesSubtrees(t *testing.T) {
 	m.processTreeMode = false
 	if got := m.displayProcess(10); got.CPU != 5 || got.Memory != 100 {
 		t.Fatalf("list mode shows aggregate: %+v", got)
+	}
+}
+
+func TestExplorerChildrenStandAsRoots(t *testing.T) {
+	// The shell launches but does not own apps: they must not nest under
+	// explorer.exe, or ending the shell's tree would take every app with it.
+	m := testModel(t)
+	m.processTreeMode = true
+	m.processRows = []process.Info{
+		{PID: 10, Name: "explorer.exe"},
+		{PID: 11, PPID: 10, Name: "app.exe"},
+		{PID: 12, PPID: 10, Name: "tool.exe"},
+		{PID: 13, PPID: 11, Name: "helper.exe"},
+	}
+	m.rebuildProcessTree()
+	if slices.Contains(m.processChildren[10], 11) || slices.Contains(m.processChildren[10], 12) {
+		t.Fatalf("apps nested under the shell: %v", m.processChildren[10])
+	}
+	if !slices.Contains(m.processRoots, 11) || !slices.Contains(m.processRoots, 12) {
+		t.Fatalf("shell children not promoted to roots: %v", m.processRoots)
+	}
+	if !slices.Contains(m.processChildren[11], 13) {
+		t.Fatalf("real child lost with the flattening: %v", m.processChildren[11])
 	}
 }
 

@@ -430,7 +430,14 @@ func (m *Model) view(c *ui.Context) {
 		m.diskInfoView(c)
 	}
 	if m.terminateOpen {
-		choice := ui.AlertDialog(c, &m.terminateOpen, "End process?", fmt.Sprintf("%s (PID %d). Unsaved work may be lost.", m.terminateTarget.Name, m.terminateTarget.PID), "Cancel", "End process")
+		title, msg := "End process?", fmt.Sprintf("%s (PID %d). Unsaved work may be lost.", m.terminateTarget.Name, m.terminateTarget.PID)
+		if m.terminateTree {
+			if n := m.processDescendants(m.terminateTarget.PID); n > 0 {
+				title = "End process tree?"
+				msg = fmt.Sprintf("%s (PID %d) and the %d processes under it. Unsaved work may be lost.", m.terminateTarget.Name, m.terminateTarget.PID, n)
+			}
+		}
+		choice := ui.AlertDialog(c, &m.terminateOpen, title, msg, "Cancel", "End process")
 		if choice == 1 {
 			target, tree := m.terminateTarget, m.terminateTree
 			go func() {

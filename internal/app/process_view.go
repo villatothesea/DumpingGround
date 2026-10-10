@@ -51,6 +51,14 @@ func (m *Model) rebuildProcessTree() {
 		}
 		parent, exists := m.processByPID[r.PPID]
 		valid := exists && r.PPID != 0 && r.PPID != r.PID && included[r.PPID]
+		// The shell launches apps but does not own them: nesting everything
+		// started from Explorer under explorer.exe both hides the tree's real
+		// shape and makes "End process tree" on the shell wipe out every app
+		// the user opened. Task Manager shows no such level either, so the
+		// shell's children stand as roots.
+		if valid && strings.EqualFold(parent.Name, "explorer.exe") {
+			valid = false
+		}
 		if valid && !r.Started.IsZero() && !parent.Started.IsZero() && parent.Started.After(r.Started) {
 			valid = false
 		}
@@ -180,6 +188,23 @@ func (m *Model) sortProcessTree() {
 	for p := range m.processChildren {
 		slices.SortFunc(m.processChildren[p], compare)
 	}
+}
+
+// processDescendants counts the processes nested under pid in the tree, so
+// a destructive action can state its blast radius.
+func (m *Model) processDescendants(pid uint32) int {
+	stack := append([]uint32(nil), m.processChildren[pid]...)
+	seen := map[uint32]bool{}
+	for len(stack) > 0 {
+		p := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if seen[p] {
+			continue
+		}
+		seen[p] = true
+		stack = append(stack, m.processChildren[p]...)
+	}
+	return len(seen)
 }
 
 // selectProcessRow makes pid the selected row in whichever mode is active.
