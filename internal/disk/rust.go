@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
 
 // RustDir is one directory a cleanup tier deletes, with the bytes the
@@ -26,11 +27,14 @@ type RustTier struct {
 }
 
 // RustItem is one project's target/ dir with its per-tier breakdown. Path
-// is the target/ dir itself; the project lives in its parent.
+// is the target/ dir itself; the project lives in its parent. Idle is the
+// days since the project was last touched — a source edit or a build —
+// or -1 when nothing could be dated.
 type RustItem struct {
 	Path        string
 	Incr, Debug uint64
 	Total       uint64
+	Idle        int
 }
 
 // RustReport summarizes Rust build artifacts inside a snapshot: target/
@@ -123,7 +127,7 @@ func FindRustTargets(s *Snapshot, gone func(string) bool) *RustReport {
 		rep.Projects++
 		rep.Tiers[2].Dirs = append(rep.Tiers[2].Dirs, RustDir{s.FullPath(i), n.Allocated})
 		rep.Tiers[2].Bytes += n.Allocated
-		item := RustItem{Path: s.FullPath(i), Total: n.Allocated}
+		item := RustItem{Path: s.FullPath(i), Total: n.Allocated, Idle: rustIdleDays(s.FullPath(i))}
 		// Cargo puts incremental/ under every profile dir — and profiles
 		// themselves can nest under a target triple or a nested
 		// CARGO_TARGET_DIR (check62/debug/incremental,
@@ -161,6 +165,53 @@ func FindRustTargets(s *Snapshot, gone func(string) bool) *RustReport {
 	}
 	sort.Slice(rep.Items, func(a, b int) bool { return rep.Items[a].Total > rep.Items[b].Total })
 	return rep
+}
+
+// rustIdleDays estimates how long a project has sat untouched: the newest
+// of the last source change — a shallow walk of the project minus heavy
+// dirs — and the last build, dated by the fingerprint dirs cargo refreshes
+// every compile. -1 means nothing on disk could be dated.
+func rustIdleDays(target string) int {
+	proj := filepath.Dir(target)
+	newest := time.Time{}
+	mark := func(p string) {
+		if fi, err := os.Stat(p); err == nil && fi.ModTime().After(newest) {
+			newest = fi.ModTime()
+		}
+	}
+	// The last build: every profile's .fingerprint dir updates on compile.
+	mark(target)
+	for _, fp := range []string{`*\*.fingerprint`, `*\*\*.fingerprint`} {
+		if matches, err := filepath.Glob(filepath.Join(target, fp)); err == nil {
+			for _, m := range matches {
+				mark(m)
+			}
+		}
+	}
+	// The last source edit, skipping dirs that dominate the walk without
+	// saying anything about the project's own activity.
+	skip := map[string]bool{"target": true, ".git": true, "node_modules": true, "vendor": true}
+	steps := 0
+	filepath.WalkDir(proj, func(p string, d os.DirEntry, err error) error {
+		if err != nil || steps > 5000 {
+			return filepath.SkipAll
+		}
+		if d.IsDir() && p != proj && skip[strings.ToLower(d.Name())] {
+			return filepath.SkipDir
+		}
+		steps++
+		if d.IsDir() {
+			return nil
+		}
+		if fi, err := d.Info(); err == nil && fi.ModTime().After(newest) {
+			newest = fi.ModTime()
+		}
+		return nil
+	})
+	if newest.IsZero() {
+		return -1
+	}
+	return int(time.Since(newest).Hours() / 24)
 }
 
 // hasCargoToml reports whether the dir node has a Cargo.toml child — the

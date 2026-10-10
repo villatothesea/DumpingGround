@@ -174,6 +174,7 @@ type Model struct {
 	rustSel                         int  // the cleanup tier previewing its files, -1 none
 	rustConfirm                     int
 	rustRowConfirm                  string // target path whose row clean button is armed
+	rustSortIdle                    bool   // sort report rows by idle days instead of size
 	rustMsg                         string
 	rustGone                        map[string]bool
 	rustList                        ui.ListState

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/dumpingground/dumpingground/internal/disk"
@@ -230,6 +231,14 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 				ui.Text(c, m.rustMsg).FontSize(11).TextColor(t.TextMuted).SingleLine().MinWidth(0)
 			}
 			ui.Spacer(c)
+			sortLabel := "Sort: size"
+			if m.rustSortIdle {
+				sortLabel = "Sort: idle"
+			}
+			if ui.Button(c, sortLabel).Clicked() {
+				m.rustSortIdle = !m.rustSortIdle
+				m.rustSortItems()
+			}
 			if m.iconButton(c, "x", "Back to disk view").Clicked() {
 				m.rustMode = false
 			}
@@ -255,6 +264,9 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 			ui.Row(c).Width(70).Shrink(0).Justify(ui.End).Children(func() {
 				ui.Text(c, "%").FontSize(11).Bold().TextColor(t.TextMuted)
 			})
+			ui.Row(c).Width(64).Shrink(0).Justify(ui.End).Children(func() {
+				ui.Text(c, "Idle").FontSize(11).Bold().TextColor(t.TextMuted)
+			})
 			ui.Box(c).Width(76).Shrink(0)
 		})
 		total := max(rep.Scanned, 1)
@@ -277,7 +289,10 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 					}
 				})
 				path := filepath.Dir(it.Path)
-				ui.Text(c, path).SingleLine().Tooltip(path).Grow(1).MinWidth(0)
+				ptxt := ui.Text(c, path).SingleLine().Tooltip(path).Grow(1).MinWidth(0)
+				if it.Idle > 60 {
+					ptxt.TextColor(t.TextMuted)
+				}
 				for _, v := range []uint64{it.Incr, it.Debug, it.Total} {
 					ui.Row(c).Width(110).Shrink(0).Justify(ui.End).Children(func() {
 						ui.Text(c, format.Bytes(v)).SingleLine()
@@ -286,12 +301,47 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 				ui.Row(c).Width(70).Shrink(0).Justify(ui.End).Children(func() {
 					ui.Text(c, fmt.Sprintf("%.1f%%", float64(it.Total)/float64(total)*100)).SingleLine()
 				})
+				ui.Row(c).Width(64).Shrink(0).Justify(ui.End).Children(func() {
+					ui.Text(c, rustIdleText(it.Idle)).SingleLine().TextColor(t.TextMuted)
+				})
 				ui.Row(c).Width(76).Shrink(0).Justify(ui.End).Children(func() {
 					m.rustRowButton(c, t, i, it)
 				})
 			})
 		}).Grow(1).FillWidth()
 	})
+}
+
+// rustIdleText renders days idle in a compact unit.
+func rustIdleText(days int) string {
+	switch {
+	case days < 0:
+		return "—"
+	case days == 0:
+		return "today"
+	case days < 14:
+		return fmt.Sprintf("%dd", days)
+	case days < 60:
+		return fmt.Sprintf("%dw", days/7)
+	case days < 365:
+		return fmt.Sprintf("%dmo", days/30)
+	default:
+		return fmt.Sprintf("%dy", days/365)
+	}
+}
+
+// rustSortItems orders the report rows by the active sort — biggest or
+// stalest first.
+func (m *Model) rustSortItems() {
+	rep := m.rustReport
+	if rep == nil {
+		return
+	}
+	if m.rustSortIdle {
+		sort.SliceStable(rep.Items, func(i, j int) bool { return rep.Items[i].Idle > rep.Items[j].Idle })
+	} else {
+		sort.SliceStable(rep.Items, func(i, j int) bool { return rep.Items[i].Total > rep.Items[j].Total })
+	}
 }
 
 // rustRowButton is the per-row clean control: the first click arms it, the
