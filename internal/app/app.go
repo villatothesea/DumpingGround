@@ -618,13 +618,25 @@ func (m *Model) refreshVolumes() {
 // discoverable. Both end actions stay visible — no dropdown.
 func (m *Model) selActs(c *ui.Context, t *ui.Theme) {
 	selected, ok := m.selectedProcess()
-	ui.Box(c).Width(1).Height(20).Background(t.Border)
 	if m.pactButton(c, "folder", "Open location").Disabled(!ok || selected.Path == "").Clicked() {
 		mygo.Shell.ShowItemInFolder(selected.Path)
 	}
 	if m.pactButton(c, "copy", "Copy path").Disabled(!ok || selected.Path == "").Clicked() {
 		mygo.Clipboard.WriteText(selected.Path)
 	}
+	det := "chup"
+	if m.showDetails {
+		det = "down"
+	}
+	if m.iconTextButton(c, det, "Details").Clicked() {
+		m.showDetails = !m.showDetails
+	}
+}
+
+// selKillActs holds the destructive actions — pinned to the toolbar's
+// right edge, away from the navigation-style buttons.
+func (m *Model) selKillActs(c *ui.Context, t *ui.Theme) {
+	selected, ok := m.selectedProcess()
 	exited := ok && selected.Access == "Exited"
 	killTip := "End process"
 	switch {
@@ -644,13 +656,6 @@ func (m *Model) selActs(c *ui.Context, t *ui.Theme) {
 	}
 	if m.dangerButton(c, "x", "End process tree").Disabled(!ok || selected.PID <= 4 || exited).Tooltip(treeTip).Clicked() {
 		m.terminateTarget, m.terminateTree, m.terminateOpen = selected, true, true
-	}
-	det := "chup"
-	if m.showDetails {
-		det = "down"
-	}
-	if m.iconTextButton(c, det, "Details").Clicked() {
-		m.showDetails = !m.showDetails
 	}
 }
 
