@@ -104,6 +104,7 @@ type Model struct {
 	iconRequests                    chan string
 	detailSplit                     float32
 	themeMode                       int
+	appliedThemeMode                int
 	settingsOpen                    bool
 	diskInfoOpen                    bool
 	reservedQuery                   string
@@ -374,6 +375,20 @@ func (m *Model) view(c *ui.Context) {
 			t = ui.DarkTheme()
 		}
 		c.SetTheme(t)
+	}
+	// The engine theme above styles our content; the caption buttons and the
+	// window frame are native and read mygo.Theme's source instead. Sync it
+	// once per change or the three buttons keep the system glyphs' color.
+	if m.appliedThemeMode != m.themeMode {
+		m.appliedThemeMode = m.themeMode
+		switch m.themeMode {
+		case 1:
+			mygo.Theme.SetSource(mygo.ThemeLight)
+		case 2:
+			mygo.Theme.SetSource(mygo.ThemeDark)
+		default:
+			mygo.Theme.SetSource(mygo.ThemeSystem)
+		}
 	}
 	m.sys.sample()
 	t := c.Theme()
