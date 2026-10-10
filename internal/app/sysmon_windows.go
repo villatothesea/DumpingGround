@@ -27,8 +27,9 @@ type memoryStatusEx struct {
 	AvailExtendedVirtual uint64
 }
 
-// systemUsage samples total CPU and physical memory. sampleSystem calls it
-// at frame pace; cpu stays at the last reading when too little time passed.
+// systemUsage samples total CPU, physical memory and network rates. It is
+// called every frame but resamples at most once a second: the counters tick
+// at ~15.6ms granularity, so shorter windows make the rates meaningless.
 type systemUsage struct {
 	total, busy           uint64
 	cpu                   float64
@@ -38,9 +39,14 @@ type systemUsage struct {
 	netIn, netOut         uint64
 	netInRate, netOutRate uint64
 	netWhen               time.Time
+	sampled               time.Time
 }
 
 func (s *systemUsage) sample() {
+	if time.Since(s.sampled) < time.Second {
+		return
+	}
+	s.sampled = time.Now()
 	var idle, kernel, user [2]uint32
 	r, _, _ := procGetSystemTimes.Call(uintptr(unsafe.Pointer(&idle)), uintptr(unsafe.Pointer(&kernel)), uintptr(unsafe.Pointer(&user)))
 	if r != 0 {

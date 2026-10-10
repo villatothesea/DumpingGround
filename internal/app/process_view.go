@@ -275,7 +275,7 @@ func (m *Model) modeButton(c *ui.Context, t *ui.Theme, label string, on bool, ch
 	e.BorderWidth(1).BorderColor(t.Border)
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
 		if on {
-			p.Fill(r, t.Selection, t.Radius)
+			p.Fill(r, t.Accent, t.Radius)
 		} else if e.Hovered() {
 			p.Fill(r, t.SurfaceHover, t.Radius)
 		}
@@ -283,7 +283,7 @@ func (m *Model) modeButton(c *ui.Context, t *ui.Theme, label string, on bool, ch
 	e.Children(func() {
 		tx := ui.Text(c, label).SingleLine()
 		if on {
-			tx.Bold()
+			tx.TextColor(t.AccentText).Bold()
 		} else {
 			tx.TextColor(t.TextMuted)
 		}
@@ -385,7 +385,7 @@ func (m *Model) segPair(c *ui.Context, t *ui.Theme, name string, labels []string
 			e := ui.Row(c).Height(26).PaddingX(10).AlignItems(ui.Center).Radius(5).Label(name)
 			e.Draw(func(p *ui.Painter, r ui.Rect) {
 				if on {
-					p.Fill(r, t.Selection, 5)
+					p.Fill(r, t.Accent, 5)
 				} else if e.Hovered() {
 					p.Fill(r, t.SurfaceHover, 5)
 				}
@@ -393,7 +393,7 @@ func (m *Model) segPair(c *ui.Context, t *ui.Theme, name string, labels []string
 			e.Children(func() {
 				tx := ui.Text(c, name).SingleLine()
 				if on {
-					tx.Bold()
+					tx.TextColor(t.AccentText).Bold()
 				} else {
 					tx.TextColor(t.TextMuted)
 				}
@@ -421,7 +421,7 @@ func (m *Model) detailPill(c *ui.Context, t *ui.Theme, name string) {
 	e := ui.Row(c).Height(24).PaddingX(10).AlignItems(ui.Center).Radius(12).Label(name)
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
 		if on {
-			p.Fill(r, t.SurfacePressed, 12)
+			p.Fill(r, t.Accent, 12)
 		} else if e.Hovered() {
 			p.Fill(r, t.SurfaceHover, 12)
 		}
@@ -429,7 +429,7 @@ func (m *Model) detailPill(c *ui.Context, t *ui.Theme, name string) {
 	e.Children(func() {
 		tx := ui.Text(c, name).SingleLine()
 		if on {
-			tx.Bold()
+			tx.TextColor(t.AccentText).Bold()
 		} else {
 			tx.TextColor(t.TextMuted)
 		}

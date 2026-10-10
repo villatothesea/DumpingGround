@@ -371,7 +371,7 @@ func (m *Model) resultsView(c *ui.Context, t *ui.Theme, s *disk.Snapshot) {
 		m.breadcrumbs(c, t, s)
 		ui.Spacer(c)
 		root := s.Nodes[m.diskRoot]
-		ui.Text(c, fmt.Sprintf("Allocated %s · Logical %s · %d files · %d skipped · %d estimates", format.Bytes(root.Allocated), format.Bytes(root.Bytes), s.Files, s.Skipped, s.Estimated)).FontSize(11).TextColor(t.TextMuted).SingleLine().Shrink(0)
+		ui.Text(c, fmt.Sprintf("Allocated %s · Logical %s · %d files · %d skipped · %d estimates", format.Bytes(root.Allocated), format.Bytes(root.Bytes), s.Files, s.Skipped, s.Estimated)).FontSize(11).TextColor(t.TextMuted).SingleLine().Shrink(0).Tooltip("skipped: entries the scan could not index (access denied, gone mid-scan, unsupported records)\nestimates: files whose on-disk size had to be guessed, e.g. no data attribute read")
 		if m.extensionFilter != "" {
 			m.extChip(c, t)
 		}

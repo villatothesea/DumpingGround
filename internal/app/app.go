@@ -655,7 +655,7 @@ func (m *Model) statusBar(c *ui.Context, t *ui.Theme) {
 		}
 		ui.Text(c, hint).FontSize(11).TextColor(t.TextMuted).Shrink(0)
 		if m.page == diskPage {
-			icon(c, "info", 14).TextColor(t.TextMuted).Tooltip("Hard-link allocation is counted once per scan. Reparse points and cloud placeholders are skipped; unknown allocation is estimated. Whole-drive scans try the read-only MFT path and fall back to a directory walk.")
+			icon(c, "info", 14).TextColor(t.TextMuted).Tooltip("Hard-link allocation is counted once per scan. \"skipped\" counts entries the scan could not index (access denied, reparse points, cloud placeholders, records without a usable name); \"estimates\" counts files whose allocated size was guessed because their data attribute could not be read. Whole-drive scans try the read-only MFT path and fall back to a directory walk.")
 		}
 	})
 }
