@@ -41,6 +41,14 @@ type FileStatFunc func(path string) (logical, allocated uint64, ok bool)
 // the platform default. Not safe for concurrent use; call it from the same
 // goroutine that reads the snapshot.
 func (s *Snapshot) ApplyUSN(events []USNEvent, stat FileStatFunc) bool {
+	changed, _ := s.ApplyUSNDirs(events, stat)
+	return changed
+}
+
+// ApplyUSNDirs applies a batch like ApplyUSN and also reports which
+// directories gained or lost members, so a caller drawing only part of
+// the tree can tell whether its visible slice actually changed.
+func (s *Snapshot) ApplyUSNDirs(events []USNEvent, stat FileStatFunc) (bool, map[int]bool) {
 	if stat == nil {
 		stat = defaultUSNStat
 	}
@@ -100,7 +108,7 @@ func (s *Snapshot) ApplyUSN(events []USNEvent, stat FileStatFunc) bool {
 			return x.Allocated > y.Allocated
 		})
 	}
-	return changed
+	return changed, touched
 }
 
 // frnIndex maps file reference numbers to node IDs lazily; one FRN can own

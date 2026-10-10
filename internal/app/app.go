@@ -152,8 +152,10 @@ type Model struct {
 	diskWatcher                     *disk.Watcher
 	diskWatchCancel                 context.CancelFunc
 	diskEvents                      chan []disk.USNEvent
+	diskPending                     [][]disk.USNEvent
 	diskLiveDirty                   bool
 	diskLiveFlush                   time.Time
+	diskMapFlush                    time.Time
 	diskWatchErr                    chan error
 	diskLive                        bool
 	events                          chan func()
@@ -381,6 +383,13 @@ func (m *Model) view(c *ui.Context) {
 	m.samplerActive.Store(m.page == processPage && !m.minimized)
 	if m.diskCancel != nil {
 		c.After(100 * time.Millisecond)
+	}
+	// Live-index work continues on the next frames: pending journal events
+	// need folding in, and a dirty view flushes once its cadence arrives.
+	if len(m.diskPending) > 0 {
+		c.After(50 * time.Millisecond)
+	} else if m.diskLiveDirty {
+		c.After(250 * time.Millisecond)
 	}
 	if m.dirtyProcesses || m.lastQuery != m.processQuery || m.lastSort != m.processSort {
 		m.rebuildProcessTree()

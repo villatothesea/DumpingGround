@@ -118,8 +118,10 @@ func (m *Model) startWatch() {
 	m.diskWatchCancel = cancel
 	m.diskEvents = make(chan []disk.USNEvent, 4)
 	m.diskWatchErr = make(chan error, 1)
+	m.diskPending = nil
 	m.diskLiveDirty = false
 	m.diskLiveFlush = time.Now()
+	m.diskMapFlush = m.diskLiveFlush
 	m.diskLive = true
 	go func() {
 		defer w.Close()
@@ -155,32 +157,90 @@ func (m *Model) drainWatch() {
 	if s == nil {
 		return
 	}
-	changed := false
 	for {
 		select {
 		case ev := <-m.diskEvents:
-			if s.ApplyUSN(ev, nil) {
-				changed = true
-			}
+			m.diskPending = append(m.diskPending, ev)
 		case err := <-m.diskWatchErr:
 			m.diskStatus = "Live index lost: " + err.Error()
 			m.stopWatch()
 		default:
-			if changed {
-				m.diskLiveDirty = true
-			}
-			// The journal chatters under load; rebuilding the row list and
-			// the map's extension walk per batch stalls every frame. Flush
-			// the invalidation at a human pace instead.
-			if m.diskLiveDirty && time.Since(m.diskLiveFlush) >= 750*time.Millisecond {
-				m.diskViewKey = ""
-				m.mapRoot = -1
-				m.diskLiveDirty = false
-				m.diskLiveFlush = time.Now()
-			}
-			return
+			goto apply
 		}
 	}
+apply:
+	preBytes, preAlloc := uint64(0), uint64(0)
+	if m.diskRoot >= 0 && m.diskRoot < len(s.Nodes) {
+		preBytes, preAlloc = s.Nodes[m.diskRoot].Bytes, s.Nodes[m.diskRoot].Allocated
+	}
+	changed := false
+	var touched map[int]bool
+	// Fold at most a few hundred events per frame — each restat costs a
+	// syscall, and a busy journal must not stall the UI catching up.
+	for budget := 300; len(m.diskPending) > 0 && budget > 0; {
+		batch := m.diskPending[0]
+		n := min(len(batch), budget)
+		c, dirs := s.ApplyUSNDirs(batch[:n], nil)
+		if c {
+			changed = true
+			if touched == nil {
+				touched = map[int]bool{}
+			}
+			for id := range dirs {
+				touched[id] = true
+			}
+		}
+		budget -= n
+		if m.diskPending[0] = batch[n:]; len(m.diskPending[0]) == 0 {
+			m.diskPending = m.diskPending[1:]
+		}
+	}
+	if changed {
+		// Only a change inside the displayed subtree earns a rebuild:
+		// the root's sums moved (size delta anywhere below) or a touched
+		// directory sits inside the view (membership or rename).
+		visible := false
+		if m.diskRoot >= 0 && m.diskRoot < len(s.Nodes) {
+			n := s.Nodes[m.diskRoot]
+			visible = n.Bytes != preBytes || n.Allocated != preAlloc
+		}
+		for id := range touched {
+			if visible {
+				break
+			}
+			visible = m.diskInView(id)
+		}
+		if visible {
+			m.diskLiveDirty = true
+		}
+	}
+	if m.diskLiveDirty {
+		now := time.Now()
+		if now.Sub(m.diskLiveFlush) >= 750*time.Millisecond {
+			m.diskViewKey = ""
+			m.diskLiveFlush = now
+			m.diskLiveDirty = false
+			// The map's extension stats re-walk the whole subtree; refresh
+			// it on a slower cadence than the cheap row list.
+			if now.Sub(m.diskMapFlush) >= 3*time.Second {
+				m.mapRoot = -1
+				m.diskMapFlush = now
+			}
+		}
+	}
+}
+
+// diskInView reports whether id lies inside the subtree on screen —
+// it is the displayed root or one of its descendants.
+func (m *Model) diskInView(id int) bool {
+	s := m.diskSnapshot
+	for p, steps := id, 0; p >= 0 && steps <= len(s.Nodes); steps++ {
+		if p == m.diskRoot {
+			return true
+		}
+		p = s.Nodes[p].Parent
+	}
+	return false
 }
 func (m *Model) cancelScan() {
 	if m.diskCancel != nil {
@@ -194,6 +254,7 @@ func (m *Model) clearDisk() {
 		return
 	}
 	m.stopWatch()
+	m.diskPending = nil
 	m.diskSnapshot = nil
 	m.diskRows = nil
 	m.diskItems = nil
@@ -704,6 +765,20 @@ func (m *Model) prepareMap() {
 			m.diskItems = append(m.diskItems, treemap.Item{ID: id, Value: v})
 		}
 	}
+	// Children arrive sorted by allocated size, so the tail is the small
+	// fry: fold it into one "Other" block instead of painting thousands of
+	// hairline rectangles every frame.
+	const maxMapItems = 1500
+	if len(m.diskItems) > maxMapItems {
+		rest := uint64(0)
+		for _, it := range m.diskItems[maxMapItems:] {
+			rest += it.Value
+		}
+		m.diskItems = m.diskItems[:maxMapItems]
+		if rest > 0 {
+			m.diskItems = append(m.diskItems, treemap.Item{ID: -1, Value: rest})
+		}
+	}
 	for i, it := range m.diskItems {
 		lv := math.Log(float64(it.Value) + 1)
 		if i == 0 || lv < m.mapLogMin {
@@ -835,9 +910,10 @@ func (m *Model) diskMap(c *ui.Context) {
 					enter = m.childBelow(m.diskRoot, old.Root)
 					back = m.childBelow(old.Root, m.diskRoot)
 				}
-				// Only a changed scene animates; a resize of the same scene snaps.
-				changed := old.Root != next.Root || old.Items != next.Items || old.Sum != next.Sum
-				m.mapMotion.retarget(next, p.Now(), animate && changed, enter, back)
+				// Only navigation animates — zooming in or out. Live index
+				// updates resize blocks in place; pulsing them every flush
+				// reads as flicker, so data changes snap.
+				m.mapMotion.retarget(next, p.Now(), animate && old.Root != next.Root, enter, back)
 				m.mapWidth, m.mapHeight = r.W, r.H
 			}
 			progress := m.mapMotion.progress(p.Now(), animate)
@@ -877,12 +953,18 @@ func (m *Model) childBelow(node, ancestor int) int {
 	return -1
 }
 func (m *Model) paintMapCell(p *ui.Painter, viewport ui.Rect, b treemap.Rect, alpha float32, labels bool) {
-	if alpha <= 0 || m.diskSnapshot == nil || b.ID < 0 || b.ID >= len(m.diskSnapshot.Nodes) {
+	if alpha <= 0 || m.diskSnapshot == nil || b.ID >= len(m.diskSnapshot.Nodes) {
 		return
 	}
 	x, y := max(b.X, 0), max(b.Y, 0)
 	w, h := min(b.X+b.W-1, viewport.W)-x, min(b.Y+b.H-1, viewport.H)-y
 	if w < 1 || h < 1 {
+		return
+	}
+	if b.ID < 0 {
+		// The "Other files" aggregate of the small fry tail.
+		box := ui.Rect{X: viewport.X + x, Y: viewport.Y + y, W: w, H: h}
+		p.Fill(box, ui.Hex("#9a9aa0").Alpha(alpha), 2)
 		return
 	}
 	n := m.diskSnapshot.Nodes[b.ID]
