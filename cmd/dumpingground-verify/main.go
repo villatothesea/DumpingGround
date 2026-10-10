@@ -18,7 +18,7 @@ func snapshotSummary(s *disk.Snapshot) map[string]uint64 {
 	return map[string]uint64{
 		"files": s.Files, "dirs": s.Dirs, "bytes": s.Bytes, "allocated": s.Allocated,
 		"skipped": s.Skipped, "estimated": s.Estimated,
-		"attrFiltered": s.AttrFiltered, "unlinked": s.Unlinked,
+		"reparse": s.Reparse, "offline": s.Offline, "unlinked": s.Unlinked,
 	}
 }
 

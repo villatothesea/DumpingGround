@@ -55,16 +55,21 @@ func measureSpace(path string, logical int64) (uint64, bool, string) {
 	}
 	return uint64(max(info.AllocationSize, 0)), true, identity
 }
-func skipEntry(info os.FileInfo) bool {
+func skipEntry(info os.FileInfo) bool { return skipAttrs(info) != 0 }
+
+// skipAttrs returns the attribute bits that make an entry uncountable:
+// 0x400 for reparse points (junctions, symlinks and anything irregular),
+// the offline/recall flags for cloud placeholders.
+func skipAttrs(info os.FileInfo) uint32 {
 	if info.Mode()&(os.ModeSymlink|os.ModeIrregular) != 0 {
-		return true
+		return 0x400
 	}
 	if attr, ok := info.Sys().(*syscall.Win32FileAttributeData); ok {
 		const reparse = 0x400
 		const offline = 0x1000
 		const recallOnOpen = 0x40000
 		const recallOnData = 0x400000
-		return attr.FileAttributes&(reparse|offline|recallOnOpen|recallOnData) != 0
+		return attr.FileAttributes & (reparse | offline | recallOnOpen | recallOnData)
 	}
-	return false
+	return 0
 }

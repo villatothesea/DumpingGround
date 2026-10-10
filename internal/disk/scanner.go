@@ -25,12 +25,13 @@ type Snapshot struct {
 	Root                                              int
 	Nodes                                             []Node
 	Files, Dirs, Bytes, Allocated, Skipped, Estimated uint64
-	// AttrFiltered counts records skipped for offline/reparse/recall flags;
-	// Unlinked counts names dropped because the parent record was missing or
-	// carried a stale sequence number. Both are zero for directory walks.
-	AttrFiltered, Unlinked uint64
-	Duration               time.Duration
-	Method, Fallback       string
+	// Reparse counts junctions and links skipped by design; Offline counts
+	// cloud placeholders whose data is not on the disk. Unlinked counts
+	// names dropped because the parent record was missing or carried a
+	// stale sequence number — only NTFS MFT scans produce those.
+	Reparse, Offline, Unlinked uint64
+	Duration                   time.Duration
+	Method, Fallback           string
 	// JournalID and JournalUSN capture the USN change journal's position at
 	// scan start on Windows; WatchJournal can replay everything since.
 	// Zero for directory walks.
@@ -165,8 +166,13 @@ func (s *Scanner) scanDirectory(ctx context.Context, root string, progress chan<
 					continue
 				}
 				// Never traverse reparse points or hydrate cloud placeholders.
-				if skipEntry(meta) {
+				if k := skipAttrs(meta); k != 0 {
 					out.Skipped++
+					if k&0x400 != 0 {
+						out.Reparse++
+					} else {
+						out.Offline++
+					}
 					continue
 				}
 				n := Node{ID: len(out.Nodes), Parent: parent, Name: entry.Name(), Dir: meta.IsDir()}

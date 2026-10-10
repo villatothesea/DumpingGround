@@ -803,6 +803,12 @@ func (m *Model) diskInfoView(c *ui.Context) {
 	ui.Modal(c, &m.diskInfoOpen, func() {
 		ui.Column(c).Width(430).Padding(6, 16, 14, 16).Gap(10).Children(func() {
 			ui.Text(c, "About the scan numbers").Bold().FontSize(14)
+			if s := m.diskSnapshot; s != nil && s.Skipped > 0 {
+				other := s.Skipped - s.Reparse - s.Offline - s.Unlinked
+				body := fmt.Sprintf("This scan: %s total\n• %s links — junctions and symlinks (reparse points), skipped by design so nothing counts twice\n• %s cloud placeholders — offline stubs whose data is not on this disk\n• %s orphaned names — records whose parent was deleted or reused: deleted entries still sitting in the MFT\n• %s unreadable — corrupt records, denied folders, items deleted mid-scan",
+					format.Int(s.Skipped), format.Int(s.Reparse), format.Int(s.Offline), format.Int(s.Unlinked), format.Int(other))
+				m.diskInfoItem(c, "What was skipped", body)
+			}
 			m.diskInfoItem(c, "skipped", "Entries the scan could not index: access-denied folders, reparse points (junctions and links, skipped on purpose so nothing counts twice), cloud placeholders whose data is not on this disk, items deleted mid-scan, and records without a usable name. Skipped entries are simply absent — the totals you see only cover what could be read.")
 			m.diskInfoItem(c, "Can they be scanned?", "Access-denied items mostly can: run DumpingGround as administrator and scan again. Cloud placeholders cannot — their content lives in the cloud, not on the disk. Reparse points stay skipped by design; scan their target folder instead.")
 			m.diskInfoItem(c, "estimates", "Files that were indexed but whose on-disk size had to be guessed, because no data attribute could be read. Their size is rounded up to a cluster.")

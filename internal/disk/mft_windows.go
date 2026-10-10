@@ -151,7 +151,11 @@ func scanMFTRecords(ctx context.Context, stream io.Reader, count int64, recordBy
 			}
 			if r.Attributes&(0x400|0x1000|0x40000|0x400000) != 0 {
 				out.Skipped++
-				out.AttrFiltered++
+				if r.Attributes&0x400 != 0 {
+					out.Reparse++
+				} else {
+					out.Offline++
+				}
 				continue
 			}
 			hasLong := false
