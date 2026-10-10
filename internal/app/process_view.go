@@ -344,18 +344,24 @@ func (m *Model) processView(c *ui.Context) {
 				m.procMenuHits = append(m.procMenuHits, menuHit{y1: b.Y, y2: b.Y + b.H, id: int(id)})
 			}
 		}
+		if col >= 2 && col <= 7 && r.Access == "" && id != selPID {
+			if rank := m.procTop[col][id]; rank > 0 {
+				// Task Manager style: the whole cell tints theme blue,
+				// deepest at the column's top value, faint by rank ten.
+				heat := t.Accent.Mix(t.Background, 1-(0.38-0.33*float32(rank-1)/9))
+				pv, ph := t.Space(1.5), t.Space(2.5)
+				rowView.Fill().Justify(ui.End).Draw(func(p *ui.Painter, r ui.Rect) {
+					p.Fill(ui.Rect{X: r.X - ph, Y: r.Y - pv, W: r.W + 2*ph, H: r.H + 2*pv}, heat, 0)
+				})
+			}
+		}
 		rowView.Children(func() {
 			if col == 0 {
 				if icon := m.processIcon(r.Path); icon != nil {
 					ui.Image(c, icon).Size(16, 16)
 				}
 			}
-			tx := ui.Text(c, text).SingleLine().Tooltip(r.Path)
-			if col >= 2 && col <= 7 && r.Access == "" && id != selPID {
-				if rank := m.procTop[col][id]; rank > 0 {
-					tx.TextColor(t.Accent.Mix(t.Background, 0.8*float32(rank-1)/9)).Bold()
-				}
-			}
+			ui.Text(c, text).SingleLine().Tooltip(r.Path)
 		})
 	}
 	table := func() {

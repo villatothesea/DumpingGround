@@ -669,26 +669,22 @@ func (m *Model) iconTextButton(c *ui.Context, name, label string) ui.Element {
 	return e
 }
 
-// dangerButton is the destructive .btn: the theme's solid danger red with a
-// white label, lighter on hover and darker on press, faded while disabled.
+// dangerButton is the prototype's .btn.danger: the plain button face with
+// the glyph and label in the theme's danger red.
 func (m *Model) dangerButton(c *ui.Context, name, label string) ui.Element {
 	t := c.Theme()
-	e := ui.Row(c).Height(28).PaddingX(12).Gap(6).AlignItems(ui.Center).Radius(t.Radius).Label(label)
+	e := ui.Row(c).Height(28).PaddingX(12).Gap(6).AlignItems(ui.Center).Radius(t.Radius).Background(t.Surface).Label(label)
+	e.BorderWidth(1).BorderColor(t.Border)
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
-		bg := t.Danger
-		switch {
-		case e.IsDisabled():
-			bg = bg.Alpha(0.45)
-		case e.Pressed():
-			bg = bg.Mix(ui.RGB(0, 0, 0), 0.15)
-		case e.Hovered():
-			bg = bg.Mix(ui.RGB(255, 255, 255), 0.12)
+		if e.Pressed() {
+			p.Fill(r, t.SurfacePressed, t.Radius)
+		} else if e.Hovered() {
+			p.Fill(r, t.SurfaceHover, t.Radius)
 		}
-		p.Fill(r, bg, t.Radius)
 	})
 	e.Children(func() {
-		icon(c, name, 14).TextColor(ui.RGB(255, 255, 255))
-		ui.Text(c, label).SingleLine().TextColor(ui.RGB(255, 255, 255))
+		icon(c, name, 14).TextColor(t.Danger)
+		ui.Text(c, label).SingleLine().TextColor(t.Danger)
 	})
 	return e
 }
