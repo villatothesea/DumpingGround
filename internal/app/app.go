@@ -532,7 +532,7 @@ func (m *Model) pageTab(c *ui.Context, t *ui.Theme, pg page, label string) {
 		}
 	})
 	e.Children(func() {
-		tx := ui.Text(c, label).SingleLine()
+		tx := ui.Text(c, label).SingleLine().FontSize(13)
 		switch {
 		case on && pill:
 			tx.TextColor(t.AccentText)
