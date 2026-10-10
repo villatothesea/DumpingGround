@@ -165,6 +165,13 @@ type Model struct {
 	diskMapFlush                    time.Time
 	diskWatchErr                    chan error
 	diskLive                        bool
+	rustPending                     bool // analyze for Rust artifacts once a running scan settles
+	rustBusy                        bool // analysis or deletion in flight
+	rustReport                      *disk.RustReport
+	rustOpen                        bool
+	rustConfirm                     int
+	rustMsg                         string
+	rustGone                        map[string]bool
 	events                          chan func()
 	// CaptureDir writes only this application's frames during explicit diagnostics.
 	CaptureDir  string
@@ -180,7 +187,8 @@ func New() *Model {
 		processUpdates: make(chan processResult, 1), refresh: make(chan struct{}, 1), inspection: make(chan inspectionResult, 1), events: make(chan func(), 8),
 		iconCache:   make(map[string]*ui.Bitmap),
 		iconPending: make(map[string]bool), iconRequests: make(chan string, 32),
-		diskStatus: "Choose a drive or folder to scan", diskMode: "Tree", diskMetric: "Allocated", diskSelected: -1, diskNode: -1, extensionSelected: -1, mapRoot: -1, diskSplit: 300, animateMap: true, detailTab: "Properties", memRelease: "Automatic"}
+		diskStatus: "Choose a drive or folder to scan", diskMode: "Tree", diskMetric: "Allocated", diskSelected: -1, diskNode: -1, extensionSelected: -1, mapRoot: -1, diskSplit: 300, animateMap: true, detailTab: "Properties", memRelease: "Automatic",
+		rustGone: map[string]bool{}, rustConfirm: -1}
 }
 func (m *Model) Run() error {
 	if os.Getenv("DG_DEBUG_INSTANCE") != "" {
@@ -454,6 +462,9 @@ func (m *Model) view(c *ui.Context) {
 	})
 	if m.settingsOpen {
 		m.settingsView(c)
+	}
+	if m.rustOpen && m.rustReport != nil {
+		m.rustView(c)
 	}
 	if m.diskInfoOpen {
 		m.diskInfoView(c)

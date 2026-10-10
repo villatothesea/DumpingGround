@@ -104,6 +104,10 @@ func (m *Model) drainScan() {
 		if m.memRelease == "Automatic" {
 			go debug.FreeOSMemory()
 		}
+		if m.rustPending {
+			m.rustPending = false
+			m.rustAnalyze()
+		}
 	default:
 	}
 }
@@ -285,6 +289,12 @@ func (m *Model) clearDisk() {
 	m.mapHover = ""
 	m.mapMotion = mapMotion{}
 	m.mapAnimating = false
+	m.rustReport = nil
+	m.rustOpen = false
+	m.rustPending = false
+	m.rustConfirm = -1
+	m.rustMsg = ""
+	m.rustGone = map[string]bool{}
 	m.diskStatus = "Index cleared"
 	// Dropping the index frees hundreds of MB; return them to the OS now
 	// instead of letting the runtime sit on the released heap. Async so the
@@ -327,6 +337,10 @@ func (m *Model) diskView(c *ui.Context) {
 			}
 		} else if ui.PrimaryButton(c, "Scan").Disabled(strings.TrimSpace(m.diskPath) == "").Clicked() {
 			m.startScan()
+		}
+		rs := m.iconTextButton(c, "rust", "Rust scan").Tooltip("Find Cargo target/ dirs and clean them by tier")
+		if rs.Disabled(m.rustBusy || scanning && !m.rustPending).Clicked() {
+			m.rustScan()
 		}
 	})
 	if scanning {
