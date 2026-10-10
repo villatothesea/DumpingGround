@@ -637,20 +637,24 @@ func (m *Model) iconTextButton(c *ui.Context, name, label string) ui.Element {
 	return e
 }
 
-// dangerButton is the destructive .btn: a solid danger face with a white
+// dangerFace is the destructive action's muted Morandi red: softer than the
+// theme's danger color, still readable behind a white label.
+var dangerFace = ui.RGB(0xB0, 0x6A, 0x62)
+
+// dangerButton is the destructive .btn: a solid muted-red face with a white
 // label, lighter on hover and darker on press, faded while disabled.
 func (m *Model) dangerButton(c *ui.Context, name, label string) ui.Element {
 	t := c.Theme()
 	e := ui.Row(c).Height(28).PaddingX(12).Gap(6).AlignItems(ui.Center).Radius(t.Radius).Label(label)
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
-		bg := t.Danger
+		bg := dangerFace
 		switch {
 		case e.IsDisabled():
-			bg = t.Danger.Alpha(0.45)
+			bg = dangerFace.Alpha(0.45)
 		case e.Pressed():
-			bg = t.Danger.Mix(ui.RGB(0, 0, 0), 0.2)
+			bg = dangerFace.Mix(ui.RGB(0, 0, 0), 0.15)
 		case e.Hovered():
-			bg = t.Danger.Mix(ui.RGB(255, 255, 255), 0.12)
+			bg = dangerFace.Mix(ui.RGB(255, 255, 255), 0.12)
 		}
 		p.Fill(r, bg, t.Radius)
 	})
