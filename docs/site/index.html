@@ -2,19 +2,21 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<title>DumpingGround — 每台电脑都有一座垃圾山，现在由你接管。</title>
+<title>DumpingGround — 希望清理污染，像清理电脑垃圾一样容易</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="description" content="DumpingGround 是一款 Windows 原生系统管理工具：进程查看、磁盘空间分析、软件卸载、启动项管理。单文件，双击即用。">
-<meta property="og:title" content="DumpingGround — 每台电脑都有一座垃圾山，现在由你接管。">
+<meta property="og:title" content="DumpingGround — 希望清理污染，像清理电脑垃圾一样容易">
 <meta property="og:description" content="进程、磁盘、软件卸载、启动项，一个 Windows 原生小工具全搞定。">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230078d4'/%3E%3Cg transform='translate(4 4) scale(1)' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.4 20.6c1.6-5.4 4.6-8.6 8.2-8.6s6.6 3.2 8.2 8.6z'/%3E%3Cpath d='M2 20.6h20'/%3E%3Cpath d='M10.8 12V3.2'/%3E%3Cpath d='M10.8 3.2l6 2.2-6 2.4'/%3E%3C/g%3E%3C/svg%3E">
 <style>
 *{box-sizing:border-box}
 :root{--bg:#ffffff;--surface:#f4f4f5;--hover:#e9e9ec;--pressed:#dddde1;--border:#d9d9de;--text:#18181b;--muted:#71717a;
  --accent:#0078d4;--accent-h:#006abb;--accent-p:#005a9f;--accent-t:#fff;--danger:#dc2626;--warn:#d97706;--ok:#16a34a;
- --sel:rgba(0,120,212,.25);--shadow:rgba(0,0,0,.16);--glow:rgba(0,120,212,.10)}
+ --sel:rgba(0,120,212,.25);--shadow:rgba(0,0,0,.16);--glow:rgba(0,120,212,.10);
+ --sky:#7e8c9e;--sea:#47708f;--foam:#6d9cc4;--slick:#575b40;--sand:#857b6a;--trash:#b04a44;--pile:#786f60;--flag:#0078d4;--seatint:26%;--sandtint:30%}
 [data-theme=dark]{--bg:#18181b;--surface:#27272a;--hover:#323236;--pressed:#3c3c41;--border:#3f3f46;--text:#f4f4f5;--muted:#a1a1aa;
- --accent-h:#3393dc;--accent-p:#0066b4;--danger:#ef4444;--warn:#f59e0b;--ok:#22c55e;--sel:rgba(0,120,212,.4);--shadow:rgba(0,0,0,.55);--glow:rgba(0,120,212,.18)}
+ --accent-h:#3393dc;--accent-p:#0066b4;--danger:#ef4444;--warn:#f59e0b;--ok:#22c55e;--sel:rgba(0,120,212,.4);--shadow:rgba(0,0,0,.55);--glow:rgba(0,120,212,.18);
+ --sky:#8496a8;--sea:#4f7391;--foam:#8ab4d4;--slick:#6d7055;--sand:#8b8272;--trash:#d4695f;--pile:#9d9280;--flag:#3393dc;--seatint:12%;--sandtint:18%}
 html,body{overflow-x:hidden}
 html{scroll-behavior:smooth;scroll-padding-top:72px}
 body{margin:0;background:var(--bg);color:var(--text);font:16px/1.65 "Segoe UI","Microsoft YaHei UI","Microsoft YaHei",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
@@ -41,18 +43,30 @@ svg.i{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:2;stroke-l
 .btn.primary:active{background:var(--accent-p)}
 .btn.sm{height:36px;padding:0 16px;font-size:14px}
 
-/* hero */
-.hero{position:relative;padding:88px 0 40px;text-align:center;overflow:hidden}
-.hero::before{content:"";position:absolute;left:50%;top:-220px;width:1100px;height:700px;transform:translateX(-50%);background:radial-gradient(closest-side,var(--glow),transparent);pointer-events:none}
-.hero .wrap{position:relative}
-.hero h1{margin:0;font-size:clamp(34px,6vw,64px);line-height:1.15;letter-spacing:-.5px;font-weight:800}
+/* hero: ascii ocean scene */
+.hero{position:relative;text-align:center;overflow:hidden;border-bottom:1px solid var(--border)}
+.ocean{position:relative;height:clamp(380px,58vh,560px);overflow:hidden;background:linear-gradient(112deg,color-mix(in srgb,var(--sea) var(--seatint),var(--bg)) 30%,var(--bg) 54%,color-mix(in srgb,var(--sand) var(--sandtint),var(--bg)) 94%)}
+.ocean pre{position:absolute;left:50%;top:0;margin:0;transform:translateX(-50%);font:400 clamp(7px,.95vw,12px)/1.02 "Cascadia Mono","Consolas",monospace;letter-spacing:0;white-space:pre;pointer-events:none;user-select:none}
+.l-sky{color:var(--sky)}.l-sea{color:var(--sea)}.l-foam{color:var(--foam)}.l-slick{color:var(--slick)}
+.l-sand{color:var(--sand)}.l-trash{color:var(--trash)}.l-pile{color:var(--pile)}.l-flag{color:var(--flag)}
+.ocean canvas{position:absolute;inset:0;width:100%;height:100%}
+.ocean .scrim{position:absolute;inset:0;background:linear-gradient(180deg,transparent 40%,color-mix(in srgb,var(--bg) 55%,transparent) 78%,var(--bg) 98%);pointer-events:none}
+.vsw{position:absolute;right:14px;top:10px;display:flex;gap:4px;z-index:3}
+.vsw button{height:26px;padding:0 10px;font:inherit;font-size:12px;border-radius:6px;border:1px solid var(--border);background:color-mix(in srgb,var(--bg) 70%,transparent);color:var(--muted);cursor:pointer}
+.vsw button.on{color:var(--text);border-color:var(--accent);background:var(--sel)}
+.clar{position:absolute;right:14px;bottom:12px;display:flex;gap:8px;align-items:center;z-index:3;padding:5px 10px;border-radius:8px;border:1px solid var(--border);background:color-mix(in srgb,var(--bg) 72%,transparent);font-size:12px;color:var(--muted)}
+.clar button{height:24px;padding:0 9px;font:inherit;font-size:12px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer}
+.clar button.on{color:var(--text);border-color:var(--accent);background:var(--sel)}
+.clar input{width:170px;accent-color:var(--accent);cursor:pointer}
+.hero .wrap{position:relative;margin-top:-190px;padding-bottom:64px}
+.hero h1{margin:0;font-size:clamp(30px,4.6vw,52px);line-height:1.2;letter-spacing:-.5px;font-weight:800;text-wrap:balance}
 .hero h1 em{font-style:normal;color:var(--accent)}
-.hero p.lead{margin:22px auto 0;max-width:660px;font-size:clamp(16px,2vw,19px);color:var(--muted)}
-.hero .cta{margin-top:32px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-.hero .meta{margin-top:18px;font-size:14px;color:var(--muted);display:flex;gap:6px 18px;justify-content:center;flex-wrap:wrap}
+.hero p.lead{margin:18px auto 0;max-width:640px;font-size:clamp(15px,1.8vw,18px);color:var(--muted)}
+.hero .cta{margin-top:28px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.hero .meta{margin-top:16px;font-size:14px;color:var(--muted);display:flex;gap:6px 18px;justify-content:center;flex-wrap:wrap}
 .hero .meta span{display:inline-flex;align-items:center;gap:6px}
 .hero .meta svg{color:var(--ok)}
-.shot{margin:56px auto 0;max-width:1000px}
+.caption{position:absolute;left:18px;top:12px;font-size:12px;color:var(--muted);opacity:.8;pointer-events:none;letter-spacing:.4px;text-align:left}
 
 /* mock window */
 .mwrap{position:relative;border-radius:12px;box-shadow:0 24px 70px var(--shadow),0 0 0 1px var(--border);overflow:hidden;background:var(--bg);aspect-ratio:1100/620}
@@ -186,7 +200,7 @@ footer a:hover{color:var(--text)}
 <header class="nav">
   <div class="wrap">
     <a class="brand" href="#top"><span class="logo"><svg viewBox="0 0 24 24"><path d="M2.4 20.6c1.6-5.4 4.6-8.6 8.2-8.6s6.6 3.2 8.2 8.6z"/><path d="M2 20.6h20"/><path d="M10.8 12V3.2"/><path d="M10.8 3.2l6 2.2-6 2.4"/><path d="M7.8 17.2h.01M12.4 16.4h.01M14.4 18.6h.01"/></svg></span>DumpingGround</a>
-    <nav><a href="#features">功能</a><a href="#why">为什么叫这个名字</a><a href="#download">下载</a><a href="#faq">常见问题</a></nav>
+    <nav><a href="#concept">概念</a><a href="#features">软件</a><a href="#music">音乐</a><a href="#download">下载</a><a href="#faq">常见问题</a></nav>
     <span class="sp"></span>
     <button class="iconbtn" id="theme" title="切换明 / 暗主题" aria-label="切换明暗主题"></button>
     <a class="btn primary sm" href="#download">下载</a>
@@ -195,26 +209,30 @@ footer a:hover{color:var(--text)}
 
 <main id="top">
 <div class="hero">
+  <div class="ocean" id="ocean" aria-hidden="true">
+    <canvas id="ocv"></canvas>
+    <div class="scrim"></div>
+    <div class="caption">ASCII 动图 · 字符渐渐清晰成照片 — 海滩上的垃圾，和电脑里的一样多</div>
+    <div class="vsw"><button data-v="a" class="on">版本 A</button><button data-v="b">版本 B</button></div>
+    <div class="clar"><button id="clauto" class="on">自动 ▶</button><span>清晰度</span><input id="clarity" type="range" min="0" max="100" value="0"></div>
+  </div>
   <div class="wrap">
-    <h1>每台电脑，都有一座垃圾山。<br><em>现在，由你接管。</em></h1>
-    <p class="lead">DumpingGround 把进程、磁盘空间、软件卸载、启动项放进同一个 Windows 原生小工具。看清谁在占资源，找到谁在占空间，把不用的统统清出去。</p>
+    <h1>希望清理污染，<br><em>像清理电脑垃圾一样容易。</em></h1>
+    <p class="lead">但现实总是残酷的。DumpingGround 是一个概念项目：海里的垃圾我们一时清不完，你电脑里的那座垃圾山，现在就能清。</p>
     <div class="cta">
-      <a class="btn primary" href="#download"><svg class="i" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>下载 Windows 版</a>
-      <a class="btn" href="#features">看看能做什么</a>
+      <a class="btn primary" href="#download"><svg class="i" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>下载软件</a>
+      <a class="btn" href="#concept">了解这个概念</a>
     </div>
     <div class="meta">
-      <span><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>单文件，双击即用</span>
-      <span><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>原生界面，无需 WebView2</span>
-      <span><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>无需管理员权限</span>
-      <span><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>不联网，不上传数据</span>
+      <span><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Windows 原生 · 单文件</span>
+      <span><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>同名歌曲与 MV 筹备中</span>
     </div>
-    <div class="shot"><div class="mwrap" id="heroShot"></div></div>
   </div>
 </div>
 
 <section id="features">
   <div class="wrap">
-    <div class="sec-h"><h2>四个页签，管好一台电脑</h2><p>每个页签只做一件事，操作入口只有一个，不绕路。</p></div>
+    <div class="sec-h"><h2>这个软件，负责清理你的那座垃圾山</h2><p>四个页签，每个只做一件事，操作入口只有一个，不绕路。</p></div>
     <div class="stabs" id="stabs"></div>
     <div class="show">
       <div id="showText"></div>
@@ -237,15 +255,24 @@ footer a:hover{color:var(--text)}
   </div>
 </section>
 
-<section id="why">
+<section id="concept">
   <div class="wrap">
-    <div class="name">
-      <div class="bigicon"><svg viewBox="0 0 24 24"><path d="M2.4 20.6c1.6-5.4 4.6-8.6 8.2-8.6s6.6 3.2 8.2 8.6z"/><path d="M2 20.6h20"/><path d="M10.8 12V3.2"/><path d="M10.8 3.2l6 2.2-6 2.4"/><path d="M7.8 17.2h.01M12.4 16.4h.01M14.4 18.6h.01"/></svg></div>
-      <div>
-        <h2>为什么叫 DumpingGround？</h2>
-        <p><b>Dumping ground，垃圾场。</b>因为大多数人的电脑就是这样：进程越开越多，文件越堆越高，装过的软件从不卸载，开机项悄悄越变越长。</p>
-        <p>图标是一座垃圾山，山顶插着旗：旗插下去，这座山就归你管。</p>
-      </div>
+    <div class="sec-h"><h2>一个关于「垃圾场」的概念</h2><p>海洋是最大的 dumping ground，电脑是最小的那个。</p></div>
+    <div class="grid3">
+      <div class="card"><div class="ci"><svg class="i" viewBox="0 0 24 24"><path d="M2 12c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M2 17c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M2 7c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/></svg></div><h4>海里的垃圾场</h4><p>每年有上千万吨塑料进入海洋，一部分漂到海滩上，堆成一座座没人认领的小山——和上面动图里的一样。</p></div>
+      <div class="card"><div class="ci"><svg class="i" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div><h4>你电脑里的垃圾场</h4><p>进程越开越多，文件越堆越高，装过的软件从不卸载，开机项悄悄变长。这座山小得多，但它是你能动手清的那个。</p></div>
+      <div class="card"><div class="ci"><svg class="i" viewBox="0 0 24 24"><path d="M2.4 20.6c1.6-5.4 4.6-8.6 8.2-8.6s6.6 3.2 8.2 8.6z"/><path d="M2 20.6h20"/><path d="M10.8 12V3.2"/><path d="M10.8 3.2l6 2.2-6 2.4"/><path d="M7.8 17.2h.01M12.4 16.4h.01M14.4 18.6h.01"/></svg></div><h4>海滩上的锚点</h4><p>图标是一座立在海滩上的垃圾山，山顶插着旗。旗就是锚点：插下去，这片垃圾场就归你管。</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="music">
+  <div class="wrap">
+    <div class="dl">
+      <span class="v">概念原声</span>
+      <h2>同名歌曲《DumpingGround》</h2>
+      <div class="muted">为这个概念写的同名歌曲即将上线，MV 也在制作中——海滩、垃圾山，和你的电脑。</div>
+      <a class="btn" style="pointer-events:none;opacity:.6"><svg class="i" viewBox="0 0 24 24"><path d="M6 3l14 9-14 9z"/></svg>即将上线</a>
     </div>
   </div>
 </section>
@@ -283,7 +310,7 @@ footer a:hover{color:var(--text)}
 <footer>
   <div class="wrap">
     <a class="brand" href="#top"><span class="logo"><svg viewBox="0 0 24 24"><path d="M2.4 20.6c1.6-5.4 4.6-8.6 8.2-8.6s6.6 3.2 8.2 8.6z"/><path d="M2 20.6h20"/><path d="M10.8 12V3.2"/><path d="M10.8 3.2l6 2.2-6 2.4"/><path d="M7.8 17.2h.01M12.4 16.4h.01M14.4 18.6h.01"/></svg></span>DumpingGround</a>
-    <span class="muted">每台电脑都有一座垃圾山，现在由你接管。</span>
+    <span class="muted">希望清理污染，像清理电脑垃圾一样容易。</span>
     <span class="sp"></span>
     <a href="#features">功能</a><a href="#download">下载</a><a href="#faq">常见问题</a>
     <span>v0.1.0</span>
@@ -384,8 +411,110 @@ function show(t){
 }
 $('#stabs').onclick=e=>{const b=e.target.closest('[data-t]');if(b)show(b.dataset.t)};
 
+const OCIMG={"gw":190,"gh":38,"a":{"src":"../img/dumpingground.png","rows":[";;;~~~~~~~=====------------++++++++++++*++***************x**xxxxxxxxxxxxxxxxxxxx###xxxxxxxxxxxxxxx#############################xxxxxx########%%%%%%###########xx***++++++++++++***++++++++++--","~~~~~~~~=======-----------+++++++++***********xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx####################################################%%############xxx######x*******++++++++*****++++**++++---","~~~~~=======-------------+++++++++**********xxxxxxxxxxxxxxxxxxxx*xxx####################################################################################xxxxxxxx****************++++++++------","~~~~~=======---------+++++++++++***************xxxxxxxxxxxxxxxxx-;xx####################################################################################xxxxxxxxxx*************+++++++++------","~~~========--------++++++++++************xxxxxxxxxxxxxxxxxxxxx*-~·-xx####################################################################################xxxxxxxxxx************+++++++++++++++","========----------+++++++++************xxxxxxxxxxxxxxxxxxx*+-~+~~~·*x##################################################################################xxxxxxxxxxxxx***************+++++-==-+-","=======---------++++++++++************xxxxxxxxxxxxxxxxxxxx~;;~=-~=·;x##################################################################################xxxxxxxxxxxxxxxxxxxx*****++---=~;···;;·","=======---------++++++++++*************xxxxxxxxxxxxxxxxx*+;;~~;~+-=·~xx###############################################################xx**************xxxxx***++++---==-------~~~====:········","========--------++++++++++*************xxxxxxxxxxxxxxxxxxx+;;~~;~~=;·=xx######################################################x*++++++---+++---------------------------==~~~;;;;;;;;;::::·····","~=======---------+++++++++++****************xxxxxxxxxxxxxx-;;;;;;~=+~;*xxxx#################################################x+++++++++++--++-+----------------------===~~~~~;;:::::···..·.....",";;;;;;;~~~~~~~~~===============-----------------------++++~·;;~-=~=--;;++++++++++++++++++++++++++++++**+******************++++++++*++***************************++++-==~~;;:;::::·····....·...","······::::::::::::;;;;;;;;;;;;;~;~~~~~~~~;~;;~~~~~~~~~~~==~=====-~~~==:=----======-+++++----=--+++++++++***********x*****xx*x***********x***********+++---=====~=~~~~~~;;~~;~;:;;::;:··:·:··:·","·········:::::::;;;;;:;;;:::;;;;;;;~~~=====~---++----+++*+++*-+*-~~===~:+xx*xxxxxxxxxxx*******++**++***+++**+++************************+*xx****x****+---===~~~~~~~~;~=~~~;;::;~;;;;;;··;::;:::","······::::·:;;;;;:;;~========-=-=---------+--*****x*xx********~-:;===~==;+****+*++-++++++++++++++++++++++++++*+***++++++**+********+-*x*x****xxxxxxx*+----==~;;~~~~;;~;~=~=;;;;;;;;::::;::::··",";;;~;;~~~~=======-==---+--+------------====~================---;··~-----=;+-+++-+++++++++++++++++-++++-++****+*+******+++++++++++*x**xx*****xxxxx**+---=~;;~~~==~;;:;;~·;=;:·;;;;:::::;;·~:...",";;~~~~~~~~~~=~==;;;~~~~~;~~;;;~~=~~~~~~~~~========-=---=----+-+-~-++++-++~~---++---+-++-+++++++---++----++++++++++*****+++-+***xxx*+++***xxxx*++-====~~~~=~~;;;~~~~~~;;;;;;;=~:~=::···:;:·::::","··········::::::;;;;;;;;;;~~~~~~~~~~========--==================-=----+--+:-+--+---++++++=-=-+---======---++**+++*+++****+*xx*+****xxxx**+-===~--=~~~=~;;~~=~~~=~;~;:=~:;;;~~=;;;:::;;;;;:·;::","::::;;;;;;;;;;;;~~~~~~;~~~~~~;~~=======~=~~;;~~~~~===~~~~=--+--==========-=;-=-=======~~~~~=---=------++-++++**x+++********xxxxx**---====;:;~~~=~~=~;:;;~;;;;;~~:;;:~=;~;~~;;:.··:::;;;;;;;;=;","::::::;;;;;~~~~~~~~~~~~~~~~~~~~~==~~~~~~====~==~=--===--=======----=-==---~~~=~====~~=====---+++--=-+++***+*xxxxxxxxxxx*+++------~~;==-=:=~;=====-~~;;=---===-=~~=~~~;~~:····...··.....:~;~-;·",":::::::::::::;::;;;::;;;:::;;~~~~~~;;;::···::;;~~~==========~==~~~;;~=---+*x~+-==~=~;;~~:~-*+++++**xxxxxxxxxxxxxx*++-=-=;~==~~=;==~~;==~~==~;~::~:·:;~=-~~===++-~=~~···.···....·····.·····::::","·····::::::;:::::··········:::::;;;;;;;~~~~~==~============~=*x*--+=+~===---;:=~;:;:....··;-xxxx*xxxxxx**xx***++-+-=~;~=~~~~~~==+~~~~===~~;:·····:::;;~~=~;;~;~;;:;::~~;;=;;~~;;;::;;;;;::::::","······::······:::·:::::;;;;;~;~~~;;;;;;:;;:::::;:::;;~~=-+=-+++*+*+--~=-~~;;;·:~;::··..·.~-=*x**+++++*++~=-----~~;;:~~:;:::;;;~=====~~~;;;~~;~:;=+==~=;~~:~;··::;;~~=+=~;~;~;~;;~;::;;::::::::","······:::::::;;;;;;;;;:;;;;::::·····:··::::;:;;~~;~~==~~--===;;:;;:;;:·:::;~~==~~;:.·:.·~-~;~+*xx++*+++*-==~--=--;;;==~~~=~~==--=~~==--~~~===-;;~==;==--~~=~~~;;··:·:;;;~~:;;;;;;;;;:;;;::::::","::::::::::::·············::::;;;~;;;;~~~~~==~===~=-=-=;::;;~~+-=·.::~==+--=~~===---;~~=---=+--=-*x++*-~~+*~=;-~;~~=-==-++==~~===~~~;;;~~:~:;;~:;;~~~----=~;;:;:·····;:::~--;~;;~:;;::···::::::",".··········.·····::::·::::;;;;~~~~~~~~~~~~~===--++-+-:::=+===***+~=--=~~;~~~-;=-~=-++-+*xxx+~~;;~=-==+*-;+-----=~=---+-~:::··=-~···::·;~+=;~;::;~~~==~;;~====-===~~;;;~;;~~~~~:;;;:·...··:::::","....···:··::::::;;;;;;;~;;;;;;;;;;~=========-----::.:::::·:;=*********=~+-~~+***+**-=----+*xx+-~;~~=-++*+=+x#++*+==----*+-~:;;;=-~-~;;:;::::;;=+===~;~~~~~=-===~~=~==~~~;;;;;;;~~;;:;::::·::··","······:;:::::;;;;;;;;;;;~~~~~~=--====---+++++=~:·. ......;-==---=-++*+:==~==-==++---;:;-=--+-++*+:;;~;~-+*-=-x-~~;;+~~~===+-;~=~;~~~~~;;~~+*=====-=--===--=====~;~:···..·~~;;:;;~;;:;:::::::::","····:::::::::::;;~~~~=~=--==-=+++-++++-+++-+-·.........:~==;~===::~-*~;~;=~;:=-+---~+:·~;~:~~;;=*-:;:;=-+--;~~--=~:··..·····:~;;=========;~;;~~==-=--====+++-=~~;:···.··::·:;;:;;:;;;;:;:·:::·","··:·:;;;~~=~;;;;~~=====--==-+++++-++-====~~~;........ ·~~~==::::····.····:::·;:::;;~=:··~-~;;=*+==;::;~=~=-+*+;:=~::;;~==~;;;;::;;:;~==~;~;·····:;;;:;~=-~;:::·::::;::;:··.·:::·:;··::::::::··","·::::;~~~=~=;;~=~=----====--====;;;;;;~~~~==~.. ..    ·:;~~;··;=-=:··:.··:··.···:::~~··:::~:;;~=~~··:::;;;=****+====;~+~:;=;··:·:·:;;::::::·:;:···::::······:::;~~;;;;::··:::·...........····:",";;;;;~~~~~=-=~===~~~~;~;;;;:··..··:·:;;;~;;=~·.....  .:;~:···:;;~=:.:··~;;::········:··;·:··;;:··.··:·:;~==+**+--~~~;~=;==;:-~;;:::·.·.·····;·;;·:·····.::;·:··:···~=;::···...·:::::···::·:::·",";;;;;;~;;;;;;::::::::::·.·.......... .·;;;~~:... ...··;;;;;=:;~:::;;;;;=-~=~~~~~::;;;~;::··.·.   .·:::··.·:;~~=-*=::;~~=;;;;~;::::::....······:::·...·~--;·..·::.:;:·······;;;····:::·········",":::···········::::··:::·..   ... .···;;::;;;···..·.··:;:;:=~~~;:·~=;;==;:;~=+++*--+=~==:·    .......·::·.;;;~-*=+-·~=~~;:~=~=~·····;;·:=--~;==;::···..:····..:--·.·;~:.·.·····...;~~;::·······","..··········::·:·.·:·..  ..·.·;:··::···:;:···.:~;;-::...........~~;;:::;::=~===-==~~~:· ...  ...... ..···:;:~=-~;;~+-;:··:;-=~~=~~~=;;;~~==~:;-*-::············::;::·:::·...   ..·:··········.","····.......·.............····::::::;;~~~;;:..:~~~=-~~;·..     .:::;;;;···::;:··;~;;~~:.  ·     .    .····.·::;;=*=·~=~~~:;::·:;=~;~;~==~~:···::;:::;;::;;:::::::;;;;:;:·:········.···········.",".····.··. ..··....··.··::::···::::::·····;~:·:;;::;;;·.       ···:·:·::·:::······:;;;·   ..  ......···..·...·;+==-··:;·:.·:;;·;-:··;::··:·..··:·:;;~=;:;~;::;;;:::::::·:;:·:::::········....··"," .···:  ......   ·:·::·:;~;;::·:·.·.::···::.:;:::··:.           .·.·.·::::·..·.··.··:··...·...  ...     .·..·=-~;:...:··:··:;;~~~~~~~~;:::~~~~;;==~~=;;;:::·;::··:;:;:::::::::············....","     .... ..··.········..···.::··....·.. .:··::··..·..       ... .···..······...····..:::···.           .·.·:;;;:;;·.:::::·..···::::::···:::;;;;:::::;;;;~:::;::·.·::::::···:::·············.."],"pal":["#e0d3ce","#ddd0cb","#dbcdc9","#d7ccc9","#d7c8c4","#d1c5c3","#ccbfbc","#c5bcbc","#c4b6b4","#bcb3b4","#b7acac","#b3a8a6","#b1a29d","#a8a0a2","#a49b99","#a39591","#9a9698","#969194","#968d8b","#8d8b8e","#928077","#868589","#837e7e","#7a7e81","#77797c","#80726c","#757375","#6c7174","#79685f","#6c6765","#63686c","#606466","#6b5e56","#5f5e5d","#63574f","#5f5047","#545f5f","#52585a","#535251","#455153","#524a43","#40494a","#4b423a","#3e4141","#433a33","#3b3733","#353f40","#353635","#293839","#332f2b","#2c2c2a","#252d2f","#252524","#1a292b","#191f21","#101619"],"idx":"lkkkffeeebbaYXXWVVVVVTTTTTTRQQOONOONNNNNNNNNLLKKKKKKKKJJJJJJJJJJJJJIIHHHHGGGGGGFFFFFFHHHHHHHHHHGGGFEEEEDCCBBBBCCDDCDDDDCBBBBCDFGGGGGFEEEECBAAAAAAAAAABBBBBBBCEGIKLMNOOOOPPOPPPOMMMMMMOPPMMPPSSkffeeeebbbaYYXXWVVVTTTTTRRQQQONNNNNNLLKKKKKJJJJJJJJJHHHHHHHHHHHHHHHHHHHHHHHGGGGGFFFFFFFFFFFFEEDDDDDDDCCCCCCCCCCDDDCCCDDEECBBBABBAAAAAAAAAABBBCBCCCEFGGEEEEEFIKKLLLMMMOOOOOOMLKLLMMMMMMMMPPSSSSeeebbbbYYYXXXVVVVTTTTTTTRRQQQONNNNNLLLKKKKJJJJJJJJJIIHHHHHGGGGGGKHFFFFFFFFFFEEEEEDDDDDDDDEEFFFFFFFFFFFEDDCBBBAAAAABBDDDDDCCBBAAAABBBBBAAAAAABBCCEEEEEEEEGGGGIIIIJKKKKLLLLKLLLMMMOOPPPPPSSSSUUUfeeebbbbaYXXVVVTTTTRRRRQQQQQONNNNNLLLLKKKKKJJJJJJJIIHHHHHHHHHHHHThHFFFFEDDDDDDDDDDDDDDDDDDDDDCCCCBBBAAAAAAAAAAAAAAABBBBBBAAAAAAAAAAAAAABBAAABBCCEEEEEEFFGGGGGIIIIIKKKKKLLLLLMMMMOOOPPPPSSSSSSSebbbbbaYYXXXVVVTTTRRQQQQQONNNNNLLLKKKKKJJJJJIIIHHHHHHGGGGGGGGGKSfzTGFFFEDDDDDDDDDCCCBBBBBBBAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBCCDDDDDEEEEEEECCCCEEEEEEEEEEEEFGGGGIIIIIKKKKKLLLLMMMMMOOOPPPPPPPPPPbbaYYYXXXVVVVTTTTRRQQQOONNNNNLLLKKKKKJJJJJIIHHHHHHGGGGGGGGKQUdQbeewKFFFEDDDDDCCBBBBBBBBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBCCCCCDDDDDDCDEEEECEEEEEEEEFFFGGGGGIIIIIIIJKKKKKKLLLMMMMMMMOPPUZUSPSbaYYXXXVVVVTTTTRRQQQQONNNNNNLLLKKKKKJJJJJJIIHHHHHHHGGGGGGHeiidaTbYwpIFFEDDDDDDDCCCBBBBBBBBBBBBBBBBBAAAAAAAAAAAAAAAAAAAAAAABBBBBBBBBCCCCCCCCCCEEEEEEEEFFFGGGGGGGGIIIIIIIIIIIIKKKLOPSUUZhhvzvoovbbaYYXXVVVVTTTRRRQQQQOONNNNNLLLKKKKKJJJJJJIIIHHHHHHGGGGGLOniggoeQTbzfGFFFEEDDDDDDDDDDDCCCCBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBCCCCDFEEFHJLNNNNLLLLLLKKIIIIJKLMOOQQSVWWWWVVSVVWbfdYYaarvvvvvvvvbbbYYYXXVVVVTTTRRRQQQOONNNNNLLLLKKKKKJJJJJJIIIHHHHHHHHGGGGOiigclkfanwWGFFFFFFEEDDDDDDDDDDDDDDCCDCCCCCCCCCCCCCCBBBBBCCCCCCCCCCDGKNQRRRRRRRRRRRRRTTTTTVTTTTTTVVVVWVWWWWWWaaddflmmomllomorrrvvvvzebbbaYYXXVVVVTTTRRRQQQOONNNNNNLLLLLKKKKKJJJJJJJIIIIIHHHHHHSoiijolfaPhmNGFFFFFFFFFFFFEEEEEDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDEJOQRRRRRRRRRRRRRRRRTTTTTTTTRRTTTTTTVVVVVWaaddhhhhorrrtvzz111z11112nlllkkkkffeeeeebbbbbaYYYYYYXXXXXXXXVVVVVVVVVTTTTTTTRRRRRRRdtoidWadaSSohOQQQQQQQQQQOOONOOOOOONNNNNNNNNNNNNNLNNNNNNNNNLLLLLNNNOONNNNNNNNLNLLLKKKKKKKKKKKJKKLKLLLLMOOPPUUZdgimooqqstvxvy02002y222wwwwwwuuuuuuupppppnnnnlnnlnnllkkkkefefffkkkkkeeefeeeefeebYebaYXXVdddZZraXXVVXXXXYbTQOONOVVVVXVRRQNRONNONNLKLKKLLKKKJLLJKJIJKJKKLKKKKJKLLJKJLKJKKKKMMMPSSSUWWWZZdZggggcgiigcigiqiorrmrvvrvrxytxwwwwwwwwwuuppprpnnnnnpnnnnppnlnnnlkeeebYYYXbXVTRRTTTVQOQNNONLVQKTdgZZZcoOIJKJHJHHHHHHIJJKLLLKLNNLLOOLKLQOONLQRQNKLLKLJKLKKLKKKKLKKLKLLLONIIKKKJIKKKKPSUUUZZccgdgdghhhWdddhmpoidijjjiovtjqqoqqqzwwwwuuuuuupnlnnnpnlfbYXXXXXXVXXXTVTVTTVTVRTXNLNJJJJJJKKNJKKJKfTplZZZdZaoNKNLNNNNQRNORQQNOOONQRQOOOOQOONOOONNMOMMMNNOMPOMMOMLLLLKKLOVLIKJKLKJIIIGGGIMPUUUUZcgmigcddimhmhWfdhioiiomioosqosqqtvvlllfklkebebbbbbYXXXXVTTRTTRTTRTTTTTVTVVYbYYbaYXXXYXYYXYbYYaYVTVnzwhWVTRRaoQRQRQRQQRQNOOQQOOQQQRQQSQONOSOONLMLNMNLLLLLLOOOOOOSRQONKJKJIILMMLKIIIGGIMOSUUZcjmigcZcciiooigwmYhuvmmomotqqqiitho232kkebfefeffebYbabklnkffkklkfklnkebeeekfffebYYaaXYXXVXVVVXTRVRRTQVeTRRQRTRRddTTRRRRTTRRQQTQOOQQOQTVSOOSSTSQQQOORONNOLLKKLMPPSNKKKJHJLOPMMLKIIIIKPPUZZUZcgghadgmmjccgdhdklmllhlagohaoryytqjqtqqqquwwwwwwwwuuruuppnnlnnllllkeefbefeeebbbbaYYXXXVYabYYYYYXYXXXXYYYYVYXTTRRTTQoVRTTRSVTQQRQOQXWWSQSVWYabYbbWWTROLMOOOLNQNLKKKNJHHLMLLLKIIIIKMPUUUZgUUZdhhddhiddcggcZdihoradpimmgcZiojoqojjijiqtoqsupupnnnnnlllllkkkkffeekfbbfeklffbaabaYYebeflkfeefbaYbbefbXXTRTVYaYXXXXXXXWamTYWYXYYaWYbehhbYVTTWVWWVTVRRSONQONKINSNLKLLLKKJIIGIIKMUUUUUZZipldhddkdZgmppmdlnllnfkpnmqcZmiicgiou11wprqjjjijjjoamppuuppnlkkkfffffkfkkkkeekkfffeefbXeeeeeebbbbbbabYXXYXXVVXXYbYYYWVVWYVXWTVWbddbeYYYaeebYbaYWSSRPRSSYSPPOLLNNLIIIIGGIHGGILMPPSUUUUUccjZZUZqZgiZZcZZUggmkZUUUcZbWbhgddigicgqz111121ww22121pdodWmzupppruurupurpnrpnlnpnnnnpppnlkffeefklnpuwwuuplkkeebYbbYYYaaabbbeffklfbXVTRKHdOTZZcZcmmdhpdVLOOQSQNNJIHHIHIIHIGGGILPPUZUZiiZZccciZWhhmebhdZZhiiqogrzwneaSkbaYaSRVdZhkvw11zwz0222zzzzz0yvzwvtoqtwuwzwuuprrpnppuuruwwwwzzzwwuruupnlllkkkkfkkbabebYXXYYXYababbaLHNWVRWReXbXVRToqZgjsjq32211wmTJHJIKIIJHIHMJGHJKMMPUPUcgigcchddddZWPdcgcZcZgflsvwyxxsqsmnhebbmlemhoirpwuidjicjidgijjoooooooooqqsqwwwwwwuuwwwwwwrpuuurunnnnnnkflkffklnllnpnnpprupnpurnlffbROUSOPPMPLQTXeYXhhmjjvqgjooxy20z0eTXNIJKOQQROKOPcUUUUUUcdmmphfoortojjjgZZZZcgggoilhhoirnYPUZcZmhdogoxxtojigcZPZgicigjgiigoqqjoqqqossqq1zzwwwuuurpppnnlllllllpnnnnppruuwuwwuuvuurpppnlhfkfbbbebVSZYZjjoomwnnuwwwpkdfYWddmr0yr0vdVemgOKIIRSMPPPKSaYhVWbXWhlmZagicUcccUUUcggcZUUcggZZZWiicZciZZSSccccggomvyqttjjjgcqijooiiijormmjoooqosuuuuuuuuuupuwwwwwwzzzzzzwupupnnlkkkkkffffeXYbaYYbWVWTXnppiihdNSav1uufZXRTTYeeaaaSSVlfdWTSWWRWWWVMIPPLSggPKkYlWdigccUZUUPPUZcgcWaekknnnhcohqmigtomdccUUUUZcioriqvtxyunprneTThdiigojjsuzzvqqqsqq1zzzzzzzzzz1zwwwwuuuuuurpnnlllkheeeeefhfeeeaYXWTRNRQVpprYRWYXKLKQdYVVaekndhcPgZUgZSRORRLIGGNffnnfaUadSKSmPSUUUUZcZUUUPUgrpvzzbSez1wpuwngPWigiqojgcccZcijgccZUUZZccgoojgjjchddhtoijqt0220tqoqss1211zzwuwuuupppplkkllllhllklllknmheaYYaaYbbYWTVTRpr1pprrr1qhYNLKKJLLKLYeQVfdQLKLMLLUaTTTVQKHHOWknfkeUSSMPZPIEPPMScZUUUUMPUgommiZSfXhmnrorpvrhoUOUZcgjgcccgZUUUZcgcgZZgcdiijjjijggojojqsqqtsstyzzwwuuunppnppnlmnnlllmlkeefefbbWWWWYWRTRONNOQXfnz23222212lRXYTVVXTNOLOpbaeXbWZZMSUSUirkTXVTRVQQNQpplkmcUPMSbVJUiklmSggdaZZPUidWdodhgcgijicPMZZccUUZUUZUZUUUZUZZcigqyxy02yggjjqjigjjojoqqqqqoqqwwwuurupruuupppnlhfheaeYVVaYWYQQOTQQQQTQONTRVv221333222nbXXnhaaaprhVNfhbnadhpWTSUSScSrvknfrffklaMWrpriZUPUUmekSUcgtyy02zz0yyrhjiZZaZaXYWZigpmkdZZUZUSWYYXPOPUZmlpuzvy0ytqqxsijqoooojoooostssstzwuvunnlffbfllllheXXXaaTVYXTQQOQRTRQTWZZZcggi332233233zfefXbprruzz1z1yzzzrrtvoqrrijcZttsdVellWMOZcoqunhZgcUOLNhrZgstmlbYadojoourojohebbflenw1w11wlnnpkfaXfnoosxtsqqooqoqxx0yssosqotvtqstqqssttwrrupleeeaeblheYeYVWVVaaaaVTWaZZijjiiiggcgccc233333333urkffnwznWVXuwzr2zvrzz20yyqqqgczxsrphrmmcZggzvvwroiiZKKLKMZccaidQhpiZjyvuvuwwnnupuuwpwunp1wwuuuw1111wwrsqjggjjijoqxytsst033002122000yyyslnlllkeffeYVYeaaaeeefhhhiioqtt00ytqvujjigjjZfz12233330pnfrvv1umhfap1pvvelmprvvvvxttxrxyjtrwzmnrv00zzsvtogUUPKMPUUghfmhambbprVgopuup11111www1nzlnwwz1ww11uunwu1wryyvhWiqrzyx000ttqqoqxxtsstssstlnlnmlflllnlmprrssssqqsy00220033332333ymomfbp0233322yunllnmarmdrprmmonnYVbbebbddrplmmhmprz13033332vrrovx2ysjccUULduriheblpnnknwwuupu1121111w11prpz2321bVVkz21zpr0smrwvyvxyxijjtyxxsqqttttxtyyyruuvvyxxxxxtttssqsyyuuuz1233320332vvxjioslllvzw21z1zvnkpppafbkhuzbahneenpleYNQNNVSMahZZrx33332122211yosy0mmicUMcPUvfWhhnufbkbly1wwviivpbVWhkYahprvz111uz1ww22rVVy0ymdo2y0yxtty000mfdnrrxxxxxxy000yyxxttvtvruvuv1zuz223330z2zmrttsqyxtqjuzzy1rknkXpu1z022300222hhmmuuunuuYfXYXWWUccgqx302333233223332ztttoocZUciifOTlu11wlVYkfaeebYlnmddaWhrpTKWrtyzzwwzxtxtyxpqoqstqssx02333332xstvxvyxtxxy0yxxy0020220z1223220022300vvxtqsqssojiiggjjp00rdfeXThflz0233333zrqoimmmwzwupnuwwmgiocgq233y33333333330ytxx0xqsijZLdzhWdhhuppuwukadmhodWbfhrtvvroopuoooqooprssqqssoojjojqssxyxxttty0xxxxyyyxxty00yzzz0zz2331ww2322yt0yxsqostzvtqtststtyyykeryoomwwlmlz33333333zzvrvrvuttvvwwzwzytsiim033303333332200zz02y222tiPZZUvzuovv0zrmmylTuvymrtyxsx00ytttoiigcjqogjoqojjoqqqoqstqoqysssssxyyyyyyy0000xy32yvvu33332333333yotsstqmhhoqqytv0v0orv1znp0uluruzyu2333333333332z1z0zsqqsx23z0yx0yvt0y022t22233322333333y21zZUdis002ox0txxsiigddgdcdciqssgddgjoZZgccijjqqstoqsttsooooqsqqqqqsttttttxyyyyy0000333333333320xx0xxyyyxy0000xx0rpvy221111230ryzuwzz00z233333333333330xy000xxyyz000yxxx11uuuzyy2333333333332x2uphjotimy0sqssss20yytqqqqssxyxqqsmmhossooqoiiigqqqjssx0xssqssstxttsstxxxxtxxyyyyy00"},"b":{"src":"../img/dumpingground 2.png","rows":[":::::;;;;;;;;;~~~~~~~===================-------------++++++++++++++++++++++++*****************************************x***********************+++++++++++++++------------===========~~~~~~~;;;","::::;;;;;;;;~~~~~~~~~~=============---------------++++++++++++++++++**************************************************************************++++++++++++++++++-----------=========~~~~~~~~~;",":::;;;;;;;;;;~~~~~~~~~~=========---------------++++++++++++++++++++*****************************************************************************+++++++++++++++++------------=========~~~~~~~~","::;;;;;;;;;~~~~~~~~~~============-------------+++++++++++++++++++*************************************************************************************+++++++++-------=======~;·:~~;::·;:::::·",":;;;;;;;;;~~~~~~~~~============--------------+++++++++++++++++++*************************************************************==~;::::::·:~~===~~~;;:;~~;::::··············....  .....     . . ",":;;;;;;;;~~~~~~~~~~===========---------------++++++++++++++++++++****************************+=~;;;;~~~=-+++-==~;;;;;;;;;;;:····································...·.·..............          ",":::::::::::;;;;;;;;;;;;;~~~~~~~~~~~~~~~~~=============================-------------------------------------+++++++++------==----------------------;---=-=-;===~~~;;;;;;;;::::::·········.·..·.","······::::::::::::;;;;;;;;;;;;;;;;;;;~~~~~~~~~~~~~==~===================----------------------------++-+-+++++++++++++++++.:+++++++++++++++++++--==~~~=;;~=~~;;~~~~~~~~~~;;;;;;;;;:;::;:;;::::","··::::::::::::::;;;:;;;;;;;~;;;;~~~;~~~~~~~~~~~~~~~====~~=============-=--=----------------------------+++++++++++++++++*- .·-*++++++++-+++-=~~~~~=;:·:~~;:~=~~~~~~;;;;~~~~~~~~~~:·:;;:::::::·","····::::::::::::;;;;;;;;;;;;;;;~~~~~~~~~~~~~~~~~~==~~==~~=~===========---=-------------+-+-+++----+++++++++++++++++++++++~··.·=+-+++++--=~;;;;~~---+=;;:·;::;==~;~~~;;~~;;;;;;~~~~~~;;;;;:;:·.","···::::::::::::;;;;;;;;;;;;;;;;;;;;~~~~~~~~~~~~~~~~~~==============--=-=----==----------+++++++++++-+++++++++++++++++----=+*=:·-*++======~;~=-~;~;~-~===-==-==~~==;~;;~;~;;::~~~~;;~;;;;;;;;;;","·::::::::::::::::::;;;;;;;;;;~~;~~~~~~~~~~~~~~~~~~~~================------=----+------------++++++++++----+++----===-=~--=*x*;:·-==;;~~====-;·····~~=;-===--+=~~==~~~~;~~~~~~:~;~~:::;;;;;;;;:","··::::::::::::::::;;;;:;;;;;;;;;;~~~;~~~~~~~~~~~==================---==-=-------=---------------------=-=~-==~~~=-++***++=*x*=:·++~;~=~~~=;:.·;;·.~~;:;~=========~;;~;;;;;;;:;~;:;;;;~;;;~~;:;","·::::··::::::::::;;;;;;;~~;;~~~~~~~~~~~~~~~~=====~~~~~~=~=~==~===-=====---------=------==----====-=========~==+*x*+**++=~~~====~+*======~~~~=~==~~~-=====---==========~~~;~~;~~;::~;·~~::::;;:","::::::::::::::::;;;;;;;;~~~;;;;;~~~~;~~~~~~~~~~====~===============-=-=-====---=-======================~~-++****++--====~~~;~==--+--==-==--------====----=====---====;.....:;;~;;~~;::;;;:::::",":::::::::::::;;:;;;;;;;:;;;;;;;;;;;;~~~~~~=~~~~~~==~~========~~================~=~~=~~=========~~~~~=---++++--======;;~;;~~=------====+--=-++++---+++--------+=~------===-===~~~;;::;;;:;~~~::","::::::::::::::::::::::;;;;~~~~~~~;;;~~~~~~~~~~~~~~~~~~~~~~~~~==~~~~~~~;;;;;;;~~~====~==~~;;~=~~==--+++++-=======--==~~~~~=------====+++++++++--++------===--=~. ;~=;;~::;~--+-==~;~;~~;;~~~;;:","·:·::::::::::;;;;;;;::;;;;;;;;;;;;;;~~~~~~~~~~~;;;;~~~~~~~~~~;;;;~;;;;;;;;~~~~;;;;~~~~~==-=----++++-=~~========~~~~~~=-=-+-----+-+-====-+++--++--=-+--++--===-===~+-~;;;;;~~;~;;:;;;~~;~~;;~~;","···:::::::::::::::;;;;;;;;;;;;;;;;;;;;;;;;;;;;;~;;;;;;;;;;;;:;;;;;;;;;;;;;;;~~~~~======-+-+++++-====~~~==-===;~;~~==++=~---------+=----==---+-++-++++===+++----------=-===~~~~;=:::::;;;;;;;;:","·:::::::::::::::::::::;:::::;::::;;;;;;;;;;;;:::::;:::;;;:;;;;;;;;;;~;;;;;;~~~====----++++--==~~~~~~~=-==~===~=-*-#####-+++=~~--+-=-==--+--=+*+-~~==*=-+--~;~+=:;;:;;~=~~~~==~~=~~;;;;;;:;:::;","·······::::::::::··::::::;::::::;:::::;;:::::::::::::::;;:;;;;;;;;:;;;;~~~==---+++++++--========~·:;;-=-=~===---+=~=~=*=~=-----+##x***--++-++-=---===--~~;;~~;~:;=~;;:-==~;=-=~;;;;;:;===-~;;.","·········:·····:::::::::···::::::::::::·::::::::;:;:::;;:;;:;;;;~~~-~~------++++----======--==~:;;~==-*x*====~;-~;x*=;****-++-+-~--+*+=----=~==-==--=--+----=~;;;;-~~==;=-==~=;;:;::;::;;~;::·","···...················:::::::::::::::::::::::::::··::::::::;~==~~==-------=---==~~~~=~===;;~~~~====--x++~--:···:=***x*--~~~==-+-+-=;=-*-;=+-----=--+--=-+-====~-==~~~~;~=~==~~~;;;;;;;;:;;;;;:","..·················:::··::······:::::::··.......····::·:::~====------===~~~~~~~~~~~-=;=:::;==+-----+++==+~~~=-==-+=~~;=+~===+·:;~--:··~~=;=-==--==-=====--==-----=-====--~=~=~~;;;:;~;~;;;;;:;","···································.·.....··::::;;;~==============;;;;;;;;;;~~~~~~;~;~~~==-++-=-=+**x+~~;;;=xx*---;:::~-~+-++=.·.·:····.;~;--~===~~=-======---=====+-==~~~~~~~;::::;;;;~;;;:;:","...···...··.···.········.......... .·····:::;;;;~~~=======~~~~~;:::~~~~;~~~~;:::~~=~~=-----=--++=:;-*=.....·-=-***x-=;--==-+-=-:··:::;=;-+;:~==-------=~~=-==~;======--~~~;;;=~:;~;:;·.::;·:;;","...........................········:::::;;;~~~~~~~~~~~~~~~~;:·...·:;;~~~~~=~~;;;~;~~~~===~=~==~=~·.:-+.    .~++-~:·;=-**-=-==~=-=;·;;;:;~*-;:;=--~=-===---~~~========~~~~~~~~~;~~~;::···;;::..","          ..........············:::::;;;~~~~~~~~~~~~~~~;;;;;;;;;;;;~=-===~~~;~=;:;:;~===~~~;~=;::·.::;~:::::~~~~;:::;~;~==-+*+===··:;::·;-==·;~=+++++----==~~====~~~~;;~:::;;;::::···;~··.·:::","    ..........·.···········:::::;;;;;;;~~~~~;;;;;;;;:::;:::::;;~~~=~=~~~~=~~==--~~=-==;=-=~==;:·.··;--==~~::;;;:;;·:.·:;:·;-+-++-:··::····=:·::-:;-+-===--=~~;~===~~=~;;;;;;:·;;;;;;;;::;:·.··","..  ........·········::::::::;;;;;;;;;;;;;;;:::::::::;;;;::;;~~~~=~~===~~;::·:;~--=~~;;--+-==:··.:;=-=-;~;:·;+;··:::·::-~;~=;====:···:::·. ·::·~:;:·::·~~~==~;~~~~~~;;~~~~;;;:::;;;:;;::::::··",".........·.·········::::::;;;;;;;;;;;;;:::::·:::::~-;;;;;;:·::::~~~~==;;~;::;~==~;~=~==;::::·;=:·::·... .···=-+~~:·:·;~;==;===:....···:..·. .:=~   ... ·;~~=~~;:;;=~~;:::;;:·::::::··::::·::··","..........·::··::::::::::::::::;;;;;;;;::::::·;:::.·::····.··.··::~~;;~~===~~~~~=~=~~~::···:·==::·..··  ...·;~--=;··.....···~~.  ...·.·..·:~;·=+~;::;;:·:===~~~~~~~~:··:::;;;:··:··:::::;·····",".......········::::::::·..   .·:::::::::::;::·::···...··::;·;:;;;~~=~==~=~;~~~~~~~~~~=~~;;····;;: ...:·      ·:=:···.... ·.·;:···..··:..;=-~;-++=~:-+~~~~~=~~~;:;;;~~~;;:::;;;;:;:::·:::;~:···","........········:··.     .········::::···:;::::·..··:::::;;;~~~~~;~~~:;~~~~~==-~~~=;;;;;:::··:···.  ..       .·······.. .·~=~;;~~=~:.···~;;:;;-=~;;~~~~~==~~~~~~~~;;~;~~~~::;;·:::;;~=~:······",".............·...    ..;:·····:·::::··:::;;;;:;:::;;;·::;~;~:;;;;;;~:;~=~;~~~;~==~~~~;;:;;~~~~;;;          .........··.::;-====~~;:····:::~-*::;;;~~~~~;~~~~~~~~~;;::;;~;;:::::::;~~~;~:···..·","..............     ...······..··:::::::;::::·~:·:;~:;::;;;;;~~~;;~;;;~;:;~~~;;:=~:;~~~~~===~~~~--~·;;;~;;;~;.········. ;;;=~~;~;:;..  .:;;·:~~;;;;~;;~~=~~~~~~~~~~;;;;;;::::::;-=~=-=;   .    ","..........·.........·..··....········....·:··~~·~:·::::::::;~~~~;;;;;;:;~~~~;:;==~==~=-~~==~;;;;;;;;;::;::···:;;;;:;;;:;~~==-=~~==.·::;=;;~~~~~;;;~~;;;;~~~~;;;;::;;:;:::;;:::::~~::;~~.  ..  ","......................·····.·······:·:·····::····::::;;::;;;:;~;:;;;~~;;;:;;;;;:;;~~;-~;;~==~~~~~~~~;;;::·::::·:~~~;:;;;;--=~-=~=-=;;;~~~~~;;~;;:;;;;;~~~;;;;;;;:·:::::::;::·..::····:;:··...."],"pal":["#adb5b9","#a5b0b6","#a4aaad","#98a7b1","#a7998c","#969da1","#8d9aa2","#8596a1","#a58b74","#9f8267","#8d8e8d","#918377","#7f8d96","#7c858b","#72838e","#977a61","#8a796a","#8b725b","#876b54","#7d746d","#7e6a5b","#7c644f","#6d7b85","#6a757e","#6e6b6a","#6f625a","#5f717e","#5d6871","#516672","#745e4b","#725845","#6a5a4d","#695241","#615854","#605147","#5e4b3e","#4f5c68","#4f545b","#534b47","#53463e","#445665","#434c57","#3d4b57","#334955","#534136","#4a3f39","#3f4046","#33404c","#463831","#37373b","#3d2d2b","#283b46","#28313a","#25282e","#1f1f25","#11131a"],"idx":"rrrqqooooookkcccccaaaaaaaaaaaaWWWWWOOOOOOOOOMMMMHHHHHHHHHHGGGGGGGGDDDDDDDDDDDDDDDDDDDDDDDDDDDDBBBBBBBBBBBBBBBBBBBBAAAAAAAAAAAAAAABBABCCCCCCCCDFFFFFFFGGGGGGHHHMMMMMNNNNNNOWWWWWXXXXXabbbbbkkkkrrrqqoooookkccccccaaaaaaXWWWWWWOOOOOOOMMMMMMMMMHHHHHHHHGGGGGDDDDDDDDDDDDDDDDDDDDDDBBBBBBBBBBBBBBBBBBBBAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBCCCCCCCCCDDFFFFFFFFGGGGGGHHHMMMMMMNNNNNWWWWXXXXabbbbbbkkkrrqqooooookkccccccaaaaaaaaWWWOOOOOOOMMMMMMMHHHHHHHHHHGGGGGGGDDDDDDDDDDDDDDDDDDDDBBBBBBBBBBBBBBBBBBBBBBBBBBBBBAAAAABAABBBBBBBBBBBBBBBBCCCCCCCCCDDDDDFFFFFFFFGGGGGHHMMMMMMMNNNNOWWWWXXXXaabbbbbbqqoooooookkccccccaaaaaaaaWWWWOOOOOOOMMMMMMMHHHHHHHHHGGGGGGDDDDDDDDDDDDDDDDDDDDDDBBBBBBBBBBBBBBBBBBBBBBAAAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBCBCCCCCCCCCDDDDDFFFFGFGHMMMNMMNWWWXXXblzqbckqv0pqvqqz0qqooooookccccccaaaaaaaaWWWWOOOOOOOOMMMMMMHHHHHHHHHHGGGGGGDDDDDDDDDDDDDDDDDDDDDBBBBBBBBBBBBBBBBBBBBBBBAAAAAAAAAAABBBABBBAAAABCWXYluvxxpu0vbbXWXbbbkpplkblpuqvxx00000000011123233331332333333333qqoooookcccccccaaaaaaaWWWWOOOOOOOOOMMMMMHHHHHHHHHHHGGGGGGGDDDDDDDDDDDDDDDDDDDDDBDDBBBBBBBBBBDGWcooooccaWMGHHMWacoooooooookoqx000x0xxxx000000xxx000x000000x000111111111222222222222233333333333zvvvrrrrrqqooooooooookkccccccccccccaaaaaaaaaaaWWWWWWWOOOOWWOWWOOWOOOOOOOOOOOOOOOMOMMMMMMMMMMMMMMMMMMMMMMMMMHHHHHGGGGHNMNNNYWNNNNNNNNNNNNNNMKKKKKKKfKKKTKTKfTTTZfffiimmmmmnnntwwyyyyyyyy12122y2zzzzzzvvvrrrrrrqqqqqqooooooookkkkkkkkcccccccccaaaaaaaaaaaaWWWWWWWWWWWOOOOOOOONNNNMMNMMNMMMMMMMMMMMMMHGHHMGGGGGGGGGGFFFFFFFygFFFFFFFFFFFFFFFFFFFKNTQSUYThidUZZhifdVdVddVddffifjfiiinmtnnnnnttttzzzzzvvvrrrrrrqqooqqoooooookkkkoccckccccccccbaaaaaaaaaaaaXWWWWXWWWWWWWOONNONNNNNNNNNNMNMMMMMNMMMMMMMMNMHGGGGGGGFFFFFFFFFDKyysECFFFFFFFFKKKKKTYZZfdUitxxYhluZQfZZZZZffgjdVdedddffdmxuninnnwwwtwzzzzvvvrrrrrrrrqqqqoooooooooookcccccccccccacbaabcaaaaaaaaaaXXaXWWWXWWWOOOONNMNMMMMMMMMMHMHMHGHMMMNHGGGFFFFFFFFFFFFFFFFFFFTysysLFKFFFFFKKTZihiiVULLLEUimt0mxuhUUfffYZhfZfffffiffdffdVfiiiinmtx1zzzvvvzvvvvrqqqoqqoooooooookookokkkcccccckcccbbccbaaaaXWWWWOOWOOWOWOOWNONNMMOONMMMMMMMMHHGHGFGGGGHGMGFGGFGFGGGFFGFGGGHHMKTCALggICFKTYTULUZfUUNbhZdhKhQPPPPSLUTfUTUhZiifjfffnsdVdffffiifijjiiijzzzvvvrrrrqrrvvvrrqoooooooookcckkccbbacbcbbcbaabaabcaXWXWXXXWWWWWWWWONNNNNONNMMHMMMMMMMMMMMMHHHGHHGHGGMMMMGGHMMNNWNNNWYNKTAACeggIQQiiZZUSSQNly111xhhThLPRRJIERUVUUdfZViUVZUZfnZiZZnttjiijnjjntzzvvrvvvvrrrrrqvqqqoooqoooopkkkkkkbckccckkccbbaaaaaXWWWXXWWOOOWOWWNNOOOOWNNNNMNNNNNNMMMMNMMMMMMMMNMNNNWNXXNNWYYYTKKFCCCFFTCAAQggEIZfdSUddRfv2yhhy2hZnthUQUSSRQSSSdjiUffffjgfnihmtjgggfgiiZfinnzvvvvzzvzvrrqqqrqqpooookkckokkcbbbcbbccccbbaaaXaabbabbaaaabXaaXXWOWWWWWNNNNMMNNNWNNNNNNWWNNNNWONNNWONNNWXXYYTTKCACFCCFETVVUQQQRREAQRSRRRSVVVSVSRSSSJRRPPRPJPRRRPRSSQQUdddjdfifhlntfiwZUnntnijnvvvvrrvvrvvrqqqqpooooookkckkkkkkccccobbccbbbbaaaXXXaXWWXXXWWWWWXXWWNONONWWWWNNNNNWWWWXWNNWWWWWWXWNNWWWWYhLEECCCCKKKLQQUQedUfdRRJJEJPSRPPPJIPJJIIJRPPPJPJJRRURPJJPPQURi12322sijfjiZfinsiijnttnsrrrvvvvvvrqqqqppppppoopqpkkklkkkkllkcbbbbbXaabbbbXabaXXWWXXXXbbXXWWXXWWXXXWXXXXXXbbXXXXXXXXXXWXbYYhZTKLKKFFFKLQTRQQUfhZieUdQIJJIIJRRRPIIJPJIIEIIJJIIIIIIJJJJJIRVJJIJJJRRPPPPQUdZllqrigjwiZYZntvvvvvvvqqqqvvqqqqvrqqqpokkckkkkkkkkkccccckkbbbbbbbbbabbabbbbbXXbbbbbbbkpllllkbbbXWXXbXXbbkhhYYYTLLKEEEEKKTUUUQQQQLQRUUUUVSPIIIIJRRSPIIIEEIIIIIJIIIJJJJJPRRJIPU13hZThifwthZLLELUUVjdgdfifddegjnzzzvvvvvvrqqqpppppppqppllllkkklllolkbkcbbbbbbkkkllkbbkkbbbbbbkllkkklkllllkbbbbklkkbhZYYTTLQLLKKKEFKKTUZUQQQQQRQZZZfdVRJPJIJPIJJIJIJPRRRJIEIJJIIIJPJIIIIIJJPPPJPPRUELfjfjmiZUgUijniffddffdgfddjzzzzvvvvvvvvvvvvqqppookoppllppllkkkkllllpplkkkkckkkkllllppppppllllpkkkklkkkkbbbYYYTTLQLLEKEFFFKLLTUUZhZQQQQQQfffZdUQEIPeJPPJIIIJJIPJJJJPRJJJIIIIJIEEEQSPIIIIIIJJJJJJJPJPPRVVUVmUnnttnjjiigjjjwzvvvvvvvvvqqqqqqqqvqqppqqqqqppqqqplplllllkklpuquqpppppplpplkllllllkkkllllllhhZTTTQLLKKEEEKKLTTYZZZYZfQLQUUSPRURLCKAAAAAPEKHacaIIEIPJRPJIIIPPICEIfZUQEQIELLZmUEQnfiniifRddeVRSdVUUdjjijinnnnntj00zzzzzvvvvvvvvvvzvvvvvvqppqvvqppqqqqqppquuuquuuuqqppqpllplpplllllpmhmhZYZTLLLKEEEEEEELLQPQQQPQTVwsjfJQJRVTYYMOKFbYTZTCRZWMMOMKEAAACCAIIIIJIIIRJIPRPPPJUdfgVVfdsjTZfisLTUVgQLSdgggggniTTTKYhl200000zzzzvzzzzzvvvvqvvvvz0zvvvvvvqqqvvvzvvuqqppplppppppppppppllhhZZLZZLLLLKKEEEEKLLJPPPPQQPPPRdsjiUQPPCACaaabbhIUmACYeECEELEELEIZKKEEEPJJIJRSSPPSRPJPJIIIJJIPSeggfLhZTWjULTYYYimtjnnjttjihmntw001111100000100000000zvvvvvvvvrvvvvqqqqqqvppuvuuuxxuuuxuummmZTTZZTTLLLLKKKQLLLQPUdUVUUQQUfiffddRRSPJJAFFbLJuz0ygLCCAACJLZfdUQLIIEETlYKALmREJJPJJPJIIIIPJIJPRSRSPPSeUVfidSSRRVVdjjjgeggjsjjjjjs1110000000zzzz0zzzzvuvzvpvvzzzzzvvvvqvvx0122221111xxwtywsnZTTQLLLLLLLLTYUUZffZZZhUUQUgQswtgSRIJJJJIEEEUUEffZLLTULKUcorbKZTQTE1umZLKw1zYccpUJRRJIPRPPRPRPJJPPIJJJPPPRRSRJPSSSRSdjggseVgegggjjsj000000000000000000xx0xxzzzzzz00000011232211xuuummihZTYYTTTTTTTTTTYhllmiiihhhZZbYfZfViddVRPJIIJPPRKACAEeZmmmTAAAKNNlzzzbKYEKEET2111xz00x2roqWQVRRSVeSPPRRRRPJJJSRPPPELQRVVdVVVdgnntmiijgfggjnjn111111111111111100000001112222222332110xxuumihhhZYYTTTTTYYYYYYYhutnffffiZZZZipttfVUUdRJPJJJRPJIETulNAT122220NXWDCCALVmNKTTLELTLn1ywttmQjJEhzobPJJJJJJIPUUTIPSVeSRPRRQLLSVdggjUUnmYlmm12tmiysij221222111111223233222222211111100xxxutnnmihhZZZZYYYYYYYYYYhhm1222ynmifZZUUUVfijgdjedVeSPPVSSPTYacz2uLE233332YFFKhv0nRJCCJQLTTYYKXpynjitidEIixrbQPVRJPRPPJJdddRPRRSRPSVSVdVdVedgddegnsyy1mlpu1133333333333332221111111000xxxxxxxtttnihhhZZZhZYZYZZZZZhhhimmmimmmfffUPRRRVVfidRithngeSRSVVVjUUorz12tulkvuzzxhZdVjswwlcocXQLICKXNWz0xntw1hJPSyrlbEIIEEJJJJRPVVRSPRdeVVggVjssjjftssswywiZxx2ywww333333322222111111110xxxxxxxtttnmihhhhhhZZZhhhhhhimmnnmmmnnntmifdUUVUVUUVSVUURLLVUSLSSjQLRVPQhzz101hLLQUdVuuhhingjxx2zrorrpLELEEKnyywtw1x1UsysjQugLEQTQRJJPSeiVSSRVVSVgggjgjswjgjjgjgfssjw12yy333333221222101110xxxuxxtmnnnmiihhhhhhhlllmmmuutttttnmmimnnmifddURVUSRUdVgwtwsgVLLSVVeeLKFLTYzz02upTLTLiVgswhFl0xvxw1pzNblYThTTQTty1wtwn013ywwyZnjtwwtyVVVRSVedddVVdggdVVdjjjsswjjjsgjsstssswy222222221111xxxxxxxxuutttmmmmmihhhhimmmmuuuxxxxttthLfiffiitxmmusdUVdSRgfUfssjVRSegeSSSSirzzzzoXuwgj122331ywxTKKbkz0wymZmTTmYTNm122211yt12x232sQU3333323yfVdRSVjsggSeegntwjjsysswwssyywsswywwyy2222112121xuuxxxuttttuuuuuummmummmmmmmmntntttwnntt1ywtyxy11yy2yytsfejfVVPRSVdeVVSSSSSdqzz00zzQUns112x1333320obKKYiyy2y2231yxhh133232121220rbmyQEUjwsnnnxnPPRSVVVVSddn10xnnfgjsyytwywnntsjwwyyy233222211yxxxxxxuuuttttx233332xuutwttnntsnnnwytt1013221ytnhyjtgjjVVSSSSSSeeVVVddeeVVSSddgi000xjit3322w13333330qTsy1y22223x11mux00220xx32mXOciLEEQUnLISVVVVSdddgsjjeVdegjttsjjgjsjnswwwtnmYtyyy2222212111110xxxxx12333332yywyxxywwwwwyyysnsttty33yysnttwjffdddVeeedejeeVVVdRQLVeSQgjgjgswwy1tywy33323333333330zzzzzz1333xYYZhlbhYZt31yyYhmtniLQUfgVVdddRSVVdVdddVgjdgUUdUjsjiywntmhYYZtywywyw22122221111111112333332mxyywyywwwwwwwywtsjjgjnjwtnjejystgejZsjeegjgesgVReedddgZQRUVdVgjwggVeddejn3333333333222112222002mniLTTTTYZmnwyyywswVLCnwgjjeVVVejeVVddVdddgitnjiZigjssswwsmYYhlYmy1y22y2222221111111233333221111yy122ywwtttttnntttnyZnwwnfngssgjgggVSejgeggeVesgVVdjgwUUnjVdeddPPRVddVLKZyhhhhllmhl2yyyyyyy123hhhQeVfhmum2333ysejwsVVgggeegeeVSVVVSVddddejjjggjnssswsiKXYWNNh33333333222222221112222222211111y1222yyyyyywy1222ytyyYhwhtwwswsswwsgVdddggeggjsjdSVVgsjQQVRQVSPdVSRdeegggjgjjssjsswwyjjgjnsjjjwiZYTJJPZZQT2yssgRjeVeeddgjgdejggedeVdgjggwsjjnjsssijswwssZZnthbY23323332222222232222222222111111yy11yy11yywwwyywyywtwyyywwtsjjssjggsgdjsjjeVeejgjgggggsjgUfjLdggSRRSVSSSdVeggjsswssss0udSVjjjjgjLLUUIUZULUjgeddeUVggeggsgeejgdddgjgeegesywsssswwjsty22wwyyyywmtyy2223"}};
+/* ---- ascii -> photo ocean scene: one continuous per-cell growth ---- */
+(function(){
+const cv=$('#ocv'),ctx=cv.getContext('2d');
+const GW=OCIMG.gw,GH=OCIMG.gh;
+const RAMP=' .·:;~=-+*x#%@',last=RAMP.length-1;
+const ALPHA='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+const MONO='#7dd3a0',GROUND='#141418';
+const CW=8,CH=13;             // offscreen cell size (char ~1:1.6)
+const CYC=12000;              // one pass, photo is the end state
+const clamp01=v=>v<0?0:v>1?1:v,ease=v=>v*v*(3-2*v);
+function hash(x,y,s){
+  let h=Math.imul(x,374761393)^Math.imul(y,668265263)^Math.imul(s,1274126177);
+  h=Math.imul(h^(h>>>13),1274126177);
+  return ((h^(h>>>16))>>>0)/4294967296;
+}
+const state={v:'a',manual:-1,L:null,ready:false};
+// every cell walks the same path: empty -> mono char -> colored char -> pixels.
+// staggered start, dense/bright areas go first — the same mode from start to finish
+const gate=new Float32Array(GW*GH);
+function buildGates(d){
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+    const i=y*GW+x,ink=Math.max(0,RAMP.indexOf(d.rows[y][x]))/last;
+    gate[i]=hash(x,y,1000)*.55+(1-ink)*.45;
+  }
+}
+function buildLayers(d){
+  const mono=document.createElement('canvas'),col=document.createElement('canvas');
+  mono.width=col.width=GW*CW;mono.height=col.height=GH*CH;
+  for(const[c,ink]of[[mono,MONO],[col,null]]){
+    const x2=c.getContext('2d');
+    x2.fillStyle=GROUND;x2.fillRect(0,0,c.width,c.height);
+    x2.font='13px "Cascadia Mono",Consolas,monospace';x2.textBaseline='top';
+    for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+      const ch=d.rows[y][x];if(ch===' ')continue;
+      x2.fillStyle=ink||d.pal[ALPHA.indexOf(d.idx[y*GW+x])];
+      x2.fillText(ch,x*CW+1,y*CH);
+    }
+  }
+  const L={mono,col,photo:null};
+  const im=new Image();
+  im.onload=()=>{
+    const p=document.createElement('canvas');p.width=GW*CW;p.height=GH*CH;
+    p.getContext('2d').drawImage(im,0,0,p.width,p.height);
+    L.photo=p;state.ready=true;
+  };
+  im.src=d.src;
+  return L;
+}
+function setV(v){
+  state.v=v;state.ready=false;
+  buildGates(OCIMG[v]);state.L=buildLayers(OCIMG[v]);
+  document.querySelectorAll('.vsw button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+}
+document.querySelector('.vsw').onclick=e=>{const b=e.target.closest('[data-v]');if(b&&b.dataset.v!==state.v)setV(b.dataset.v)};
+const sl=$('#clarity'),au=$('#clauto');
+sl.oninput=()=>{state.manual=+sl.value;au.classList.remove('on');au.textContent='自动 Ⅱ'};
+au.onclick=()=>{state.manual=-1;state.t0=performance.now();au.classList.add('on');au.textContent='自动 ▶'};
+const dbg=+((location.search.match(/[?&]p=(\d+)/)||[])[1]||-1);
+if(dbg>=0){state.manual=dbg;au.classList.remove('on');au.textContent='自动 Ⅱ';sl.value=dbg}
+setInterval(()=>{if(state.manual<0&&state.rp0!=null)sl.value=Math.round(state.rp0*100)},300);
+state.t0=performance.now();
+let lastTs=0;
+function draw(ts){
+  requestAnimationFrame(draw);
+  if(ts-lastTs<50)return;lastTs=ts;
+  const W=cv.clientWidth,H=cv.clientHeight;
+  if(!W||!H)return;
+  const dpr=Math.min(2,devicePixelRatio||1);
+  if(cv.width!==(W*dpr|0)){cv.width=W*dpr|0;cv.height=H*dpr|0}
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const cw=W/GW,ch=H/GH;
+  const p=state.manual>=0?state.manual/100:Math.min((ts-state.t0)/CYC,1);
+  state.rp0=p;
+  ctx.fillStyle=GROUND;ctx.fillRect(0,0,W,H);
+  const L=state.L;
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+    const i=y*GW+x;
+    const lv=clamp01((p-gate[i]*.70)/.30);          // this cell's own progress 0..1
+    if(lv<=0)continue;
+    const dx=x*cw,dy=y*ch,sx=x*CW,sy=y*CH;
+    if(lv<.35){                                     // mono char fades in
+      ctx.globalAlpha=lv/.35;
+      ctx.drawImage(L.mono,sx,sy,CW,CH,dx,dy,cw+.4,ch+.4);
+    }else if(lv<.62){                               // color seeps through the char
+      ctx.drawImage(L.mono,sx,sy,CW,CH,dx,dy,cw+.4,ch+.4);
+      ctx.globalAlpha=(lv-.35)/.27;
+      ctx.drawImage(L.col,sx,sy,CW,CH,dx,dy,cw+.4,ch+.4);
+    }else if(L.photo&&lv<1){                        // char resolves into pixels
+      ctx.drawImage(L.col,sx,sy,CW,CH,dx,dy,cw+.4,ch+.4);
+      ctx.globalAlpha=(lv-.62)/.38;
+      ctx.drawImage(L.photo,sx,sy,CW,CH,dx,dy,cw+.4,ch+.4);
+    }else{
+      ctx.drawImage(L.photo||L.col,sx,sy,CW,CH,dx,dy,cw+.4,ch+.4);
+      continue;
+    }
+    ctx.globalAlpha=1;
+  }
+}
+requestAnimationFrame(draw);
+setV((location.hash+location.search).includes('v=b')?'b':'a');
+})();
+
 /* ---- init ---- */
-mount($('#heroShot'),'proc');
 show((location.hash.match(/t=(\w+)/)||[])[1]||'proc');
 setInterval(()=>{
   SYS.cpu=Math.max(2,Math.min(60,SYS.cpu+(Math.random()-.5)*8))|0;SYS.mem=Math.max(55,Math.min(70,SYS.mem+(Math.random()-.5)*2))|0;SYS.disk=Math.max(0,Math.min(40,SYS.disk+(Math.random()-.5)*8))|0;

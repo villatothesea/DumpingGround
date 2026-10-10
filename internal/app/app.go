@@ -122,6 +122,7 @@ type Model struct {
 	diskMenuHits                    []menuHit
 	diskSort                        ui.SortOrder
 	diskQuery, diskMode, diskMetric string
+	memRelease                      string
 	diskViewKey                     string
 	diskProgress                    disk.Progress
 	diskStatus                      string
@@ -173,7 +174,7 @@ func New() *Model {
 		processUpdates: make(chan processResult, 1), refresh: make(chan struct{}, 1), inspection: make(chan inspectionResult, 1), events: make(chan func(), 8),
 		iconCache:   make(map[string]*ui.Bitmap),
 		iconPending: make(map[string]bool), iconRequests: make(chan string, 32),
-		diskStatus: "Choose a drive or folder to scan", diskMode: "Tree", diskMetric: "Allocated", diskSelected: -1, diskNode: -1, extensionSelected: -1, mapRoot: -1, diskSplit: 300, animateMap: true, detailTab: "Properties"}
+		diskStatus: "Choose a drive or folder to scan", diskMode: "Tree", diskMetric: "Allocated", diskSelected: -1, diskNode: -1, extensionSelected: -1, mapRoot: -1, diskSplit: 300, animateMap: true, detailTab: "Properties", memRelease: "Automatic"}
 }
 func (m *Model) Run() error {
 	if os.Getenv("DG_DEBUG_INSTANCE") != "" {
@@ -803,6 +804,13 @@ func (m *Model) settingsView(c *ui.Context) {
 					ui.Text(c, "Look of the page tabs in the top bar").FontSize(11).TextColor(c.Theme().TextMuted)
 				})
 				ui.Select(c, &m.tabStyle, []string{"Underline", "Pill"}).Width(100).Label("Tab style")
+			})
+			ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
+				ui.Column(c).Grow(1).MinWidth(0).Children(func() {
+					ui.Text(c, "Memory after scan")
+					ui.Text(c, "Return scan buffers to the OS, or keep them for faster rescans").FontSize(11).TextColor(c.Theme().TextMuted)
+				})
+				ui.Select(c, &m.memRelease, []string{"Automatic", "Keep for rescan"}).Width(110).Label("Memory after scan")
 			})
 			ui.Checkbox(c, &m.animateMap, "Animate map drill-down").Tooltip("Respects Windows reduced motion")
 		})

@@ -97,6 +97,11 @@ func (m *Model) drainScan() {
 				m.diskStatus += " · live"
 			}
 		}
+		// Returning scan buffers to the OS makes the next rescan pay for
+		// them again; keep them pooled when the user prefers speed.
+		if m.memRelease == "Automatic" {
+			go debug.FreeOSMemory()
+		}
 	default:
 	}
 }
@@ -275,8 +280,9 @@ func (m *Model) clearDisk() {
 	m.mapAnimating = false
 	m.diskStatus = "Index cleared"
 	// Dropping the index frees hundreds of MB; return them to the OS now
-	// instead of letting the runtime sit on the released heap.
-	debug.FreeOSMemory()
+	// instead of letting the runtime sit on the released heap. Async so the
+	// sweep does not stall the UI.
+	go debug.FreeOSMemory()
 }
 func (m *Model) browse() {
 	if m.window == nil {
