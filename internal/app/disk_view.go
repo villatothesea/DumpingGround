@@ -260,19 +260,31 @@ func (m *Model) driveChip(c *ui.Context, t *ui.Theme, v disk.Volume, scanning bo
 	e.Label("Drive " + v.Path).Tooltip(fmt.Sprintf("%s · %s used · %s free · %s total", v.Label, format.Bytes(v.Total-v.Free), format.Bytes(v.Free), format.Bytes(v.Total)))
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
 		if on {
-			p.Fill(r, t.Accent.Alpha(0.15), 6)
+			p.Fill(r, t.Accent, 6)
 		} else if e.Hovered() && !scanning {
 			p.Fill(r, t.SurfaceHover, 6)
 		}
 	})
 	e.Children(func() {
-		ui.Text(c, v.Path).Bold().SingleLine()
+		fg, muted := t.Text, t.TextMuted
+		if on {
+			fg, muted = t.AccentText, t.AccentText.Alpha(0.85)
+		}
+		ui.Text(c, v.Path).Bold().SingleLine().TextColor(fg)
 		used := 0.0
 		if v.Total > 0 {
 			used = float64(v.Total-v.Free) / float64(v.Total)
 		}
-		ui.Progress(c, used).Width(34).Height(4)
-		ui.Text(c, format.Bytes(v.Free)+" free").FontSize(11).TextColor(t.TextMuted).SingleLine()
+		if on {
+			// A white mini bar reads on the accent face where the accent
+			// progress fill would disappear.
+			ui.Box(c).Width(34).Height(4).Radius(2).Clip().Background(t.AccentText.Alpha(0.35)).Draw(func(p *ui.Painter, r ui.Rect) {
+				p.Fill(ui.Rect{X: r.X, Y: r.Y, W: r.W * float32(min(used, 1)), H: r.H}, t.AccentText, 2)
+			})
+		} else {
+			ui.Progress(c, used).Width(34).Height(4)
+		}
+		ui.Text(c, format.Bytes(v.Free)+" free").FontSize(11).TextColor(muted).SingleLine()
 	})
 	if !scanning && e.Clicked() {
 		m.diskDrive = v.Path
@@ -481,11 +493,17 @@ func (m *Model) crumb(c *ui.Context, t *ui.Theme, label string, id int, last boo
 func (m *Model) extChip(c *ui.Context, t *ui.Theme) {
 	chip := ui.Row(c).Height(24).PaddingX(8).Gap(4).AlignItems(ui.Center).Radius(12).Shrink(0)
 	chip.BorderWidth(1).BorderColor(t.Accent)
-	chip.Draw(func(p *ui.Painter, r ui.Rect) { p.Fill(r, t.Accent.Alpha(0.15), 12) })
+	chip.Draw(func(p *ui.Painter, r ui.Rect) { p.Fill(r, t.Accent, 12) })
 	chip.Children(func() {
 		ui.Box(c).Size(8, 8).Radius(2).Background(extensionColor(m.extensionFilter))
-		ui.Text(c, m.extensionFilter).FontSize(11).SingleLine()
-		x := m.iconButton(c, "x", "Clear type filter").Size(16, 16)
+		ui.Text(c, m.extensionFilter).FontSize(11).SingleLine().TextColor(t.AccentText)
+		x := ui.Row(c).Size(16, 16).Center().Radius(4).Label("Clear type filter").Tooltip("Clear type filter")
+		x.Draw(func(p *ui.Painter, r ui.Rect) {
+			if x.Hovered() {
+				p.Fill(r, t.AccentText.Alpha(0.25), 4)
+			}
+		})
+		x.Children(func() { icon(c, "x", 10).TextColor(t.AccentText) })
 		if x.Clicked() {
 			m.extensionFilter = ""
 			m.extensionSelected = -1
