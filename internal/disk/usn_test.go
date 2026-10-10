@@ -28,7 +28,17 @@ func usnFakeStat(sizes map[string][2]uint64) FileStatFunc {
 func TestApplyUSNCreateAndDelete(t *testing.T) {
 	s := usnFixture()
 	dir := usnFRN(6)
-	stat := usnFakeStat(map[string][2]uint64{`D:\dir\b.txt`: {200, 256}})
+	// A create directly under the volume root must resolve the root node
+	// as its parent even though the root has no parent of its own.
+	stat := usnFakeStat(map[string][2]uint64{`D:\rootfile`: {8, 8}})
+	if !s.ApplyUSN([]USNEvent{{FRN: usnFRN(9), ParentFRN: usnFRN(5), Name: "rootfile", Attrs: 0x20, Reason: usnFileCreate}}, stat) {
+		t.Fatal("create under root was not applied")
+	}
+	if s.Nodes[0].Children[len(s.Nodes[0].Children)-1] != len(s.Nodes)-1 || s.Files != 2 {
+		t.Fatalf("root create not linked: %+v", s.Nodes[0])
+	}
+	s = usnFixture()
+	stat = usnFakeStat(map[string][2]uint64{`D:\dir\b.txt`: {200, 256}})
 	if !s.ApplyUSN([]USNEvent{{FRN: usnFRN(8), ParentFRN: dir, Name: "b.txt", Attrs: 0x20, Reason: usnFileCreate}}, stat) {
 		t.Fatal("create was not applied")
 	}

@@ -14,7 +14,9 @@ import (
 
 const (
 	fsctlQueryUSNJournal = 0x900f4
-	fsctlReadUSNJournal  = 0x900b8
+	// FSCTL_READ_USN_JOURNAL uses METHOD_NEITHER (0xB8 | 3); a METHOD_BUFFERED
+	// code is rejected with ERROR_INVALID_FUNCTION.
+	fsctlReadUSNJournal = 0x900bb
 )
 
 // usnJournalDataV0 is USN_JOURNAL_DATA_V0.
@@ -24,13 +26,17 @@ type usnJournalData struct {
 	MaximumSize, AllocationDelta              uint64
 }
 
+// readUSNInput is READ_USN_JOURNAL_DATA_V1: tracking a specific journal ID
+// and pinning the record version requires V1; V0 must pass JournalID = 0
+// and returns ERROR_INVALID_FUNCTION otherwise.
 type readUSNInput struct {
-	StartUSN          int64
-	ReasonMask        uint32
-	ReturnOnlyOnClose uint32
-	Timeout           uint64
-	BytesToWaitFor    uint64
-	JournalID         uint64
+	StartUSN                          int64
+	ReasonMask                        uint32
+	ReturnOnlyOnClose                 uint32
+	Timeout                           uint64
+	BytesToWaitFor                    uint64
+	JournalID                         uint64
+	MinMajorVersion, MaxMajorVersion  uint16
 }
 
 func openVolume(root string) (*os.File, error) {
@@ -109,7 +115,7 @@ func (w *Watcher) Next(ctx context.Context) ([]USNEvent, error) {
 }
 
 func (w *Watcher) poll() ([]USNEvent, error) {
-	in := readUSNInput{StartUSN: w.next, ReasonMask: 0xffffffff, ReturnOnlyOnClose: 1, Timeout: 1, BytesToWaitFor: 4096, JournalID: w.id}
+	in := readUSNInput{StartUSN: w.next, ReasonMask: 0xffffffff, ReturnOnlyOnClose: 1, Timeout: 1, BytesToWaitFor: 4096, JournalID: w.id, MinMajorVersion: 2, MaxMajorVersion: 2}
 	var returned uint32
 	ok, _, e := deviceIO.Call(w.vol.Fd(), fsctlReadUSNJournal, uintptr(unsafe.Pointer(&in)), unsafe.Sizeof(in), uintptr(unsafe.Pointer(&w.buf[0])), uintptr(len(w.buf)), uintptr(unsafe.Pointer(&returned)), 0)
 	if ok == 0 {

@@ -109,7 +109,7 @@ func (s *Snapshot) frnIndex() map[uint64][]int {
 	if s.frns == nil {
 		s.frns = make(map[uint64][]int, len(s.Nodes))
 		for i := range s.Nodes {
-			if s.Nodes[i].FRN != 0 && s.Nodes[i].Parent >= 0 {
+			if s.Nodes[i].FRN != 0 && (s.Nodes[i].Parent >= 0 || i == s.Root) {
 				s.frns[s.Nodes[i].FRN] = append(s.frns[s.Nodes[i].FRN], i)
 			}
 		}
@@ -117,10 +117,11 @@ func (s *Snapshot) frnIndex() map[uint64][]int {
 	return s.frns
 }
 
-// usnDir resolves the directory node for a file reference number.
+// usnDir resolves the directory node for a file reference number. The root
+// node qualifies despite having no parent; tombstoned nodes do not.
 func (s *Snapshot) usnDir(frn uint64) int {
 	for _, id := range s.frnIndex()[frn] {
-		if n := &s.Nodes[id]; n.Dir && n.Parent >= 0 {
+		if n := &s.Nodes[id]; n.Dir && (n.Parent >= 0 || id == s.Root) {
 			return id
 		}
 	}
