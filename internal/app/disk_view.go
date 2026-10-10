@@ -534,15 +534,16 @@ func (m *Model) resultsView(c *ui.Context, t *ui.Theme, s *disk.Snapshot) {
 		if m.iconTextButton(c, "export", "Export CSV").Clicked() {
 			m.exportDisk()
 		}
-		m.iconButton(c, "more", "More").Menu(func(menu *ui.Menu) {
-			if menu.Item("Clear index").Chosen() {
-				m.clearDisk()
-			}
-			menu.Separator()
-			if menu.Item("Animate transitions").Checked(m.animateMap).Chosen() {
-				m.animateMap = !m.animateMap
-			}
-		})
+		if m.iconTextButton(c, "trash", "Clear index").Tooltip("Drop the index and return its memory to Windows").Clicked() {
+			m.clearDisk()
+		}
+		anim := m.iconTextButton(c, "zap", "Animate").Tooltip("Zoom transitions when drilling the space map")
+		if m.animateMap {
+			anim.BorderColor(t.Accent).Background(t.Accent.Alpha(0.12))
+		}
+		if anim.Clicked() {
+			m.animateMap = !m.animateMap
+		}
 	})
 	m.prepareDiskRows()
 	m.prepareMap()

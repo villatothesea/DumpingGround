@@ -18,6 +18,7 @@ var glyphs = map[string]*ui.SVG{
 	"down":    glyph(`<path d="m6 9 6 6 6-6"/>`),
 	"chup":    glyph(`<path d="m18 15-6-6-6 6"/>`),
 	"x":       glyph(`<path d="M18 6 6 18M6 6l12 12"/>`),
+	"trash":   glyph(`<path d="M4 7l16 0"/><path d="M10 11l0 6"/><path d="M14 11l0 6"/><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"/><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"/>`),
 	"export":  glyph(`<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>`),
 	"more":    glyph(`<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>`),
 	"info":    glyph(`<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>`),
