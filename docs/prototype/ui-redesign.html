@@ -68,31 +68,35 @@ svg.i{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke
 .cnt{font-size:11px;font-weight:400;line-height:16px;height:16px;padding:0 6px;border-radius:8px;background:var(--hover);color:var(--muted);font-variant-numeric:tabular-nums}
 .tab.on .cnt{background:var(--sel);color:var(--text)}
 .app[data-tabs=pill] .tab.on .cnt{background:rgba(255,255,255,.25);color:#fff}
-.meters{display:flex;gap:2px;flex:none;margin-left:6px;padding-left:8px;border-left:1px solid var(--border);height:24px;align-items:center}
-.meter{position:relative;display:flex;align-items:center;gap:5px;height:28px;padding:0 7px 2px;border-radius:6px;white-space:nowrap;cursor:default;font-variant-numeric:tabular-nums}
+.meters{display:flex;gap:2px;flex:none;margin-left:8px;padding-left:10px;border-left:1px solid var(--border);height:22px;align-items:center}
+.statusbar .meter{height:22px;padding:0 6px}
+.selacts{display:flex;align-items:center;gap:6px;flex:0 1 auto;min-width:0;overflow:hidden;margin-left:6px;padding-left:8px;border-left:1px solid var(--border);height:28px}
+.selacts:empty{display:none}
+
+.meter{position:relative;display:flex;align-items:center;gap:5px;height:28px;padding:0 7px;border-radius:6px;white-space:nowrap;cursor:default;font-variant-numeric:tabular-nums}
 .meter:hover{background:var(--hover)}
 .meter .lab{color:var(--muted)}
 .meter .ico{display:none;color:var(--muted)}
 .meter .ico svg.i{width:14px;height:14px}
 .meter b{font-weight:600;display:inline-block;min-width:30px;text-align:right}
-.meter .bar{position:absolute;left:7px;right:7px;bottom:2px;height:2px;border-radius:1px;background:var(--pressed);overflow:hidden}
-.meter .bar i{display:block;height:100%;background:var(--accent);transition:width .3s}
-.meter.w .bar i{background:var(--warn)}
-.meter.d .bar i{background:var(--danger)}
+.meter.w b{color:var(--warn)}
 .meter.d b{color:var(--danger)}
 .meter .net{display:inline-flex;gap:8px}
-.meter .net span{display:inline-flex;align-items:center;gap:1px}
-.meter .net b{min-width:34px}
-.meter .net svg.i{width:11px;height:11px;color:var(--muted)}
+.meter .net span{display:inline-flex;align-items:center;gap:2px;color:var(--muted)}
+.meter .net b{min-width:30px;color:var(--text);font-weight:400}
+.app.narrow .selacts .btn{font-size:0;width:28px;padding:0;gap:0}
+.app.narrow .selacts .pact{display:none}
+.pact{width:28px;padding:0}
 .app.narrow .meter .lab{display:none}
 .app.narrow .meter .ico{display:inline-flex}
-.app.narrow .meter{padding:0 5px 2px;gap:4px}
+.app.narrow .meter{padding:0 5px;gap:4px}
 .app.narrow .meters{padding-left:4px;margin-left:2px}
 .app.narrow .tab{padding:0 8px}
 .app.narrow .search{min-width:96px}
+.app.narrow .tbar-note{display:none}
 @container (max-width:210px){.search kbd{display:none}}
-.tb-fill{flex:1 1 24px;min-width:12px;align-self:stretch}
-.search{display:flex;align-items:center;gap:6px;height:28px;padding:0 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;flex:0 1 320px;min-width:130px;color:var(--muted)}
+.tb-fill{flex:1 1 16px;min-width:8px;align-self:stretch}
+.search{display:flex;align-items:center;gap:6px;height:28px;padding:0 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;flex:0 1 220px;min-width:110px;color:var(--muted)}
 .search:focus-within{border-color:var(--accent);box-shadow:0 0 0 2px var(--focus)}
 .search{container-type:inline-size}
 .search input{flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--text)}
@@ -121,6 +125,7 @@ svg.i{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke
 .btn.danger{color:var(--danger)}
 .btn.sq{width:28px;padding:0}
 .btn:disabled,.btn.dis{opacity:.45;pointer-events:none}
+.btn.on{background:var(--sel)}
 .seg{display:inline-flex;flex:none;gap:2px;height:28px;padding:2px;background:var(--surface);border:1px solid var(--border);border-radius:6px}
 .seg button{border:0;background:none;border-radius:4px;padding:0 10px;color:var(--muted)}
 .seg button:hover{color:var(--text)}
@@ -322,9 +327,9 @@ svg.i{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke
 <div class="stage">
 <div class="app" id="app" data-theme="light" data-tabs="underline">
   <header class="topbar" id="topbar">
-    <div class="brand" id="brand"><span class="logo"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg></span><span class="ell">DumpingGround</span></div>
+    <div class="brand" id="brand"><span class="logo"><svg class="gl" viewBox="0 0 24 24"><path d="M2.4 20.6c1.6-5.4 4.6-8.6 8.2-8.6s6.6 3.2 8.2 8.6z"/><path d="M2 20.6h20"/><path d="M10.8 12V3.2"/><path d="M10.8 3.2l6 2.2-6 2.4"/><path d="M7.8 17.2h.01M12.4 16.4h.01M14.4 18.6h.01"/></svg></span><span class="ell">DumpingGround</span></div>
     <nav class="tabs" id="tabs"></nav>
-    <div class="meters" id="meters"></div>
+    <div class="selacts" id="selacts"></div>
     <div class="tb-fill"></div>
     <label class="search" id="gsearch"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input id="q" autocomplete="off"><kbd>Ctrl+F</kbd></label>
     <div class="tb-tools">
@@ -410,7 +415,7 @@ function renderTabs(){
   $('#tabs').innerHTML=TABS.map(t=>`<button class="tab ${S.tab===t.id?'on':''}" data-act="tab" data-v="${t.id}" title="${t.n}${t.rsv?'（预留）':''}  ${t.k}">${t.n}${t.id==='proc'?`<span class="cnt" id="pcount" title="进程总数">${P.length}</span>`:''}${t.rsv?'<i class="rsv"></i>':''}</button>`).join('');
 }
 function setTab(id){
-  S.tab=id;closeAll();renderTabs();renderPage();updateSearch();renderStatus();
+  S.tab=id;closeAll();renderTabs();renderPage();updateSearch();renderStatus();renderProcSel();
 }
 function updateSearch(){
   const q=$('#q'),g=$('#gsearch');
@@ -425,13 +430,13 @@ const SYS={cpu:12,mem:63,disk:4,dn:1.2e6,up:3.1e5,memUsed:20.1,memTotal:31.8,rd:
 const lvl=v=>v>=90?'d':v>=75?'w':'';
 const shortRate=n=>{const u=['B','K','M','G'];let i=0;while(n>=1000&&i<3){n/=1000;i++}return (n>=100||i===0?n.toFixed(0):n.toFixed(1))+u[i]};
 function meterHtml(){
-  const m=(k,lab,icon,v,tip)=>`<div class="meter ${lvl(v)}" data-m="${k}" title="${tip}"><span class="lab">${lab}</span><span class="ico">${ic(icon)}</span><b>${v.toFixed(0)}%</b><span class="bar"><i style="width:${v}%"></i></span></div>`;
+  const m=(k,lab,icon,v,tip)=>`<div class="meter ${lvl(v)}" data-m="${k}" title="${tip}"><span class="lab">${lab}</span><span class="ico">${ic(icon)}</span><b>${v.toFixed(0)}%</b></div>`;
   return m('cpu','CPU','cpu',SYS.cpu,`CPU 总使用率 ${SYS.cpu.toFixed(0)}%  ·  ${P.reduce((a,p)=>a+p.th,0)} 个线程`)
    +m('mem','内存','mem',SYS.mem,`内存已用 ${SYS.memUsed.toFixed(1)} / ${SYS.memTotal} GB（${SYS.mem.toFixed(0)}%）`)
    +m('disk','磁盘','hdd',SYS.disk,`磁盘活动时间 ${SYS.disk.toFixed(0)}%  ·  读 ${fmtR(SYS.rd)}  ·  写 ${fmtR(SYS.wr)}`)
-   +`<div class="meter" data-m="net" title="网络  下载 ${fmtR(SYS.dn)}  ·  上传 ${fmtR(SYS.up)}"><span class="lab">网络</span><span class="ico">${ic('net')}</span><span class="net"><span>${ic('dn')}<b>${shortRate(SYS.dn)}</b></span><span>${ic('upa')}<b>${shortRate(SYS.up)}</b></span></span></div>`;
+   +`<div class="meter" data-m="net" title="网络  下载 ${fmtR(SYS.dn)}  ·  上传 ${fmtR(SYS.up)}"><span class="lab">网络</span><span class="ico">${ic('net')}</span><span class="net"><span>&darr;<b>${shortRate(SYS.dn)}</b></span><span>&uarr;<b>${shortRate(SYS.up)}</b></span></span></div>`;
 }
-function renderMeters(){$('#meters').innerHTML=meterHtml()}
+function renderMeters(){const m=$('#meters');if(m)m.innerHTML=meterHtml()}
 function tickMeters(){
   const w=(v,lo,hi,s)=>Math.max(lo,Math.min(hi,v+(Math.random()-.5)*s));
   SYS.cpu=w(SYS.cpu,1,100,14);SYS.mem=w(SYS.mem,40,95,1.2);SYS.disk=w(SYS.disk,0,100,10);
@@ -500,21 +505,24 @@ function renderProcTable(){
 }
 function renderProcToolbar(){
   const t=$('#ptool');if(!t)return;
-  t.innerHTML=`<div class="seg"><button data-act="pview" data-v="list" class="${S.proc.tree?'':'on'}">列表</button><button data-act="pview" data-v="tree" class="${S.proc.tree?'on':''}">树形</button></div>
+  const p=P.find(x=>x.pid===S.proc.sel);
+  const info=p?`<span class="grow ell muted" title="${esc(p.path)}">${esc(p.name)}  PID ${p.pid}  ${esc(p.path||'路径不可用')}${p.na?' · 拒绝访问':''}</span>`:`<span class="grow"></span>`;
+  t.innerHTML=`<button class="btn ${S.proc.tree?'':'on'}" data-act="pview" data-v="list">列表</button><button class="btn ${S.proc.tree?'on':''}" data-act="pview" data-v="tree">树形</button>
    <button class="btn" data-act="pause">${S.proc.paused?ic('play')+'继续':ic('pause')+'暂停'}</button>
    ${S.proc.paused?`<button class="btn" data-act="refresh1">${ic('refresh')}刷新一次</button>`:''}
-   <span class="grow"></span>
-   <span class="muted">${S.proc.paused?'已暂停':'每 '+S.interval+' s 自动刷新'}${S.proc.query?`  ·  匹配 ${S.proc._count} / ${P.length}`:''}</span>`;
+   ${info}
+   <span class="tbar-note muted">${S.proc.paused?'已暂停':'每 '+S.interval+' s 自动刷新'}${S.proc.query?`  ·  匹配 ${S.proc._count} / ${P.length}`:''}</span>`;
 }
 function renderProcSel(){
-  const p=P.find(x=>x.pid===S.proc.sel),b=$('#psel');if(!b)return;
-  if(!p){b.innerHTML=`<div class="info muted">选择一个进程以查看详情或操作<span class="grow"></span></div><button class="btn" data-act="details">${ic(S.proc.details?'down':'chup')}详情</button>`;return}
-  const dis=!p.path?'dis':'';
-  b.innerHTML=`<div class="info">${pIcon(p)}<b>${esc(p.name)}</b><span class="muted">PID ${p.pid}</span><span class="ell muted" title="${esc(p.path)}">${esc(p.path||'路径不可用')}${p.na?' · 拒绝访问':''}</span></div>
-   <button class="btn ${dis}" data-act="openloc">${ic('folder')}打开位置</button>
-   <button class="btn ${dis}" data-act="copypath">${ic('copy')}复制路径</button>
-   <div class="splitbtn"><button class="btn danger ${p.pid<=4?'dis':''}" data-act="kill" data-v="0">结束进程</button><button class="btn danger ${p.pid<=4?'dis':''}" data-act="killmenu">${ic('down')}</button></div>
+  const b=$('#selacts');if(!b)return;
+  const p=S.tab==='proc'&&P.find(x=>x.pid===S.proc.sel);
+  if(!p){b.innerHTML='';renderProcToolbar();return}
+  const dis=p.path?'':'dis';
+  b.innerHTML=`<button class="btn pact ${dis}" data-act="openloc" title="打开位置">${ic('folder')}</button>
+   <button class="btn pact ${dis}" data-act="copypath" title="复制路径">${ic('copy')}</button>
+   <div class="splitbtn"><button class="btn danger ${p.pid<=4?'dis':''}" data-act="kill" data-v="0">${ic('x')}结束进程</button><button class="btn danger ${p.pid<=4?'dis':''}" data-act="killmenu" title="更多结束选项">${ic('down')}</button></div>
    <button class="btn" data-act="details">${ic(S.proc.details?'down':'chup')}详情</button>`;
+  renderProcToolbar();
 }
 function renderProcDetails(){
   const el=$('#pdetails');if(!el)return;
@@ -534,7 +542,7 @@ function renderProcDetails(){
   drag($('#dsp'),'y',-1,()=>LAY.dh,v=>{LAY.dh=v;el.style.setProperty('--dh',v+'px')},100,()=>app.clientHeight-260);
 }
 function procPage(){
-  return `<div class="toolbar" id="ptool"></div><div class="twrap" id="ptable"></div><div class="selbar" id="psel"></div><div class="details" id="pdetails" style="display:none;--dh:${LAY.dh}px"></div>`;
+  return `<div class="toolbar" id="ptool"></div><div class="twrap" id="ptable"></div><div class="details" id="pdetails" style="display:none;--dh:${LAY.dh}px"></div>`;
 }
 function procMount(){
   renderProcTable();renderProcDetails();
@@ -779,7 +787,8 @@ function renderPage(){
 function setStatus(t,ms=4000){S.status=t;renderStatus();if(ms){clearTimeout(setStatus.t);setStatus.t=setTimeout(()=>{S.status='';renderStatus()},ms)}}
 function renderStatus(){
   const hint=S.tab==='disk'?'F5 扫描 · Backspace 上一级':S.tab==='proc'?'F5 刷新 · Enter 详情':'';
-  $('#status').innerHTML=`<span class="ell">${esc(S.status||(S.tab==='disk'&&S.disk.state==='idle'?'就绪':'就绪'))}</span><span class="sp"></span><span>${hint}  ·  Ctrl+1–4 切换页签</span>${S.tab==='disk'?`<span title="硬链接分配空间每次扫描只计一次；重解析点与云占位文件已跳过；未知分配空间为估算。MFT 快速路径不可用时自动回退目录遍历。">${ic('info')}</span>`:''}`;
+  $('#status').innerHTML=`<span class="ell">${esc(S.status||'就绪')}</span><div class="meters" id="meters"></div><span class="sp"></span><span>${hint}  ·  Ctrl+1-4 切换页签</span>${S.tab==='disk'?`<span title="硬链接分配空间每次扫描只计一次；重解析点与云占位文件已跳过；未知分配空间为估算。MFT 快速路径不可用时自动回退目录遍历。">${ic('info')}</span>`:''}`;
+  renderMeters();
 }
 function renderTheme(){
   app.dataset.theme=S.theme;
@@ -973,7 +982,7 @@ new MutationObserver(ms=>{if(!ms.every(m=>m.target.closest&&(m.target.closest('.
 
 /* ======================= change list ======================= */
 $('#clBox').innerHTML=`<h2>改动清单 / 待确认项</h2>
-<h3>1. 顶栏</h3><ul><li>顶栏 40 高，整行可拖动窗口：<b>Logo + 软件名（左）→ 页签（进程 / 磁盘 / 软件卸载·预留 / 启动项管理·预留）→ 全局搜索框 → 明暗切换 → 设置 → 最小化/最大化/关闭（系统按钮，46×40）</b>。</li><li>原先的「标题栏 + 页面名行 + 进程数 + 页内搜索栏」合并，省出约 1 行高度。</li><li><b>系统总量</b>常驻在顶栏（所有页签可见）：CPU、内存、磁盘、网络。每项带迷你进度条，≥75% 变橙、≥90% 变红；悬停看详情（内存已用/总量，磁盘读写速率，网络上下行）。窄窗口时文字标签换成图标。</li><li>「进程」页签右侧带<b>进程总数徽标</b>；搜索时工具栏另显示“匹配 N / 总数”。</li><li>搜索框是全局的：进程页搜进程，磁盘页过滤文件；预留页签时禁用。</li></ul>
+<h3>1. 顶栏</h3><ul><li>顶栏 40 高，整行可拖动窗口：<b>Logo + 软件名（左）→ 页签（进程 / 磁盘 / 软件卸载·预留 / 启动项管理·预留）→ 全局搜索框 → 明暗切换 → 设置 → 最小化/最大化/关闭（系统按钮，46×40）</b>。</li><li>原先的「标题栏 + 页面名行 + 进程数 + 页内搜索栏」合并，省出约 1 行高度。</li><li><b>系统总量</b>放在底部状态栏（就绪右侧，所有页签可见）：CPU、内存、磁盘、网络。≥75% 数值变橙、≥90% 变红；悬停看详情（内存已用/总量，磁盘读写速率，网络上下行）。窄窗口时文字标签换成图标。</li><li>「进程」页签右侧带<b>进程总数徽标</b>；搜索时工具栏另显示“匹配 N / 总数”。</li><li>搜索框是全局的：进程页搜进程，磁盘页过滤文件；预留页签时禁用。</li></ul>
 <h3>2. 去重 / 简化（现状 → 新）</h3>
 <table><tr><th>现状</th><th>新设计</th></tr>
 <tr><td>磁盘页「Scan drive」+「Scan」+ 每张盘符卡片上的「Scan X:\\」+ F5，共 4 处扫描入口；Cancel 另放一个按钮</td><td><b>只有一个主按钮</b>：扫描 ⇄ 取消（同一位置切换），F5 同效</td></tr>
@@ -983,7 +992,7 @@ $('#clBox').innerHTML=`<h2>改动清单 / 待确认项</h2>
 <tr><td>树形表里每行都有「路径/状态」列，与层级重复</td><td>树形不显示路径列，仅平铺/过滤模式显示</td></tr>
 <tr><td>「Clear type filter」按钮、「Export CSV」「Clear index」「Tree/Files」「Allocated/Logical」「Search」各占位置</td><td>类型过滤变为可关闭的芯片；Clear index 收进「⋯」；口径移入设置；Tree/Files → 树形/平铺分段；Search 并入顶栏</td></tr>
 <tr><td>进程页：搜索栏（搜索 / Tree / Pause / 间隔 / Refresh / Details）+ 「Processes · 539」标题行 + 顶部「539 processes」+「539 matching」，进程数出现 3 次</td><td>搜索上移顶栏；工具栏仅 <b>列表|树形、暂停(继续)、刷新一次(仅暂停时)</b>；进程总数改为「进程」页签上的数字徽标，工具栏仅在搜索时显示匹配数；刷新间隔移入设置</td></tr>
-<tr><td>选中栏 4 个按钮常驻（Open location / Copy path / End process / End tree），右键菜单又重复一遍，另有 Details 在顶部</td><td>选中栏：打开位置、复制路径、<b>结束进程 ▾（含结束进程树）</b>、详情；右键菜单保留；Enter/双击也可开详情</td></tr>
+<tr><td>选中栏 4 个按钮常驻（Open location / Copy path / End process / End tree），右键菜单又重复一遍，另有 Details 在顶部</td><td><b>底部选中栏整行取消</b>：选中进程信息（名称·PID·路径）显示在工具栏中部；打开位置、复制路径、<b>结束进程 ▾（含结束进程树）</b>、详情移到顶栏页签右侧（窄窗变纯图标）；右键菜单保留；Enter/双击也可开详情</td></tr>
 <tr><td>详情用下拉框选 5 个子页，头部又单独显示「N modules · M threads」，「Copy command line」独占一行按钮</td><td>子页改为页签，计数写在页签上；复制命令行改为行内图标按钮；面板顶边可拖动调高</td></tr>
 <tr><td>磁盘空间图上方一行说明 + 下方一行悬停路径 + 底部免责声明</td><td>合并为空间图头部一行（悬停信息 + ⓘ 图例提示）</td></tr>
 <tr><td>表格右侧大片空白（进程表固定列宽）</td><td>首列自适应拉伸，填满宽度</td></tr></table>
@@ -1021,7 +1030,7 @@ const LOGOS=[
  {n:'垃圾山插旗',d:'垃圾堆成山，山顶插旗：“这座山我来接管”。有点幽默，也体现“管理”。',
   s:'<path d="M2.4 20.6c1.6-5.4 4.6-8.6 8.2-8.6s6.6 3.2 8.2 8.6z"/><path d="M2 20.6h20"/><path d="M10.8 12V3.2"/><path d="M10.8 3.2l6 2.2-6 2.4"/><path d="M7.8 17.2h.01M12.4 16.4h.01M14.4 18.6h.01"/>'}
 ];
-let logoSel=-1;
+let logoSel=9;
 const lsvg=(s,c='')=>`<svg class="gl ${c}" viewBox="0 0 24 24">${s}</svg>`;
 function applyLogo(i){logoSel=i;document.querySelector('.logo').innerHTML=lsvg(LOGOS[i].s);renderLogoGallery()}
 function renderLogoGallery(){
