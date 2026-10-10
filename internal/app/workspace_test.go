@@ -97,8 +97,9 @@ func TestWorkspaceControlsStayInsideWindow(t *testing.T) {
 				for _, name := range []string{"Scan", "Browse…", "Drive C:\\", "Drive D:\\"} {
 					visible(t, tt, size[0], size[1], name)
 				}
-				// Chips scan the drive on click; swap the fake volume for a
-				// temp dir so the test does not scan a real drive.
+				// Chips only select the drive; swap the fake volume for a
+				// temp dir, select it, then press Scan — the scan of the
+				// temp dir is instant and touches nothing real.
 				fake := t.TempDir()
 				m.diskVolumes[1] = disk.Volume{Path: fake, Total: 2000, Free: 500}
 				tt.Frame()
@@ -106,10 +107,13 @@ func TestWorkspaceControlsStayInsideWindow(t *testing.T) {
 					t.Fatal(err)
 				}
 				if m.diskDrive != fake || m.diskPath != fake {
-					t.Fatalf("drive chip did not retarget: %s %s", m.diskDrive, m.diskPath)
+					t.Fatalf("drive chip did not select: %s %s", m.diskDrive, m.diskPath)
+				}
+				if err := tt.Click("Scan"); err != nil {
+					t.Fatal(err)
 				}
 				if m.diskCancel == nil && m.diskSnapshot == nil {
-					t.Fatal("drive chip did not start a scan")
+					t.Fatal("Scan did not start a scan")
 				}
 				if m.diskCancel != nil {
 					m.diskCancel()

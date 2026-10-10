@@ -44,6 +44,7 @@ func (m *Model) rustAnalyze() {
 			m.rustBusy = false
 			m.rustReport = rep
 			m.rustMode = true
+			m.rustSel = -1
 			m.rustConfirm = -1
 		})
 	}()
@@ -147,6 +148,31 @@ func (m *Model) rustButton(c *ui.Context, off bool) ui.Element {
 	return e.Disabled(off)
 }
 
+// rustCovers reports whether cleaning the given tier removes parts of the
+// item's target dir — tier 1 incremental caches, tier 2 debug builds,
+// tier 3 everything.
+func rustCovers(it disk.RustItem, tier int) bool {
+	switch tier {
+	case 0:
+		return it.Incr > 0
+	case 1:
+		return it.Debug > 0
+	}
+	return true
+}
+
+// tierBadge is the numbered plan marker: a rounded square in the theme
+// accent with a white digit, dimmed when the plan does not apply.
+func tierBadge(c *ui.Context, t *ui.Theme, n int, dim bool) ui.Element {
+	bg, fg := t.Accent, t.AccentText
+	if dim {
+		bg, fg = t.TextMuted.Alpha(0.25), t.TextMuted
+	}
+	return ui.Row(c).Size(16, 16).Shrink(0).Radius(4).Background(bg).Center().Children(func() {
+		ui.Text(c, fmt.Sprint(n)).FontSize(10).Bold().TextColor(fg)
+	})
+}
+
 // rustResultsView fills the disk page with the artifact report: one card
 // per cleanup tier, then every target/ dir in the shared table.
 func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
@@ -175,45 +201,66 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 			ui.Text(c, "No Cargo target/ directories in this index.").TextColor(t.TextMuted)
 			return
 		}
-		cols := []ui.TableColumn{
-			{ID: "proj", Title: "Project", MinWidth: 220},
-			{ID: "incr", Title: "Incremental", Width: 110, Align: ui.End},
-			{ID: "debug", Title: "Debug", Width: 110, Align: ui.End},
-			{ID: "total", Title: "Total", Width: 110, Align: ui.End},
-			{ID: "pct", Title: "%", Width: 70, Align: ui.End},
-		}
+		// Header matching the row layout below.
+		ui.Row(c).FillWidth().Height(24).Shrink(0).Padding(0, 10).Gap(6).AlignItems(ui.Center).Children(func() {
+			ui.Box(c).Width(56).Shrink(0)
+			ui.Text(c, "Project").FontSize(11).Bold().TextColor(t.TextMuted).Grow(1).MinWidth(220).SingleLine()
+			for _, h := range []string{"Incremental", "Debug", "Total"} {
+				ui.Row(c).Width(110).Shrink(0).Justify(ui.End).Children(func() {
+					ui.Text(c, h).FontSize(11).Bold().TextColor(t.TextMuted)
+				})
+			}
+			ui.Row(c).Width(70).Shrink(0).Justify(ui.End).Children(func() {
+				ui.Text(c, "%").FontSize(11).Bold().TextColor(t.TextMuted)
+			})
+		})
 		total := max(s.Allocated, 1)
-		tableChrome(c, func() ui.Element {
-			return ui.Table(c, &m.rustList, cols, len(rep.Items), func(i, col int) {
-				it := rep.Items[i]
-				var str, tip string
-				switch col {
-				case 0:
-					str = s.FullPath(s.Nodes[it.Target].Parent)
-					tip = str
-				case 1:
-					str = format.Bytes(it.Incr)
-				case 2:
-					str = format.Bytes(it.Debug)
-				case 3:
-					str = format.Bytes(it.Total)
-				case 4:
-					str = fmt.Sprintf("%.1f%%", float64(it.Total)/float64(total)*100)
+		ui.List(c, &m.rustList, len(rep.Items), func(i int) {
+			it := rep.Items[i]
+			hit := m.rustSel >= 0 && rustCovers(it, m.rustSel)
+			row := ui.Row(c).FillWidth().Height(26).Padding(0, 10).Gap(6).AlignItems(ui.Center).Radius(4)
+			if hit {
+				row.Background(t.Accent.Alpha(0.12))
+			}
+			row.Children(func() {
+				ui.Row(c).Width(56).Shrink(0).Gap(4).Children(func() {
+					for tier := range rep.Tiers {
+						dim := !rustCovers(it, tier) || (m.rustSel >= 0 && tier != m.rustSel)
+						tierBadge(c, t, tier+1, dim)
+					}
+				})
+				path := s.FullPath(s.Nodes[it.Target].Parent)
+				ui.Text(c, path).SingleLine().Tooltip(path).Grow(1).MinWidth(0)
+				for _, v := range []uint64{it.Incr, it.Debug, it.Total} {
+					ui.Row(c).Width(110).Shrink(0).Justify(ui.End).Children(func() {
+						ui.Text(c, format.Bytes(v)).SingleLine()
+					})
 				}
-				ui.Text(c, str).SingleLine().Tooltip(tip)
+				ui.Row(c).Width(70).Shrink(0).Justify(ui.End).Children(func() {
+					ui.Text(c, fmt.Sprintf("%.1f%%", float64(it.Total)/float64(total)*100)).SingleLine()
+				})
 			})
 		}).Grow(1).FillWidth()
 	})
 }
 
-// rustTierCard is one cleanup level: its reclaimable size plus a Clean
-// button that asks for a second click before deleting anything.
+// rustTierCard is one cleanup level: its numbered badge, reclaimable size
+// and a Clean button that asks for a second click. Clicking the card
+// selects the plan and lights up the files it removes.
 func (m *Model) rustTierCard(c *ui.Context, t *ui.Theme, i int) {
 	tier := &m.rustReport.Tiers[i]
+	on := m.rustSel == i
 	card := ui.Column(c).Grow(1).Padding(10, 12).Gap(6).Background(t.Surface).Radius(8)
-	card.BorderWidth(1).BorderColor(t.Border)
+	card.BorderWidth(1).BorderColor(t.Border).Cursor(ui.CursorPointer)
+	if on {
+		card.BorderColor(t.Accent)
+	}
+	card.Tooltip("Click to highlight the files this plan removes")
 	card.Children(func() {
-		ui.Text(c, tier.Name).Bold().FontSize(13)
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			tierBadge(c, t, i+1, false)
+			ui.Text(c, tier.Name).Bold().FontSize(13)
+		})
 		ui.Text(c, tier.Note).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Tooltip(tier.Note)
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
 			ui.Text(c, format.Bytes(tier.Bytes)).FontSize(16).Bold().Grow(1).MinWidth(0)
@@ -233,4 +280,11 @@ func (m *Model) rustTierCard(c *ui.Context, t *ui.Theme, i int) {
 			})
 		}
 	})
+	if card.Clicked() {
+		if on {
+			m.rustSel = -1
+		} else {
+			m.rustSel = i
+		}
+	}
 }

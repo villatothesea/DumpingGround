@@ -294,6 +294,7 @@ func (m *Model) clearDisk() {
 	m.rustReport = nil
 	m.rustMode = false
 	m.rustPending = false
+	m.rustSel = -1
 	m.rustConfirm = -1
 	m.rustMsg = ""
 	m.rustGone = map[string]bool{}
@@ -378,7 +379,7 @@ func (m *Model) driveChip(c *ui.Context, t *ui.Theme, v disk.Volume, scanning bo
 		if on {
 			fg, muted = t.AccentText, t.AccentText.Alpha(0.85)
 		}
-		ui.Text(c, v.Path).Bold().SingleLine().TextColor(fg)
+		ui.Text(c, v.Path).Bold().SingleLine().Ellipsis("…").MaxWidth(140).TextColor(fg)
 		used := 0.0
 		if v.Total > 0 {
 			used = float64(v.Total-v.Free) / float64(v.Total)
@@ -395,7 +396,7 @@ func (m *Model) driveChip(c *ui.Context, t *ui.Theme, v disk.Volume, scanning bo
 		ui.Text(c, format.Bytes(v.Free)+" free").FontSize(11).TextColor(muted).SingleLine()
 	})
 	if !scanning && e.Clicked() {
-		m.scanDrive(v.Path)
+		m.selectDrive(v.Path)
 	}
 }
 
@@ -462,17 +463,17 @@ func (m *Model) driveCard(c *ui.Context, t *ui.Theme, v disk.Volume) {
 		ui.Progress(c, float64(v.Total-v.Free)/float64(max(v.Total, 1))).FillWidth().Height(6)
 	})
 	if card.Clicked() {
-		m.scanDrive(v.Path)
+		m.selectDrive(v.Path)
 	}
 }
 
-// scanDrive picks a volume and immediately scans it — the drive chips and
-// the big idle cards are one-click scan shortcuts, not just selectors.
-func (m *Model) scanDrive(path string) {
+// selectDrive picks a volume without starting a scan — leaving results up
+// (or picking another drive mid-review) never rescans on its own; the
+// Scan button does.
+func (m *Model) selectDrive(path string) {
 	m.diskDrive = path
 	m.diskPath = path
 	m.rustMode = false
-	m.startScan()
 }
 
 func (m *Model) stat(c *ui.Context, t *ui.Theme, name, value string) {

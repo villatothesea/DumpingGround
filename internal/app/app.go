@@ -169,6 +169,7 @@ type Model struct {
 	rustBusy                        bool // analysis or deletion in flight
 	rustReport                      *disk.RustReport
 	rustMode                        bool // the disk page shows the artifact report
+	rustSel                         int  // the cleanup tier previewing its files, -1 none
 	rustConfirm                     int
 	rustMsg                         string
 	rustGone                        map[string]bool
@@ -189,7 +190,7 @@ func New() *Model {
 		iconCache:   make(map[string]*ui.Bitmap),
 		iconPending: make(map[string]bool), iconRequests: make(chan string, 32),
 		diskStatus: "Choose a drive or folder to scan", diskMode: "Tree", diskMetric: "Allocated", diskSelected: -1, diskNode: -1, extensionSelected: -1, mapRoot: -1, diskSplit: 300, animateMap: true, detailTab: "Properties", memRelease: "Automatic",
-		rustGone: map[string]bool{}, rustConfirm: -1}
+		rustGone: map[string]bool{}, rustSel: -1, rustConfirm: -1}
 }
 func (m *Model) Run() error {
 	if os.Getenv("DG_DEBUG_INSTANCE") != "" {
