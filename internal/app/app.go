@@ -105,6 +105,7 @@ type Model struct {
 	detailSplit                     float32
 	themeMode                       int
 	settingsOpen                    bool
+	diskInfoOpen                    bool
 	reservedQuery                   string
 	sys                             systemUsage
 	status                          string
@@ -389,6 +390,9 @@ func (m *Model) view(c *ui.Context) {
 	if m.settingsOpen {
 		m.settingsView(c)
 	}
+	if m.diskInfoOpen {
+		m.diskInfoView(c)
+	}
 	if m.terminateOpen {
 		choice := ui.AlertDialog(c, &m.terminateOpen, "End process?", fmt.Sprintf("%s (PID %d). Unsaved work may be lost.", m.terminateTarget.Name, m.terminateTarget.PID), "Cancel", "End process")
 		if choice == 1 {
@@ -663,7 +667,10 @@ func (m *Model) statusBar(c *ui.Context, t *ui.Theme) {
 		if text == "" {
 			text = "Ready"
 		}
-		ui.Text(c, text).SingleLine().MinWidth(0).TextColor(t.TextMuted)
+		st := ui.Text(c, text).SingleLine().MinWidth(0).TextColor(t.TextMuted)
+		if m.page == diskPage && m.diskLive {
+			st.Tooltip("live: the index updates itself through the NTFS change journal — file changes appear as they happen, without rescanning. Click the ⓘ icon for details.")
+		}
 		m.statMeter(c, t, "cpu", "CPU", fmt.Sprintf("%.0f%%", m.sys.cpu), m.sys.cpu, fmt.Sprintf("Total CPU usage %.0f%%", m.sys.cpu))
 		m.statMeter(c, t, "mem", "MEM", fmt.Sprintf("%d%%", m.sys.memLoad), float64(m.sys.memLoad), fmt.Sprintf("Memory %.1f of %.1f GB used (%d%%)", float64(m.sys.memUsed)/1073741824, float64(m.sys.memTotal)/1073741824, m.sys.memLoad))
 		var rd, wr uint64
@@ -680,7 +687,16 @@ func (m *Model) statusBar(c *ui.Context, t *ui.Theme) {
 		}
 		ui.Text(c, hint).FontSize(11).TextColor(t.TextMuted).Shrink(0)
 		if m.page == diskPage {
-			icon(c, "info", 14).TextColor(t.TextMuted).Tooltip("Hard-link allocation is counted once per scan. \"skipped\" counts entries the scan could not index (access denied, reparse points, cloud placeholders, records without a usable name); \"estimates\" counts files whose allocated size was guessed because their data attribute could not be read. Whole-drive scans try the read-only MFT path and fall back to a directory walk.")
+			info := ui.Row(c).Size(20, 20).Center().Radius(4).Label("About scan terms").Tooltip("What skipped, estimates and live mean — click for details")
+			info.Draw(func(p *ui.Painter, r ui.Rect) {
+				if info.Hovered() {
+					p.Fill(r, t.SurfaceHover, 4)
+				}
+			})
+			info.Children(func() { icon(c, "info", 14).TextColor(t.TextMuted) })
+			if info.Clicked() {
+				m.diskInfoOpen = true
+			}
 		}
 	})
 }
@@ -716,6 +732,29 @@ func (m *Model) settingsView(c *ui.Context) {
 			})
 			ui.Checkbox(c, &m.animateMap, "Animate map drill-down").Tooltip("Respects Windows reduced motion")
 		})
+	})
+}
+
+// diskInfoView explains the numbers the disk view reports: what skipped
+// entries are, whether they can be scanned, what estimates are, and what
+// the live indicator means.
+func (m *Model) diskInfoView(c *ui.Context) {
+	ui.Modal(c, &m.diskInfoOpen, func() {
+		ui.Column(c).Width(430).Padding(6, 16, 14, 16).Gap(10).Children(func() {
+			ui.Text(c, "About the scan numbers").Bold().FontSize(14)
+			m.diskInfoItem(c, "skipped", "Entries the scan could not index: access-denied folders, reparse points (junctions and links, skipped on purpose so nothing counts twice), cloud placeholders whose data is not on this disk, items deleted mid-scan, and records without a usable name. Skipped entries are simply absent — the totals you see only cover what could be read.")
+			m.diskInfoItem(c, "Can they be scanned?", "Access-denied items mostly can: run DumpingGround as administrator and scan again. Cloud placeholders cannot — their content lives in the cloud, not on the disk. Reparse points stay skipped by design; scan their target folder instead.")
+			m.diskInfoItem(c, "estimates", "Files that were indexed but whose on-disk size had to be guessed, because no data attribute could be read. Their size is rounded up to a cluster.")
+			m.diskInfoItem(c, "live", "The index keeps itself current through the NTFS change journal: new, renamed, resized and deleted files update the numbers as they happen — no rescan needed. Live mode needs administrator rights; if the journal wraps under heavy churn the status line says \"Live index lost\" and a rescan restores it.")
+		})
+	})
+}
+
+// diskInfoItem is one titled paragraph of the scan-terms modal.
+func (m *Model) diskInfoItem(c *ui.Context, title, body string) {
+	ui.Column(c).Gap(2).Children(func() {
+		ui.Text(c, title).Bold()
+		ui.Text(c, body).FontSize(11).TextColor(c.Theme().TextMuted).Width(390)
 	})
 }
 

@@ -62,12 +62,17 @@ func TestScreenshotStates(t *testing.T) {
 		},
 		Bytes: 1200, Allocated: 1200, Files: 3, Method: "Directory walk",
 	}
-	m2.diskRoot = 0
+	m2.diskRoot = 1
 	m2.diskNode = 1
 	tt2 := ui.NewTester(m2.view, 1180, 760)
 	tt2.SetDark(true)
 	tt2.Frame()
 	dump(t, tt2, dest, "disk-dark.png")
+
+	// The scan-terms modal from the skipped counter.
+	m2.diskInfoOpen = true
+	tt2.Frame()
+	dump(t, tt2, dest, "disk-info.png")
 
 	// Settings modal.
 	tt3 := ui.NewTester(m.view, 1180, 760)

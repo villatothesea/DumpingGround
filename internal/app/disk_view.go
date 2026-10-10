@@ -371,7 +371,23 @@ func (m *Model) resultsView(c *ui.Context, t *ui.Theme, s *disk.Snapshot) {
 		m.breadcrumbs(c, t, s)
 		ui.Spacer(c)
 		root := s.Nodes[m.diskRoot]
-		ui.Text(c, fmt.Sprintf("Allocated %s · Logical %s · %d files · %d skipped · %d estimates", format.Bytes(root.Allocated), format.Bytes(root.Bytes), s.Files, s.Skipped, s.Estimated)).FontSize(11).TextColor(t.TextMuted).SingleLine().Shrink(0).Tooltip("skipped: entries the scan could not index (access denied, gone mid-scan, unsupported records)\nestimates: files whose on-disk size had to be guessed, e.g. no data attribute read")
+		ui.Row(c).Gap(4).AlignItems(ui.Center).Shrink(0).Children(func() {
+			ui.Text(c, fmt.Sprintf("Allocated %s · Logical %s · %d files ·", format.Bytes(root.Allocated), format.Bytes(root.Bytes), s.Files)).FontSize(11).TextColor(t.TextMuted).SingleLine()
+			skip := ui.Row(c).Gap(3).Padding(1, 5).Radius(4).AlignItems(ui.Center).Label("What is skipped").Tooltip("Entries the scan could not index — click for details")
+			skip.Draw(func(p *ui.Painter, r ui.Rect) {
+				if skip.Hovered() {
+					p.Fill(r, t.SurfaceHover, 4)
+				}
+			})
+			skip.Children(func() {
+				ui.Text(c, fmt.Sprintf("%d skipped", s.Skipped)).FontSize(11).TextColor(t.TextMuted).SingleLine()
+				icon(c, "info", 11).TextColor(t.Accent)
+			})
+			if skip.Clicked() {
+				m.diskInfoOpen = true
+			}
+			ui.Text(c, fmt.Sprintf("· %d estimates", s.Estimated)).FontSize(11).TextColor(t.TextMuted).SingleLine().Tooltip("estimates: files whose on-disk size had to be guessed, e.g. no data attribute read")
+		})
 		if m.extensionFilter != "" {
 			m.extChip(c, t)
 		}
@@ -683,8 +699,13 @@ func (m *Model) diskMap(c *ui.Context) {
 	animate := m.animateMap && !c.Preferences().ReduceMotion
 	ui.Column(c).Fill().AlignItems(ui.Stretch).Children(func() {
 		ui.Row(c).FillWidth().Height(36).Shrink(0).PaddingX(12).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "Space map").Bold().Shrink(0)
 			s := m.diskSnapshot
+			up := m.iconButton(c, "up", "Up one level")
+			up.Label("Up").Disabled(s == nil || m.diskRoot == s.Root)
+			if up.Clicked() && s != nil {
+				m.navigateDisk(s.Nodes[m.diskRoot].Parent)
+			}
+			ui.Text(c, "Space map").Bold().Shrink(0)
 			if s != nil && m.diskNode >= 0 && m.diskNode < len(s.Nodes) {
 				n := s.Nodes[m.diskNode]
 				ui.Box(c).Size(8, 8).Radius(2).Background(m.mapColor(m.diskNode)).Shrink(0)
