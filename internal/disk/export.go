@@ -28,7 +28,7 @@ func (s *Snapshot) WriteCSV(w io.Writer) error {
 				}
 			}
 		}
-		if err := out.Write([]string{s.FullPath(id), kind, strconv.FormatUint(n.Bytes, 10), strconv.FormatUint(n.Allocated, 10), strconv.FormatBool(n.Shared), n.Error}); err != nil {
+		if err := out.Write([]string{s.FullPath(id), kind, strconv.FormatUint(n.Bytes, 10), strconv.FormatUint(n.Allocated, 10), strconv.FormatBool(n.Shared), s.ErrorAt(id)}); err != nil {
 			return err
 		}
 	}

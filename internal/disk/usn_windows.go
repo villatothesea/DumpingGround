@@ -85,7 +85,7 @@ func (s *Snapshot) WatchJournal() (*Watcher, error) {
 	if s == nil || s.JournalID == 0 {
 		return nil, errors.New("no USN journal baseline; rescan as administrator")
 	}
-	root := s.Nodes[s.Root].Path
+	root := s.FullPath(s.Root)
 	vol, err := openVolume(root)
 	if err != nil {
 		return nil, err

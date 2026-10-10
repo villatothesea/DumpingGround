@@ -42,7 +42,7 @@ func TestDiskDrillDownUpAndMapAtSmallSize(t *testing.T) {
 	m := testModel(t)
 	m.page = diskPage
 	m.diskSnapshot = &disk.Snapshot{Root: 0, Files: 2, Bytes: 100, Allocated: 100, Nodes: []disk.Node{
-		{ID: 0, Parent: -1, Name: "root", Path: "C:\\fixture", Dir: true, Bytes: 100, Allocated: 100, Children: []int{1, 2}},
+		{ID: 0, Parent: -1, Name: "C:\\fixture", Dir: true, Bytes: 100, Allocated: 100, Children: []int{1, 2}},
 		{ID: 1, Parent: 0, Name: "child", Dir: true, Bytes: 80, Allocated: 80, Children: []int{3}},
 		{ID: 2, Parent: 0, Name: "small.txt", Bytes: 20, Allocated: 20},
 		{ID: 3, Parent: 1, Name: "large.bin", Bytes: 80, Allocated: 80},

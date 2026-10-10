@@ -169,7 +169,7 @@ func TestMFTRecordsCancelKeepsPartial(t *testing.T) {
 	if err != context.Canceled {
 		t.Fatalf("err=%v", err)
 	}
-	if out == nil || out.Nodes[out.Root].Path != `D:\` {
+	if out == nil || out.FullPath(out.Root) != `D:\` {
 		t.Fatalf("no partial snapshot: %v", out)
 	}
 }

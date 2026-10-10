@@ -24,10 +24,10 @@ func TestDiskViewBuildsInHeadlessTester(t *testing.T) {
 	m.diskSnapshot = &disk.Snapshot{
 		Root: 0,
 		Nodes: []disk.Node{
-			{ID: 0, Parent: -1, Name: "root", Path: "C:\\root", Dir: true, Bytes: 30, Allocated: 30, Children: []int{1, 2}},
-			{ID: 1, Parent: 0, Name: "alpha", Path: "C:\\root\\alpha", Dir: true, Bytes: 20, Allocated: 20, Children: []int{3}},
-			{ID: 2, Parent: 0, Name: "readme.txt", Path: "C:\\root\\readme.txt", Bytes: 10, Allocated: 10},
-			{ID: 3, Parent: 1, Name: "data.bin", Path: "C:\\root\\alpha\\data.bin", Bytes: 20, Allocated: 20},
+			{ID: 0, Parent: -1, Name: "C:\\root", Dir: true, Bytes: 30, Allocated: 30, Children: []int{1, 2}},
+			{ID: 1, Parent: 0, Name: "alpha", Dir: true, Bytes: 20, Allocated: 20, Children: []int{3}},
+			{ID: 2, Parent: 0, Name: "readme.txt", Bytes: 10, Allocated: 10},
+			{ID: 3, Parent: 1, Name: "data.bin", Bytes: 20, Allocated: 20},
 		},
 		Bytes: 30, Allocated: 30,
 	}

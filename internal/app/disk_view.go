@@ -729,8 +729,8 @@ func (m *Model) diskTable(c *ui.Context) {
 			}
 		case 4:
 			text = s.FullPath(id)
-			if n.Error != "" {
-				text = n.Error
+			if e := s.ErrorAt(id); e != "" {
+				text = e
 			}
 		}
 		e := ui.Text(c, text).SingleLine().Tooltip(s.FullPath(id))

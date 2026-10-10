@@ -10,7 +10,7 @@ func usnFixture() *Snapshot {
 		Root:  0,
 		Files: 1, Dirs: 2, Bytes: 100, Allocated: 128,
 		Nodes: []Node{
-			{ID: 0, Parent: -1, Name: `D:\`, Path: `D:\`, Dir: true, FRN: usnFRN(5), Bytes: 100, Allocated: 128, Children: []int{1}},
+			{ID: 0, Parent: -1, Name: `D:\`, Dir: true, FRN: usnFRN(5), Bytes: 100, Allocated: 128, Children: []int{1}},
 			{ID: 1, Parent: 0, Name: "dir", Dir: true, FRN: usnFRN(6), Bytes: 100, Allocated: 128, Children: []int{2}},
 			{ID: 2, Parent: 1, Name: "a.txt", Bytes: 100, Allocated: 128, FRN: usnFRN(7)},
 		},

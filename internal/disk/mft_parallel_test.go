@@ -32,8 +32,8 @@ func TestMFTScanLargeStream(t *testing.T) {
 	if got, want := len(out.Nodes), n-16+1; got != want {
 		t.Fatalf("nodes=%d, want %d", got, want)
 	}
-	if out.Nodes[out.Root].Path != `D:\` {
-		t.Fatalf("root path %q", out.Nodes[out.Root].Path)
+	if out.FullPath(out.Root) != `D:\` {
+		t.Fatalf("root path %q", out.FullPath(out.Root))
 	}
 	files, dirs := int64(0), int64(0)
 	for i := 16; i < n; i++ { // records below 16 (except 5) are metadata, skipped

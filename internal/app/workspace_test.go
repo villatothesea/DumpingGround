@@ -36,7 +36,7 @@ func TestCancelOwnsWorkerUntilCompletion(t *testing.T) {
 		t.Fatal("cancellation released the worker prematurely")
 	}
 	m.diskProgressCh <- disk.Progress{Files: 999, Current: "stale"}
-	m.diskDone <- scanResult{snapshot: &disk.Snapshot{Nodes: []disk.Node{{ID: 0, Parent: -1, Dir: true, Name: "partial", Path: "partial"}}}, err: context.Canceled}
+	m.diskDone <- scanResult{snapshot: &disk.Snapshot{Nodes: []disk.Node{{ID: 0, Parent: -1, Dir: true, Name: "partial"}}}, err: context.Canceled}
 	tt.Frame()
 	if m.diskCancel != nil || !strings.Contains(m.diskStatus, "Cancelled") {
 		t.Fatalf("terminal status overwritten: %s", m.diskStatus)

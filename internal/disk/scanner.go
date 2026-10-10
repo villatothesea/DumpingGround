@@ -15,11 +15,10 @@ import (
 
 type Node struct {
 	ID, Parent       int
-	Name, Path       string // Path is retained only on directory nodes.
+	Name             string
 	Dir              bool
 	Bytes, Allocated uint64
 	Children         []int
-	Error            string
 	Shared           bool
 	FRN              uint64 // NTFS file reference number: record | sequence<<48.
 }
@@ -43,6 +42,19 @@ type Snapshot struct {
 	// hard-linked records live in frnMore, so a lone link costs one map slot.
 	frns    map[uint64]int
 	frnMore map[uint64][]int
+	// errs holds per-node read errors. Almost every node has none, so they
+	// live in a side map instead of costing a string field per node.
+	errs map[int]string
+}
+
+// ErrorAt returns the read error recorded for a node, "" when it is clean.
+func (s *Snapshot) ErrorAt(id int) string { return s.errs[id] }
+
+func (s *Snapshot) setErr(id int, err string) {
+	if s.errs == nil {
+		s.errs = map[int]string{}
+	}
+	s.errs[id] = err
 }
 
 // maxPathDepth bounds parent-chain walks; a corrupt snapshot must degrade
@@ -54,9 +66,6 @@ func (s *Snapshot) FullPath(id int) string {
 		return ""
 	}
 	n := s.Nodes[id]
-	if n.Path != "" {
-		return n.Path
-	}
 	if n.Parent < 0 || n.Parent == id {
 		return n.Name
 	}
@@ -65,9 +74,6 @@ func (s *Snapshot) FullPath(id int) string {
 
 func (s *Snapshot) fullPath(id, depth int) string {
 	n := s.Nodes[id]
-	if n.Path != "" {
-		return n.Path
-	}
 	if depth >= maxPathDepth || n.Parent < 0 || n.Parent == id {
 		return n.Name
 	}
@@ -130,7 +136,7 @@ func (s *Scanner) scanDirectory(ctx context.Context, root string, progress chan<
 		return nil, errors.New("scan target is not a directory")
 	}
 	start := time.Now()
-	out := &Snapshot{Method: "Directory walk", Nodes: []Node{{ID: 0, Parent: -1, Name: root, Path: root, Dir: true}}}
+	out := &Snapshot{Method: "Directory walk", Nodes: []Node{{ID: 0, Parent: -1, Name: root, Dir: true}}}
 	pending := []int{0}
 	identities := make(map[string]struct{})
 	last := time.Time{}
@@ -153,13 +159,13 @@ func (s *Scanner) scanDirectory(ctx context.Context, root string, progress chan<
 		}
 		parent := pending[len(pending)-1]
 		pending = pending[:len(pending)-1]
-		path := out.Nodes[parent].Path
+		path := out.fullPath(parent, 0)
 		dir, e := os.Open(path)
 		if e != nil {
 			if parent == 0 {
 				return nil, e
 			}
-			out.Nodes[parent].Error = e.Error()
+			out.setErr(parent, e.Error())
 			out.Skipped++
 			continue
 		}
@@ -190,7 +196,6 @@ func (s *Scanner) scanDirectory(ctx context.Context, root string, progress chan<
 				}
 				n := Node{ID: len(out.Nodes), Parent: parent, Name: entry.Name(), Dir: meta.IsDir()}
 				if n.Dir {
-					n.Path = full
 					out.Dirs++
 					pending = append(pending, n.ID)
 				} else if meta.Mode().IsRegular() {
@@ -225,7 +230,7 @@ func (s *Scanner) scanDirectory(ctx context.Context, root string, progress chan<
 			}
 			if readErr != nil {
 				if !errors.Is(readErr, io.EOF) {
-					out.Nodes[parent].Error = readErr.Error()
+					out.setErr(parent, readErr.Error())
 					out.Skipped++
 				}
 				break

@@ -225,7 +225,6 @@ func scanMFTRecords(ctx context.Context, stream io.Reader, count int64, recordBy
 						if number == 5 {
 							p.rootAt = id
 							node.Name = root
-							node.Path = root
 						}
 						if !r.Directory {
 							node.Bytes = r.Logical
@@ -342,7 +341,7 @@ func scanMFTRecords(ctx context.Context, stream io.Reader, count int64, recordBy
 		out.Estimated += p.stats[7]
 	}
 	report(true)
-	if len(out.Nodes) == 0 || out.Nodes[out.Root].Path != root {
+	if len(out.Nodes) == 0 || out.Nodes[out.Root].Name != root {
 		return nil, errors.New("root record missing from MFT")
 	}
 	// Link using both record index and sequence number. Stale directory references
