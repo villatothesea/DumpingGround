@@ -97,11 +97,22 @@ func TestWorkspaceControlsStayInsideWindow(t *testing.T) {
 				for _, name := range []string{"Scan", "Browse…", "Drive C:\\", "Drive D:\\"} {
 					visible(t, tt, size[0], size[1], name)
 				}
-				if err := tt.Click("Drive D:\\"); err != nil {
+				// Chips scan the drive on click; swap the fake volume for a
+				// temp dir so the test does not scan a real drive.
+				fake := t.TempDir()
+				m.diskVolumes[1] = disk.Volume{Path: fake, Total: 2000, Free: 500}
+				tt.Frame()
+				if err := tt.Click("Drive " + fake); err != nil {
 					t.Fatal(err)
 				}
-				if m.diskDrive != "D:\\" || m.diskPath != "D:\\" {
-					t.Fatalf("drive chip did not update scan path: %s %s", m.diskDrive, m.diskPath)
+				if m.diskDrive != fake || m.diskPath != fake {
+					t.Fatalf("drive chip did not retarget: %s %s", m.diskDrive, m.diskPath)
+				}
+				if m.diskCancel == nil && m.diskSnapshot == nil {
+					t.Fatal("drive chip did not start a scan")
+				}
+				if m.diskCancel != nil {
+					m.diskCancel()
 				}
 				if dest := os.Getenv("DG_CAPTURE"); dest != "" {
 					f, err := os.Create(dest)

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -17,11 +18,19 @@ type RustTier struct {
 	Bytes uint64
 }
 
+// RustItem is one project's target/ dir with its per-tier breakdown.
+type RustItem struct {
+	Target      int // node id of the target/ dir
+	Incr, Debug uint64
+	Total       uint64
+}
+
 // RustReport summarizes Rust build artifacts inside a snapshot: target/
 // directories that sit next to a Cargo.toml.
 type RustReport struct {
 	Projects int // target/ dirs found
 	Tiers    [3]RustTier
+	Items    []RustItem // per project, sorted by Total descending
 }
 
 // FindRustTargets walks the snapshot for directories named "target" whose
@@ -47,6 +56,7 @@ func FindRustTargets(s *Snapshot, gone func(string) bool) *RustReport {
 		rep.Projects++
 		rep.Tiers[2].Dirs = append(rep.Tiers[2].Dirs, i)
 		rep.Tiers[2].Bytes += n.Allocated
+		item := RustItem{Target: i, Total: n.Allocated}
 		for _, prof := range n.Children {
 			p := &s.Nodes[prof]
 			if !p.Dir {
@@ -55,15 +65,19 @@ func FindRustTargets(s *Snapshot, gone func(string) bool) *RustReport {
 			if strings.EqualFold(p.Name, "debug") && !dead(prof) {
 				rep.Tiers[1].Dirs = append(rep.Tiers[1].Dirs, prof)
 				rep.Tiers[1].Bytes += p.Allocated
+				item.Debug += p.Allocated
 			}
 			for _, sub := range p.Children {
 				if d := &s.Nodes[sub]; d.Dir && strings.EqualFold(d.Name, "incremental") && !dead(sub) {
 					rep.Tiers[0].Dirs = append(rep.Tiers[0].Dirs, sub)
 					rep.Tiers[0].Bytes += d.Allocated
+					item.Incr += d.Allocated
 				}
 			}
 		}
+		rep.Items = append(rep.Items, item)
 	}
+	sort.Slice(rep.Items, func(a, b int) bool { return rep.Items[a].Total > rep.Items[b].Total })
 	return rep
 }
 

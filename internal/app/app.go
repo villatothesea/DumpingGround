@@ -168,10 +168,11 @@ type Model struct {
 	rustPending                     bool // analyze for Rust artifacts once a running scan settles
 	rustBusy                        bool // analysis or deletion in flight
 	rustReport                      *disk.RustReport
-	rustOpen                        bool
+	rustMode                        bool // the disk page shows the artifact report
 	rustConfirm                     int
 	rustMsg                         string
 	rustGone                        map[string]bool
+	rustList                        ui.ListState
 	events                          chan func()
 	// CaptureDir writes only this application's frames during explicit diagnostics.
 	CaptureDir  string
@@ -463,9 +464,6 @@ func (m *Model) view(c *ui.Context) {
 	if m.settingsOpen {
 		m.settingsView(c)
 	}
-	if m.rustOpen && m.rustReport != nil {
-		m.rustView(c)
-	}
 	if m.diskInfoOpen {
 		m.diskInfoView(c)
 	}
@@ -597,6 +595,14 @@ func (m *Model) setPage(pg page) {
 		m.refreshOnce()
 	}
 	if pg == diskPage {
+		m.maybeRefreshVolumes()
+	}
+}
+
+// maybeRefreshVolumes re-enumerates the drive chips at most every 3s —
+// cheap enough to keep chips fresh, quiet enough to never churn.
+func (m *Model) maybeRefreshVolumes() {
+	if time.Since(m.volsChecked) > 3*time.Second {
 		m.refreshVolumes()
 	}
 }

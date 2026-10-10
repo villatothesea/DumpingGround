@@ -28,6 +28,8 @@ func (m *Model) startScan() {
 		m.diskStatus = "Select a drive or folder first"
 		return
 	}
+	m.rustMode = false
+	m.rustReport = nil
 	m.stopWatch()
 	ctx, cancel := context.WithCancel(m.ctx)
 	m.diskCancel = cancel
@@ -290,7 +292,7 @@ func (m *Model) clearDisk() {
 	m.mapMotion = mapMotion{}
 	m.mapAnimating = false
 	m.rustReport = nil
-	m.rustOpen = false
+	m.rustMode = false
 	m.rustPending = false
 	m.rustConfirm = -1
 	m.rustMsg = ""
@@ -319,9 +321,7 @@ func (m *Model) browse() {
 }
 func (m *Model) diskView(c *ui.Context) {
 	t := c.Theme()
-	if time.Since(m.volsChecked) > 3*time.Second {
-		m.refreshVolumes()
-	}
+	m.maybeRefreshVolumes()
 	scanning := m.diskCancel != nil
 	ui.Row(c).FillWidth().Height(44).Shrink(0).PaddingX(12).Gap(8).AlignItems(ui.Center).Children(func() {
 		for _, volume := range m.diskVolumes {
@@ -338,8 +338,7 @@ func (m *Model) diskView(c *ui.Context) {
 		} else if ui.PrimaryButton(c, "Scan").Disabled(strings.TrimSpace(m.diskPath) == "").Clicked() {
 			m.startScan()
 		}
-		rs := m.iconTextButton(c, "rust", "Rust scan").Tooltip("Find Cargo target/ dirs and clean them by tier")
-		if rs.Disabled(m.rustBusy || scanning && !m.rustPending).Clicked() {
+		if m.rustButton(c, m.rustBusy || scanning && !m.rustPending).Clicked() {
 			m.rustScan()
 		}
 	})
@@ -349,6 +348,10 @@ func (m *Model) diskView(c *ui.Context) {
 	}
 	if m.diskSnapshot == nil {
 		m.idleCard(c, t)
+		return
+	}
+	if m.rustMode && m.rustReport != nil {
+		m.rustResultsView(c, t)
 		return
 	}
 	m.resultsView(c, t, m.diskSnapshot)
@@ -392,8 +395,7 @@ func (m *Model) driveChip(c *ui.Context, t *ui.Theme, v disk.Volume, scanning bo
 		ui.Text(c, format.Bytes(v.Free)+" free").FontSize(11).TextColor(muted).SingleLine()
 	})
 	if !scanning && e.Clicked() {
-		m.diskDrive = v.Path
-		m.diskPath = v.Path
+		m.scanDrive(v.Path)
 	}
 }
 
@@ -460,9 +462,17 @@ func (m *Model) driveCard(c *ui.Context, t *ui.Theme, v disk.Volume) {
 		ui.Progress(c, float64(v.Total-v.Free)/float64(max(v.Total, 1))).FillWidth().Height(6)
 	})
 	if card.Clicked() {
-		m.diskDrive = v.Path
-		m.diskPath = v.Path
+		m.scanDrive(v.Path)
 	}
+}
+
+// scanDrive picks a volume and immediately scans it — the drive chips and
+// the big idle cards are one-click scan shortcuts, not just selectors.
+func (m *Model) scanDrive(path string) {
+	m.diskDrive = path
+	m.diskPath = path
+	m.rustMode = false
+	m.startScan()
 }
 
 func (m *Model) stat(c *ui.Context, t *ui.Theme, name, value string) {
