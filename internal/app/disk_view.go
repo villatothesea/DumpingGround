@@ -297,6 +297,10 @@ func (m *Model) clearDisk() {
 	m.rustSel = -1
 	m.rustConfirm = -1
 	m.rustRowConfirm = ""
+	m.rustAdvConfirm = false
+	m.rustChecked = [disk.RustCatCount]bool{}
+	m.rustPathsCat = -1
+	m.rustPathsOpen = false
 	m.diskStatus = "Index cleared"
 	// Dropping the index frees hundreds of MB; return them to the OS now
 	// instead of letting the runtime sit on the released heap. Async so the

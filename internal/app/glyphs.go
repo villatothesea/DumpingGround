@@ -12,6 +12,7 @@ var glyphs = map[string]*ui.SVG{
 	"stop":    glyph(`<rect x="6" y="6" width="12" height="12" rx="1"/>`),
 	"refresh": glyph(`<path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/>`),
 	"folder":  glyph(`<path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2z"/>`),
+	"file":    glyph(`<path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/>`),
 	"copy":    glyph(`<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>`),
 	"up":      glyph(`<path d="M12 19V5M5 12l7-7 7 7"/>`),
 	"right":   glyph(`<path d="m9 18 6-6-6-6"/>`),

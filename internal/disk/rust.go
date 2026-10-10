@@ -9,48 +9,78 @@ import (
 	"time"
 )
 
-// RustDir is one directory a cleanup tier deletes, with the bytes the
-// index measured for it.
+// Cleanup risk levels, safest first. Review items never appear in the
+// preset plans — they need a human look before anything is deleted.
+const (
+	RustRiskSafe = iota
+	RustRiskModerate
+	RustRiskCareful
+	RustRiskReview
+)
+
+// Cleanup category indices in RustReport.Cats, fixed order. The first
+// five live inside project target dirs; the rest are shared locations
+// that exist regardless of which drive was scanned.
+const (
+	RustCatIncr = iota
+	RustCatDoc
+	RustCatDebug
+	RustCatRelease
+	RustCatStray
+	RustCatRegistry
+	RustCatGit
+	RustCatToolchains
+	RustCatOrphans
+	RustCatCount
+)
+
+// RustDir is one path a cleanup category removes, with the bytes measured
+// for it. Base records the expected base name and File whether it is a
+// loose file rather than a directory — both are revalidated before
+// deletion so a path that changed underneath the stale report cannot be
+// removed by mistake.
 type RustDir struct {
 	Path  string
 	Bytes uint64
+	Base  string
+	File  bool
 }
 
-// RustTier is one cleanup level: a name, the directories to delete and the
-// space deleting them frees. Tiers are cumulative by risk — each level
-// deletes a strict superset of the previous one's purpose.
-type RustTier struct {
+// RustCat is one cleanup category: a name, what deleting it costs, a
+// risk level, and the paths it covers.
+type RustCat struct {
 	Name  string
 	Note  string
+	Risk  int
 	Dirs  []RustDir
 	Bytes uint64
 }
 
-// RustItem is one project's target/ dir with its per-tier breakdown. Path
-// is the target/ dir itself; the project lives in its parent. Idle is the
-// days since the project was last touched — a source edit or a build —
-// or -1 when nothing could be dated.
+// RustItem is one project's target/ dir with its per-category breakdown.
+// Path is the target/ dir itself; the project lives in its parent. Idle
+// is the days since the project was last touched — a source edit or a
+// build — or -1 when nothing could be dated.
 type RustItem struct {
-	Path        string
-	Incr, Debug uint64
-	Total       uint64
-	Idle        int
+	Path                          string
+	Incr, Doc, Debug, Rel, Stray  uint64
+	Total                         uint64
+	Idle                          int
 }
 
-// RustReport summarizes Rust build artifacts inside a snapshot: target/
-// directories that sit next to a Cargo.toml. It is self-contained — paths
-// and sizes only, no node ids — so it stays browsable and cleanable after
+// RustReport summarizes Rust build artifacts: per-category path lists
+// plus one row per project target dir. It is self-contained — paths and
+// sizes only, no node ids — so it stays browsable and cleanable after
 // the index that produced it is released.
 type RustReport struct {
-	Projects int    // target/ dirs found
+	Projects int    // project target/ dirs found
 	Scanned  uint64 // the bytes the % column compares each item to
-	Tiers    [3]RustTier
+	Cats     [RustCatCount]RustCat
 	Items    []RustItem // per project, sorted by Total descending
 }
 
 // ApplyDeleted drops everything a finished deletion removed and recomputes
 // the rest, so the report stays accurate without an index. deleted maps
-// each RemoveAll'd dir to the bytes it held; dirs inside a deleted dir go
+// each removed path to the bytes it held; paths inside a deleted dir go
 // with it.
 func (rep *RustReport) ApplyDeleted(deleted map[string]uint64) {
 	if len(deleted) == 0 {
@@ -65,16 +95,16 @@ func (rep *RustReport) ApplyDeleted(deleted map[string]uint64) {
 		}
 		return false
 	}
-	for t := range rep.Tiers {
-		tier := &rep.Tiers[t]
-		keep, bytes := tier.Dirs[:0], uint64(0)
-		for _, d := range tier.Dirs {
+	for c := range rep.Cats {
+		cat := &rep.Cats[c]
+		keep, bytes := cat.Dirs[:0], uint64(0)
+		for _, d := range cat.Dirs {
 			if !under(d.Path) {
 				keep = append(keep, d)
 				bytes += d.Bytes
 			}
 		}
-		tier.Dirs, tier.Bytes = keep, bytes
+		cat.Dirs, cat.Bytes = keep, bytes
 	}
 	items := rep.Items[:0]
 	for _, it := range rep.Items {
@@ -86,17 +116,16 @@ func (rep *RustReport) ApplyDeleted(deleted map[string]uint64) {
 				it.Total -= min(it.Total, b)
 			}
 		}
-		// Incr and Debug recompute from the surviving tier dirs, so an
-		// incremental dir that went down with its debug dir leaves both.
-		it.Incr, it.Debug = 0, 0
-		for _, d := range rep.Tiers[0].Dirs {
-			if strings.HasPrefix(d.Path, it.Path+sep) {
-				it.Incr += d.Bytes
-			}
-		}
-		for _, d := range rep.Tiers[1].Dirs {
-			if strings.HasPrefix(d.Path, it.Path+sep) {
-				it.Debug += d.Bytes
+		// The per-category columns recompute from the surviving category
+		// dirs, so an incremental dir that went down with its debug dir
+		// leaves both counts.
+		it.Incr, it.Doc, it.Debug, it.Rel, it.Stray = 0, 0, 0, 0, 0
+		fields := []*uint64{&it.Incr, &it.Doc, &it.Debug, &it.Rel, &it.Stray}
+		for c := RustCatIncr; c <= RustCatStray; c++ {
+			for _, d := range rep.Cats[c].Dirs {
+				if strings.HasPrefix(d.Path, it.Path+sep) {
+					*fields[c] += d.Bytes
+				}
 			}
 		}
 		items = append(items, it)
@@ -104,37 +133,97 @@ func (rep *RustReport) ApplyDeleted(deleted map[string]uint64) {
 	rep.Items, rep.Projects = items, len(items)
 }
 
-// FindRustTargets walks the snapshot for directories named "target" whose
-// parent holds a Cargo.toml, then buckets them into three cleanup tiers:
-// incremental caches, whole debug builds, and whole target dirs. gone, when
-// non-nil, reports paths already deleted so a re-analysis skips them.
+// DedupRustDirs drops paths nested inside another selected path, so a
+// batch delete never tries to remove a dir already gone with its parent —
+// debug contains incremental, target contains everything.
+func DedupRustDirs(dirs []RustDir) []RustDir {
+	sort.Slice(dirs, func(i, j int) bool { return dirs[i].Path < dirs[j].Path })
+	out, tops := dirs[:0], []string{}
+	sep := string(filepath.Separator)
+	for _, d := range dirs {
+		nested := false
+		for _, tp := range tops {
+			if strings.EqualFold(d.Path, tp) || strings.HasPrefix(d.Path, tp+sep) {
+				nested = true
+				break
+			}
+		}
+		if !nested {
+			out = append(out, d)
+			tops = append(tops, d.Path)
+		}
+	}
+	return out
+}
+
+// FindRustTargets walks the snapshot for directories named "target",
+// sorts them into Cargo projects (a Cargo.toml sits next to them),
+// orphans (cargo-built but the project marker is gone) and decoys, then
+// buckets project contents into the in-target categories. Shared caches
+// — ~/.cargo registry and git checkouts, ~/.rustup toolchains — are
+// measured directly since they live under the user profile no matter
+// which drive was scanned. gone, when non-nil, reports paths already
+// deleted so a re-analysis skips them.
 func FindRustTargets(s *Snapshot, gone func(string) bool) *RustReport {
 	rep := &RustReport{Scanned: s.Allocated}
-	rep.Tiers[0].Name, rep.Tiers[0].Note = "Incremental caches", "Compiler fingerprints and incremental state — rebuild costs almost nothing"
-	rep.Tiers[1].Name, rep.Tiers[1].Note = "Debug builds", "Every target/debug dir — rebuilds on the next cargo build"
-	rep.Tiers[2].Name, rep.Tiers[2].Note = "Everything", "Entire target/ dirs including release builds — slowest to rebuild"
+	cats := [RustCatCount]struct {
+		name, note string
+		risk       int
+	}{
+		{"Incremental caches", "Compiler fingerprints — rebuild costs almost nothing", RustRiskSafe},
+		{"Doc builds", "cargo doc output — regenerates on demand", RustRiskSafe},
+		{"Debug builds", "target/debug dirs — rebuild on the next cargo build", RustRiskModerate},
+		{"Release builds", "Optimized binaries — slowest to rebuild", RustRiskCareful},
+		{"Stray files", "Loose files inside target/ Cargo did not put there", RustRiskReview},
+		{"Registry cache", "~/.cargo/registry — downloaded crate sources, re-fetched on demand", RustRiskSafe},
+		{"Git checkouts", "~/.cargo/git — git dependencies, re-fetched on demand", RustRiskSafe},
+		{"Old toolchains", "rustup toolchains other than the default — reinstall via rustup", RustRiskModerate},
+		{"Orphan targets", "Cargo-built target dirs whose project marker is gone", RustRiskReview},
+	}
+	for i, n := range cats {
+		rep.Cats[i].Name, rep.Cats[i].Note, rep.Cats[i].Risk = n.name, n.note, n.risk
+	}
+	add := func(cat int, path string, bytes uint64, base string, file bool) {
+		rep.Cats[cat].Dirs = append(rep.Cats[cat].Dirs, RustDir{Path: path, Bytes: bytes, Base: base, File: file})
+		rep.Cats[cat].Bytes += bytes
+	}
 	dead := func(id int) bool {
 		return gone != nil && gone(s.FullPath(id))
 	}
+	claimed := map[int]bool{} // node ids of target dirs already handled
+	inside := func(id int) bool {
+		for p := s.Nodes[id].Parent; p >= 0; p = s.Nodes[p].Parent {
+			if claimed[p] {
+				return true
+			}
+		}
+		return false
+	}
 	for i := range s.Nodes {
 		n := &s.Nodes[i]
-		if !n.Dir || !strings.EqualFold(n.Name, "target") {
+		if !n.Dir || !strings.EqualFold(n.Name, "target") || dead(i) || inside(i) {
 			continue
 		}
-		if !hasCargoToml(s, n.Parent) || dead(i) {
+		claimed[i] = true
+		if !hasCargoToml(s, n.Parent) {
+			// No Cargo.toml next to it: either a decoy that merely shares
+			// the name, or a real Cargo target whose project is gone.
+			// Cargo's own marker files tell the two apart.
+			if cargoMarkers(s, i) {
+				add(RustCatOrphans, s.FullPath(i), n.Allocated, "target", false)
+			}
 			continue
 		}
 		rep.Projects++
-		rep.Tiers[2].Dirs = append(rep.Tiers[2].Dirs, RustDir{s.FullPath(i), n.Allocated})
-		rep.Tiers[2].Bytes += n.Allocated
-		item := RustItem{Path: s.FullPath(i), Total: n.Allocated, Idle: rustIdleDays(s.FullPath(i))}
+		path := s.FullPath(i)
+		item := RustItem{Path: path, Total: n.Allocated, Idle: rustIdleDays(path)}
 		// Cargo puts incremental/ under every profile dir — and profiles
 		// themselves can nest under a target triple or a nested
 		// CARGO_TARGET_DIR (check62/debug/incremental,
-		// aarch64-linux-android/mobile/incremental), so the name search has
-		// to cover the whole subtree, not just one profile level. "debug"
-		// stays at depth ≤2: deeper dirs named debug are more likely a
-		// build script's than a profile's.
+		// aarch64-linux-android/mobile/incremental), so the name search
+		// covers the whole subtree. debug/release/doc stay at depth ≤2:
+		// deeper dirs with those names are more likely a build script's
+		// than a profile's.
 		type frame struct {
 			id, depth int
 		}
@@ -144,19 +233,42 @@ func FindRustTargets(s *Snapshot, gone func(string) bool) *RustReport {
 			stack = stack[:len(stack)-1]
 			for _, sub := range s.Nodes[f.id].Children {
 				d := &s.Nodes[sub]
-				if !d.Dir || dead(sub) {
+				if dead(sub) {
 					continue
 				}
-				switch {
-				case strings.EqualFold(d.Name, "incremental"):
-					rep.Tiers[0].Dirs = append(rep.Tiers[0].Dirs, RustDir{s.FullPath(sub), d.Allocated})
-					rep.Tiers[0].Bytes += d.Allocated
+				if !d.Dir {
+					// Loose files at the target root are not Cargo's —
+					// logs, scripts and dumps a developer dropped there.
+					// Cargo keeps exactly two root files of its own.
+					if f.id == i {
+						name := strings.ToLower(d.Name)
+						if name != "cachedir.tag" && name != ".rustc_info.json" {
+							add(RustCatStray, s.FullPath(sub), d.Allocated, d.Name, true)
+							item.Stray += d.Allocated
+						}
+					}
+					continue
+				}
+				switch strings.ToLower(d.Name) {
+				case "incremental":
+					add(RustCatIncr, s.FullPath(sub), d.Allocated, d.Name, false)
 					item.Incr += d.Allocated
 					continue // incremental dirs nest nothing worth listing
-				case f.depth < 2 && strings.EqualFold(d.Name, "debug"):
-					rep.Tiers[1].Dirs = append(rep.Tiers[1].Dirs, RustDir{s.FullPath(sub), d.Allocated})
-					rep.Tiers[1].Bytes += d.Allocated
-					item.Debug += d.Allocated
+				case "debug", "release", "doc":
+					if f.depth >= 2 {
+						break
+					}
+					cat, field := RustCatDebug, &item.Debug
+					switch d.Name[0] {
+					case 'r', 'R':
+						cat, field = RustCatRelease, &item.Rel
+					case 'd', 'D':
+						if strings.EqualFold(d.Name, "doc") {
+							cat, field = RustCatDoc, &item.Doc
+						}
+					}
+					add(cat, s.FullPath(sub), d.Allocated, d.Name, false)
+					*field += d.Allocated
 				}
 				stack = append(stack, frame{sub, f.depth + 1})
 			}
@@ -164,7 +276,133 @@ func FindRustTargets(s *Snapshot, gone func(string) bool) *RustReport {
 		rep.Items = append(rep.Items, item)
 	}
 	sort.Slice(rep.Items, func(a, b int) bool { return rep.Items[a].Total > rep.Items[b].Total })
+	rep.rustSharedCaches(gone)
 	return rep
+}
+
+// rustSharedCaches measures the user-profile cargo and rustup dirs — the
+// parts of a Rust install that no drive scan sees when the project tree
+// lives elsewhere.
+func (rep *RustReport) rustSharedCaches(gone func(string) bool) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	cargoHome := os.Getenv("CARGO_HOME")
+	if cargoHome == "" {
+		cargoHome = filepath.Join(home, ".cargo")
+	}
+	for _, c := range []struct {
+		cat  int
+		dir  string
+	}{
+		{RustCatRegistry, filepath.Join(cargoHome, "registry")},
+		{RustCatGit, filepath.Join(cargoHome, "git")},
+	} {
+		if gone != nil && gone(c.dir) {
+			continue
+		}
+		if bytes, ok := duDir(c.dir); ok && bytes > 0 {
+			rep.Cats[c.cat].Dirs = append(rep.Cats[c.cat].Dirs, RustDir{Path: c.dir, Bytes: bytes, Base: filepath.Base(c.dir)})
+			rep.Cats[c.cat].Bytes += bytes
+		}
+	}
+	// Toolchains: only the non-default ones are offered — deleting the
+	// active toolchain would break every build until it is reinstalled.
+	// If the default cannot be read, the category stays empty rather than
+	// risk the wrong dir.
+	rustupHome := os.Getenv("RUSTUP_HOME")
+	if rustupHome == "" {
+		rustupHome = filepath.Join(home, ".rustup")
+	}
+	def := rustDefaultToolchain(rustupHome)
+	if def == "" {
+		return
+	}
+	tcDir := filepath.Join(rustupHome, "toolchains")
+	entries, err := os.ReadDir(tcDir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if !e.IsDir() || strings.EqualFold(e.Name(), def) {
+			continue
+		}
+		p := filepath.Join(tcDir, e.Name())
+		if gone != nil && gone(p) {
+			continue
+		}
+		if bytes, ok := duDir(p); ok && bytes > 0 {
+			rep.Cats[RustCatToolchains].Dirs = append(rep.Cats[RustCatToolchains].Dirs, RustDir{Path: p, Bytes: bytes, Base: e.Name()})
+			rep.Cats[RustCatToolchains].Bytes += bytes
+		}
+	}
+}
+
+// rustDefaultToolchain reads the default_toolchain key out of
+// ~/.rustup/settings.toml without pulling in a TOML parser.
+func rustDefaultToolchain(rustupHome string) string {
+	data, err := os.ReadFile(filepath.Join(rustupHome, "settings.toml"))
+	if err != nil {
+		return ""
+	}
+	for _, ln := range strings.Split(string(data), "\n") {
+		ln = strings.TrimSpace(ln)
+		if !strings.HasPrefix(ln, "default_toolchain") {
+			continue
+		}
+		if i := strings.Index(ln, "="); i >= 0 {
+			return strings.Trim(strings.TrimSpace(ln[i+1:]), `"'`)
+		}
+	}
+	return ""
+}
+
+// duDir walks a directory tree and sums file sizes — logical bytes, close
+// enough for cache dirs the index never saw.
+func duDir(path string) (uint64, bool) {
+	if fi, err := os.Stat(path); err != nil || !fi.IsDir() {
+		return 0, false
+	}
+	var total uint64
+	filepath.WalkDir(path, func(_ string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if fi, err := d.Info(); err == nil && fi.Size() > 0 {
+			total += uint64(fi.Size())
+		}
+		return nil
+	})
+	return total, true
+}
+
+// cargoMarkers reports whether a "target" dir shows Cargo's own traces —
+// a .fingerprint dir or CACHEDIR.TAG — meaning it once held a real build
+// even though no Cargo.toml sits next to it now.
+func cargoMarkers(s *Snapshot, target int) bool {
+	type frame struct {
+		id, depth int
+	}
+	stack := []frame{{target, 0}}
+	for len(stack) > 0 {
+		f := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		for _, sub := range s.Nodes[f.id].Children {
+			d := &s.Nodes[sub]
+			name := strings.ToLower(d.Name)
+			if !d.Dir && (name == "cachedir.tag" || name == ".rustc_info.json") {
+				return true
+			}
+			if d.Dir && name == ".fingerprint" {
+				return true
+			}
+			if d.Dir && f.depth < 3 {
+				stack = append(stack, frame{sub, f.depth + 1})
+			}
+		}
+	}
+	return false
 }
 
 // rustIdleDays estimates how long a project has sat untouched: the newest
@@ -229,19 +467,23 @@ func hasCargoToml(s *Snapshot, dir int) bool {
 	return false
 }
 
-// SafeRustDelete checks that p still points at a directory with the expected
-// base name before RemoveAll touches it — the index is stale by seconds, so
-// this guards against a path that was renamed or replaced in between.
-func SafeRustDelete(p string) error {
-	base := strings.ToLower(filepath.Base(p))
-	if base != "target" && base != "debug" && base != "incremental" {
-		return errors.New("path is not a Rust artifact directory")
+// SafeRustEntry checks that path still exists and still matches what the
+// report collected — expected base name, file vs directory — before
+// deletion touches it. The report is stale by seconds, so this guards
+// against a path that was renamed or replaced in between.
+func SafeRustEntry(path, base string, file bool) error {
+	if base != "" && !strings.EqualFold(filepath.Base(path), base) {
+		return errors.New("path no longer looks like the expected artifact")
 	}
-	info, err := os.Stat(p)
+	info, err := os.Stat(path)
 	if err != nil {
 		return err
 	}
-	if !info.IsDir() {
+	if file {
+		if info.IsDir() {
+			return errors.New("expected a file, found a directory")
+		}
+	} else if !info.IsDir() {
 		return errors.New("path is not a directory")
 	}
 	return nil
