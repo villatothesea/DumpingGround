@@ -75,6 +75,11 @@ func TestWorkspaceControlsStayInsideWindow(t *testing.T) {
 				for _, name := range []string{"Tree", "List", "fixture.exe", "Search processes", "Settings"} {
 					visible(t, tt, size[0], size[1], name)
 				}
+				// The selection actions stay in the toolbar — disabled —
+				// even before a row is selected.
+				for _, name := range []string{"End process", "End process tree", "Details"} {
+					visible(t, tt, size[0], size[1], name)
+				}
 				// Selection actions sit in the page toolbar once a row is
 				// selected; the gear must still clear the caption strip.
 				m.processSelected = 0

@@ -546,33 +546,36 @@ func (m *Model) pageTab(c *ui.Context, t *ui.Theme, pg page, label string) {
 }
 
 // selActs mirrors the prototype's #selacts: quick actions for the selected
-// process live in the page toolbar and disappear when nothing is selected.
-// Both end actions stay visible — no dropdown — per the workspace layout.
+// process live in the page toolbar. They stay visible — greyed out — when
+// nothing is selected, so the row keeps its shape and the actions stay
+// discoverable. Both end actions stay visible — no dropdown.
 func (m *Model) selActs(c *ui.Context, t *ui.Theme) {
 	selected, ok := m.selectedProcess()
-	if !ok {
-		return
-	}
 	ui.Box(c).Width(1).Height(20).Background(t.Border)
-	if m.pactButton(c, "folder", "Open location").Disabled(selected.Path == "").Clicked() {
+	if m.pactButton(c, "folder", "Open location").Disabled(!ok || selected.Path == "").Clicked() {
 		mygo.Shell.ShowItemInFolder(selected.Path)
 	}
-	if m.pactButton(c, "copy", "Copy path").Disabled(selected.Path == "").Clicked() {
+	if m.pactButton(c, "copy", "Copy path").Disabled(!ok || selected.Path == "").Clicked() {
 		mygo.Clipboard.WriteText(selected.Path)
 	}
-	exited := selected.Access == "Exited"
+	exited := ok && selected.Access == "Exited"
 	killTip := "End process"
-	if exited {
+	switch {
+	case !ok:
+		killTip = "Select a process first"
+	case exited:
 		killTip = "Process already exited"
 	}
-	if m.dangerButton(c, "x", "End process").Disabled(selected.PID <= 4 || exited).Tooltip(killTip).Clicked() {
+	if m.dangerButton(c, "x", "End process").Disabled(!ok || selected.PID <= 4 || exited).Tooltip(killTip).Clicked() {
 		m.terminateTarget, m.terminateTree, m.terminateOpen = selected, false, true
 	}
 	treeTip := "End the process and all its descendants"
-	if exited {
+	if !ok {
+		treeTip = killTip
+	} else if exited {
 		treeTip = killTip
 	}
-	if m.dangerButton(c, "x", "End process tree").Disabled(selected.PID <= 4 || exited).Tooltip(treeTip).Clicked() {
+	if m.dangerButton(c, "x", "End process tree").Disabled(!ok || selected.PID <= 4 || exited).Tooltip(treeTip).Clicked() {
 		m.terminateTarget, m.terminateTree, m.terminateOpen = selected, true, true
 	}
 	det := "chup"
