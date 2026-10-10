@@ -454,11 +454,10 @@ func (m *Model) view(c *ui.Context) {
 // region and leaves the room c.TitleBar reports to the system buttons.
 func (m *Model) topBar(c *ui.Context, t *ui.Theme) {
 	// Keep the controls clear of the window buttons. A zero TitleBar means
-	// the caption failed to appear: still leave a corner's room or the
-	// window's rounded corner clips the last button. The controls in this
-	// strip must also stay narrow enough for the minimum window width —
-	// rigid items overflowing the padding end up under the native caption.
-	right := max(c.TitleBar().Right+4, 48)
+	// the caption failed to appear: the floor reserves the whole three-button
+	// strip (3×46) plus margin, so the last control can never slide beneath
+	// the native buttons whichever frame the report arrives on.
+	right := max(c.TitleBar().Right+10, 148)
 	bar := ui.Row(c).FillWidth().Height(40).Shrink(0).Padding(0, right, 0, 12).Gap(4).AlignItems(ui.Center).Background(t.Surface).DragWindow()
 	bar.Draw(func(p *ui.Painter, r ui.Rect) { p.Fill(ui.Rect{X: r.X, Y: r.Y + r.H - 1, W: r.W, H: 1}, t.Border, 0) })
 	bar.Children(func() {
@@ -660,24 +659,20 @@ func (m *Model) iconTextButton(c *ui.Context, name, label string) ui.Element {
 	return e
 }
 
-// dangerFace is the destructive action's muted Morandi red: softer than the
-// theme's danger color, still readable behind a white label.
-var dangerFace = ui.RGB(0xB0, 0x6A, 0x62)
-
-// dangerButton is the destructive .btn: a solid muted-red face with a white
-// label, lighter on hover and darker on press, faded while disabled.
+// dangerButton is the destructive .btn: the theme's solid danger red with a
+// white label, lighter on hover and darker on press, faded while disabled.
 func (m *Model) dangerButton(c *ui.Context, name, label string) ui.Element {
 	t := c.Theme()
 	e := ui.Row(c).Height(28).PaddingX(12).Gap(6).AlignItems(ui.Center).Radius(t.Radius).Label(label)
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
-		bg := dangerFace
+		bg := t.Danger
 		switch {
 		case e.IsDisabled():
-			bg = dangerFace.Alpha(0.45)
+			bg = bg.Alpha(0.45)
 		case e.Pressed():
-			bg = dangerFace.Mix(ui.RGB(0, 0, 0), 0.15)
+			bg = bg.Mix(ui.RGB(0, 0, 0), 0.15)
 		case e.Hovered():
-			bg = dangerFace.Mix(ui.RGB(255, 255, 255), 0.12)
+			bg = bg.Mix(ui.RGB(255, 255, 255), 0.12)
 		}
 		p.Fill(r, bg, t.Radius)
 	})

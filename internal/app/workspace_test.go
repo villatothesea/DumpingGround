@@ -87,7 +87,7 @@ func TestWorkspaceControlsStayInsideWindow(t *testing.T) {
 				if m.page != diskPage {
 					t.Fatal("page did not switch")
 				}
-				for _, name := range []string{"Scan", "Scan path", "Browse…", "Drive C:\\", "Drive D:\\"} {
+				for _, name := range []string{"Scan", "Browse…", "Drive C:\\", "Drive D:\\"} {
 					visible(t, tt, size[0], size[1], name)
 				}
 				if err := tt.Click("Drive D:\\"); err != nil {

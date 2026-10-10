@@ -226,7 +226,6 @@ func (m *Model) diskView(c *ui.Context) {
 		for _, volume := range m.diskVolumes {
 			m.driveChip(c, t, volume, scanning)
 		}
-		ui.TextInput(c, &m.diskPath).Label("Scan path").Placeholder("Drive or folder path").Grow(1).MinWidth(120).Disabled(scanning)
 		if ui.Button(c, "Browse…").Disabled(scanning).Clicked() {
 			m.browse()
 		}
