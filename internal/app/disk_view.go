@@ -584,8 +584,9 @@ func (m *Model) breadcrumbs(c *ui.Context, t *ui.Theme, s *disk.Snapshot, to int
 
 // crumb is one breadcrumb segment: subtle text button, bold and inert when last.
 func (m *Model) crumb(c *ui.Context, t *ui.Theme, label string, id int, last bool) {
-	e := ui.Row(c).Padding(2, 6).Radius(4).MaxWidth(200)
+	e := ui.Row(c).Padding(2, 6).Radius(4).MaxWidth(200).Label(label)
 	if !last {
+		e.Cursor(ui.CursorPointer).Tooltip(label)
 		e.Draw(func(p *ui.Painter, r ui.Rect) {
 			if e.Hovered() {
 				p.Fill(r, t.SurfaceHover, 4)
@@ -923,7 +924,33 @@ func (m *Model) diskMap(c *ui.Context) {
 				// Only navigation animates — zooming in or out. Live index
 				// updates resize blocks in place; pulsing them every flush
 				// reads as flicker, so data changes snap.
-				m.mapMotion.retarget(next, p.Now(), animate && old.Root != next.Root, enter, back)
+				switch {
+				case animate && old.Root != next.Root:
+					m.mapMotion.retarget(next, p.Now(), true, enter, back)
+				case m.mapAnimating && len(m.mapMotion.From) > 0:
+					// A live relayout during a zoom must not kill the
+					// transition: freeze the in-flight positions and re-aim
+					// each rect at its new destination on the same clock.
+					v := mapEase(m.mapMotion.progress(p.Now(), animate))
+					frozen := make(map[int]treemap.Rect, len(m.mapMotion.From))
+					for i, f := range m.mapMotion.From {
+						frozen[m.mapMotion.Scene.Rects[i].ID] = interpolateRect(f, m.mapMotion.Scene.Rects[i], v)
+					}
+					m.mapMotion.From = m.mapMotion.From[:0]
+					for _, r := range next.Rects {
+						from, ok := frozen[r.ID]
+						if !ok {
+							from = r
+							from.X += r.W / 2
+							from.Y += r.H / 2
+							from.W, from.H = 0, 0
+						}
+						m.mapMotion.From = append(m.mapMotion.From, from)
+					}
+					m.mapMotion.Scene = next
+				default:
+					m.mapMotion.retarget(next, p.Now(), false, -1, -1)
+				}
 				m.mapWidth, m.mapHeight = r.W, r.H
 			}
 			progress := m.mapMotion.progress(p.Now(), animate)
