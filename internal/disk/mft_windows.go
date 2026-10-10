@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 	"strings"
 	"syscall"
@@ -279,6 +280,9 @@ func scanMFTRecords(ctx context.Context, stream io.Reader, count int64, recordBy
 		kids := out.Nodes[id].Children
 		sort.Slice(kids, func(a, b int) bool { return out.Nodes[kids[a]].Allocated > out.Nodes[kids[b]].Allocated })
 	}
+	// Append growth overshoots by up to 2×; hand the spare capacity back —
+	// a full volume holds on the order of a million nodes.
+	out.Nodes = slices.Clip(out.Nodes)
 	out.Duration = time.Since(start)
 	return out, scanErr
 }

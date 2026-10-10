@@ -5,10 +5,14 @@ import (
 	"github.com/dumpingground/dumpingground/internal/app"
 	"log"
 	"os"
+	"runtime/debug"
 	"time"
 )
 
 func main() {
+	// The disk index holds on the order of a million nodes; do not let the
+	// heap idle at twice the live set before the collector wakes up.
+	debug.SetGCPercent(50)
 	// A once-per-second inspector benefits more from lower memory than from a
 	// permanent D3D device. Respect explicit renderer overrides for comparison.
 	if _, set := os.LookupEnv("MYGO_GPU"); !set {

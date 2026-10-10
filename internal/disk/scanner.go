@@ -37,7 +37,10 @@ type Snapshot struct {
 	// Zero for directory walks.
 	JournalID  uint64
 	JournalUSN int64
-	frns       map[uint64][]int
+	// frns maps each file reference number to its first node; extra links of
+	// hard-linked records live in frnMore, so a lone link costs one map slot.
+	frns    map[uint64]int
+	frnMore map[uint64][]int
 }
 
 // maxPathDepth bounds parent-chain walks; a corrupt snapshot must degrade

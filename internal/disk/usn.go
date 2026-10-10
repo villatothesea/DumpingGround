@@ -111,43 +111,98 @@ func (s *Snapshot) ApplyUSNDirs(events []USNEvent, stat FileStatFunc) (bool, map
 	return changed, touched
 }
 
-// frnIndex maps file reference numbers to node IDs lazily; one FRN can own
+// frnInit maps file reference numbers to node IDs lazily; one FRN can own
 // several nodes when a record carries multiple names (hard links).
-func (s *Snapshot) frnIndex() map[uint64][]int {
-	if s.frns == nil {
-		s.frns = make(map[uint64][]int, len(s.Nodes))
-		for i := range s.Nodes {
-			if s.Nodes[i].FRN != 0 && (s.Nodes[i].Parent >= 0 || i == s.Root) {
-				s.frns[s.Nodes[i].FRN] = append(s.frns[s.Nodes[i].FRN], i)
+func (s *Snapshot) frnInit() {
+	if s.frns != nil {
+		return
+	}
+	s.frns = make(map[uint64]int, len(s.Nodes))
+	for i := range s.Nodes {
+		if s.Nodes[i].FRN != 0 && (s.Nodes[i].Parent >= 0 || i == s.Root) {
+			s.frnAdd(s.Nodes[i].FRN, i)
+		}
+	}
+}
+
+// frnEach visits every node a file reference number owns until f returns
+// false — the single link first, then the extra hard links.
+func (s *Snapshot) frnEach(frn uint64, f func(id int) bool) {
+	s.frnInit()
+	first, ok := s.frns[frn]
+	if !ok || !f(first) {
+		return
+	}
+	for _, id := range s.frnMore[frn] {
+		if !f(id) {
+			return
+		}
+	}
+}
+
+func (s *Snapshot) frnAdd(frn uint64, id int) {
+	s.frnInit()
+	if _, ok := s.frns[frn]; ok {
+		if s.frnMore == nil {
+			s.frnMore = make(map[uint64][]int)
+		}
+		s.frnMore[frn] = append(s.frnMore[frn], id)
+		return
+	}
+	s.frns[frn] = id
+}
+
+func (s *Snapshot) frnDrop(frn uint64, id int) {
+	s.frnInit()
+	if first, ok := s.frns[frn]; ok && first == id {
+		if more := s.frnMore[frn]; len(more) > 0 {
+			s.frns[frn] = more[0]
+			if s.frnMore[frn] = more[1:]; len(s.frnMore[frn]) == 0 {
+				delete(s.frnMore, frn)
+			}
+		} else {
+			delete(s.frns, frn)
+		}
+		return
+	}
+	if more := s.frnMore[frn]; len(more) > 0 {
+		if i := slices.Index(more, id); i >= 0 {
+			if s.frnMore[frn] = slices.Delete(more, i, i+1); len(s.frnMore[frn]) == 0 {
+				delete(s.frnMore, frn)
 			}
 		}
 	}
-	return s.frns
 }
 
 // usnDir resolves the directory node for a file reference number. The root
 // node qualifies despite having no parent; tombstoned nodes do not.
 func (s *Snapshot) usnDir(frn uint64) int {
-	for _, id := range s.frnIndex()[frn] {
+	out := -1
+	s.frnEach(frn, func(id int) bool {
 		if n := &s.Nodes[id]; n.Dir && (n.Parent >= 0 || id == s.Root) {
-			return id
+			out = id
+			return false
 		}
-	}
-	return -1
+		return true
+	})
+	return out
 }
 
 // usnFind locates the node representing one name (link) of a record.
 func (s *Snapshot) usnFind(frn, parentFRN uint64, name string) int {
-	for _, id := range s.frnIndex()[frn] {
+	out := -1
+	s.frnEach(frn, func(id int) bool {
 		n := &s.Nodes[id]
 		if n.Parent < 0 || n.Name != name {
-			continue
+			return true
 		}
 		if n.Parent == s.Root || s.Nodes[n.Parent].FRN == parentFRN {
-			return id
+			out = id
+			return false
 		}
-	}
-	return -1
+		return true
+	})
+	return out
 }
 
 // usnDelta shifts aggregate sizes on every ancestor of id. The walk is
@@ -182,7 +237,8 @@ func (s *Snapshot) usnInsert(e USNEvent, stat FileStatFunc) int {
 	}
 	id := len(s.Nodes)
 	dir := e.Attrs&attrDirectory != 0
-	shared := len(s.frnIndex()[e.FRN]) > 0
+	s.frnInit()
+	_, shared := s.frns[e.FRN]
 	n := Node{ID: id, Parent: parent, Name: e.Name, Dir: dir, FRN: e.FRN}
 	if !dir {
 		logical, allocated, ok := stat(filepath.Join(s.FullPath(parent), e.Name))
@@ -202,7 +258,7 @@ func (s *Snapshot) usnInsert(e USNEvent, stat FileStatFunc) int {
 	}
 	s.Nodes = append(s.Nodes, n)
 	s.Nodes[parent].Children = append(s.Nodes[parent].Children, id)
-	s.frnIndex()[e.FRN] = append(s.frnIndex()[e.FRN], id)
+	s.frnAdd(e.FRN, id)
 	s.usnDelta(id, int64(n.Bytes), int64(n.Allocated))
 	return id
 }
@@ -216,14 +272,19 @@ func (s *Snapshot) usnRemove(id int) {
 		return
 	}
 	if !n.Dir && n.Allocated > 0 {
-		for _, sib := range s.frnIndex()[n.FRN] {
-			if sib != id && s.Nodes[sib].Parent >= 0 {
-				s.Nodes[sib].Allocated = n.Allocated
-				s.Nodes[sib].Shared = false
-				s.usnDelta(sib, 0, int64(n.Allocated))
-				n.Allocated = 0
-				break
+		sib := -1
+		s.frnEach(n.FRN, func(x int) bool {
+			if x != id && s.Nodes[x].Parent >= 0 {
+				sib = x
+				return false
 			}
+			return true
+		})
+		if sib >= 0 {
+			s.Nodes[sib].Allocated = n.Allocated
+			s.Nodes[sib].Shared = false
+			s.usnDelta(sib, 0, int64(n.Allocated))
+			n.Allocated = 0
 		}
 	}
 	s.usnDelta(id, -int64(n.Bytes), -int64(n.Allocated))
@@ -243,11 +304,8 @@ func (s *Snapshot) usnRemove(id int) {
 		} else {
 			s.Files--
 		}
-		if ids := s.frnIndex()[c.FRN]; len(ids) > 0 {
-			s.frns[c.FRN] = slices.DeleteFunc(ids, func(x int) bool { return x == cur })
-			if len(s.frns[c.FRN]) == 0 {
-				delete(s.frns, c.FRN)
-			}
+		if c.FRN != 0 {
+			s.frnDrop(c.FRN, cur)
 		}
 		stack = append(stack, c.Children...)
 		c.Name, c.FRN, c.Parent, c.Children = "", 0, -1, nil
@@ -259,22 +317,23 @@ func (s *Snapshot) usnRemove(id int) {
 // record when one preceded it in the batch.
 func (s *Snapshot) usnRename(e, old USNEvent, ok bool, touched map[int]bool) bool {
 	id := -1
-	for _, cand := range s.frnIndex()[e.FRN] {
+	s.frnEach(e.FRN, func(cand int) bool {
 		n := &s.Nodes[cand]
 		if n.Parent < 0 {
-			continue
+			return true
 		}
 		pfrn := s.Nodes[n.Parent].FRN
 		if ok {
 			if n.Name == old.Name && (n.Parent == s.Root || pfrn == old.ParentFRN) {
 				id = cand
-				break
+				return false
 			}
 		} else if n.Name != e.Name || pfrn != e.ParentFRN {
 			id = cand
-			break
+			return false
 		}
-	}
+		return true
+	})
 	if id < 0 {
 		return false
 	}
