@@ -152,16 +152,16 @@ func TestMFTRecordsCancelKeepsPartial(t *testing.T) {
 		stream.Write(make([]byte, recordBytes))
 	}
 	stream.Write(mftRecord(sector, recordBytes, 1, true, mftStdInfo(), mftFileName(5|1<<48, 1, ".")))
-	// Enough records to span several 256 KiB read chunks.
-	for stream.Len() < recordBytes*600 {
+	// Enough records to span several 4 MiB decode chunks (4096 records each).
+	for stream.Len() < recordBytes*5000 {
 		stream.Write(make([]byte, recordBytes))
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	reads := 0
 	src := readerFunc(func(p []byte) (int, error) {
 		reads++
-		if reads == 2 {
-			cancel() // cancel after the root record was already consumed
+		if reads == 1 {
+			cancel() // cancel while the first decode chunk was already consumed
 		}
 		return stream.Read(p)
 	})

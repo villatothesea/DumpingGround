@@ -35,14 +35,27 @@ func u64(b []byte) uint64 { return binary.LittleEndian.Uint64(b) }
 
 // Decode fixes sector trailers in a private copy; callers may reuse raw buffers.
 func Decode(raw []byte, sector int) (Record, error) {
+	return decode(raw, sector, false)
+}
+
+// DecodeMutable is Decode for callers who own raw: the update sequence
+// array is applied in place, saving a copy of every record.
+func DecodeMutable(raw []byte, sector int) (Record, error) {
+	return decode(raw, sector, true)
+}
+
+func decode(raw []byte, sector int, mutate bool) (Record, error) {
 	var r Record
-	if len(raw) < 48 || string(raw[:4]) != "FILE" {
+	if len(raw) < 48 || u32(raw[:4]) != 0x454c4946 /* "FILE" */ {
 		return r, errors.New("not a FILE record")
 	}
 	if u16(raw[22:])&1 == 0 {
 		return r, nil
 	}
-	b := append([]byte(nil), raw...)
+	b := raw
+	if !mutate {
+		b = append([]byte(nil), raw...)
+	}
 	usa, count := int(u16(b[4:])), int(u16(b[6:]))
 	if sector < 256 || usa < 8 || count < 2 || usa+count*2 > len(b) || (count-1)*sector != len(b) {
 		return r, errors.New("invalid update sequence array")
@@ -97,11 +110,13 @@ func Decode(raw []byte, sector int) (Record, error) {
 			if 66+n*2 > len(value) {
 				return r, errors.New("short filename")
 			}
-			chars := make([]uint16, n)
-			for i := range chars {
+			// A filename is at most 255 UTF-16 units; decode on the stack
+			// and let the string conversion make the only allocation.
+			var chars [255]uint16
+			for i := 0; i < n; i++ {
 				chars[i] = u16(value[66+i*2:])
 			}
-			r.Names = append(r.Names, Name{u64(value), string(utf16.Decode(chars)), value[65]})
+			r.Names = append(r.Names, Name{u64(value), string(utf16.Decode(chars[:n])), value[65]})
 		case 0x80:
 			if !named {
 				if nonresident {
