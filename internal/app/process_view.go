@@ -181,6 +181,64 @@ func (m *Model) sortProcessTree() {
 		slices.SortFunc(m.processChildren[p], compare)
 	}
 }
+
+// selectProcessRow makes pid the selected row in whichever mode is active.
+func (m *Model) selectProcessRow(pid uint32) {
+	if m.processTreeMode {
+		for i := 0; i < m.processTree.Rows(); i++ {
+			if m.processTree.Item(i) == pid {
+				m.processSelected = i
+				return
+			}
+		}
+	} else {
+		m.processSelected = slices.Index(m.processFlat, pid)
+	}
+}
+
+// rankProcessColumns ranks the rows' values per metric column so cells can
+// tint the ten largest: rank 1 in the accent's full strength, rank 10 faded
+// toward the background.
+func (m *Model) rankProcessColumns() {
+	m.procTop = nil
+	if len(m.processFlat) < 2 {
+		return
+	}
+	metrics := []struct {
+		col int
+		val func(process.Info) float64
+	}{
+		{2, func(r process.Info) float64 { return r.CPU }},
+		{3, func(r process.Info) float64 { return float64(r.Memory) }},
+		{4, func(r process.Info) float64 { return float64(r.Private) }},
+		{5, func(r process.Info) float64 { return float64(r.ReadRate) }},
+		{6, func(r process.Info) float64 { return float64(r.WriteRate) }},
+		{7, func(r process.Info) float64 { return float64(r.Threads) }},
+	}
+	ids := slices.Clone(m.processFlat)
+	for _, mt := range metrics {
+		slices.SortFunc(ids, func(a, b uint32) int {
+			return cmp.Compare(mt.val(m.displayProcess(b)), mt.val(m.displayProcess(a)))
+		})
+		var rank map[uint32]int
+		for i := 0; i < len(ids) && i < 10; i++ {
+			if mt.val(m.displayProcess(ids[i])) <= 0 {
+				break
+			}
+			if rank == nil {
+				rank = map[uint32]int{}
+			}
+			rank[ids[i]] = i + 1
+		}
+		if rank != nil {
+			if m.procTop == nil {
+				m.procTop = map[int]map[uint32]int{}
+			}
+			m.procTop[mt.col] = rank
+		}
+	}
+}
+
 func (m *Model) selectedProcess() (process.Info, bool) {
 	i := m.processSelected
 	if m.processTreeMode {
@@ -196,6 +254,12 @@ func (m *Model) selectedProcess() (process.Info, bool) {
 }
 func (m *Model) processView(c *ui.Context) {
 	t := c.Theme()
+	m.procMenuHits = m.procMenuHits[:0]
+	m.rankProcessColumns()
+	selPID := uint32(0)
+	if r, ok := m.selectedProcess(); ok {
+		selPID = r.PID
+	}
 	ui.Row(c).FillWidth().Height(40).Shrink(0).PaddingX(12).Gap(8).AlignItems(ui.Center).Children(func() {
 		m.modeButton(c, t, "Tree", m.processTreeMode, func() {
 			m.processTreeMode = true
@@ -250,26 +314,23 @@ func (m *Model) processView(c *ui.Context) {
 			text = "—"
 		}
 		rowView := ui.Row(c).Gap(6).AlignItems(ui.Center)
+		if col == 0 {
+			if b := rowView.Bounds(); b.H > 0 {
+				m.procMenuHits = append(m.procMenuHits, menuHit{y1: b.Y, y2: b.Y + b.H, id: int(id)})
+			}
+		}
 		rowView.Children(func() {
 			if col == 0 {
 				if icon := m.processIcon(r.Path); icon != nil {
 					ui.Image(c, icon).Size(16, 16)
 				}
 			}
-			ui.Text(c, text).SingleLine().Tooltip(r.Path)
-		})
-		rowView.ContextMenu(func(menu *ui.Menu) {
-			if m.processTreeMode {
-				for i := 0; i < m.processTree.Rows(); i++ {
-					if m.processTree.Item(i) == id {
-						m.processSelected = i
-						break
-					}
+			tx := ui.Text(c, text).SingleLine().Tooltip(r.Path)
+			if col >= 2 && col <= 7 && r.Access == "" && id != selPID {
+				if rank := m.procTop[col][id]; rank > 0 {
+					tx.TextColor(t.Accent.Mix(t.Background, 0.8*float32(rank-1)/9)).Bold()
 				}
-			} else {
-				m.processSelected = slices.Index(m.processFlat, id)
 			}
-			m.processMenu(menu, r)
 		})
 	}
 	table := func() {
@@ -277,9 +338,13 @@ func (m *Model) processView(c *ui.Context) {
 			if m.processTreeMode {
 				m.processTree.List.Selected = &m.processSelected
 				m.processTree.List.Sort = &m.processSort
-				tableChrome(c, func() ui.Element {
+				tbl := tableChrome(c, func() ui.Element {
 					return ui.OutlineTable(c, &m.processTree, columns, m.processRoots, func(id uint32) []uint32 { return m.processChildren[id] }, cell)
 				}).FillWidth().Grow(1).Label("Process table")
+				tableRowMenu(tbl, &m.procMenuHits, func(id int, menu *ui.Menu) {
+					m.selectProcessRow(uint32(id))
+					m.processMenu(menu, m.processByPID[uint32(id)])
+				})
 			} else {
 				m.processList.Selected = &m.processSelected
 				m.processList.Sort = &m.processSort
@@ -290,9 +355,14 @@ func (m *Model) processView(c *ui.Context) {
 						Started int64
 					}{r.PID, r.Started.UnixNano()}
 				}
-				if tableChrome(c, func() ui.Element {
+				tbl := tableChrome(c, func() ui.Element {
 					return ui.Table(c, &m.processList, columns, len(m.processFlat), func(row, col int) { cell(m.processFlat[row], col) })
-				}).FillWidth().Grow(1).Label("Process table").Submitted() {
+				}).FillWidth().Grow(1).Label("Process table")
+				tableRowMenu(tbl, &m.procMenuHits, func(id int, menu *ui.Menu) {
+					m.selectProcessRow(uint32(id))
+					m.processMenu(menu, m.processByPID[uint32(id)])
+				})
+				if tbl.Submitted() {
 					m.showDetails = true
 				}
 			}

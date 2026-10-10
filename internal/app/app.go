@@ -66,6 +66,8 @@ type Model struct {
 	processSort                     ui.SortOrder
 	processFlat                     []uint32
 	processTreeMode                 bool
+	procMenuHits                    []menuHit
+	procTop                         map[int]map[uint32]int
 	minimized                       bool
 	processInterval                 string
 	processUpdates                  chan processResult
@@ -117,6 +119,7 @@ type Model struct {
 	diskTree                        ui.OutlineState[int]
 	diskFiles                       ui.ListState
 	diskRows                        []int
+	diskMenuHits                    []menuHit
 	diskSort                        ui.SortOrder
 	diskQuery, diskMode, diskMetric string
 	diskViewKey                     string
@@ -333,8 +336,22 @@ eventsDone:
 	m.drainScan()
 	m.drainWatch()
 }
+
+// dbgMenu/dbgFrames gate stderr diagnostics for the input and frame paths
+// while hunting UI stalls; off in normal runs.
+var dbgMenu = os.Getenv("DG_DEBUG_MENU") != ""
+var dbgFrames = os.Getenv("DG_DEBUG_FRAMES") != ""
+
+func dbgLog(format string, args ...any) { log.Printf(format, args...) }
+
 func (m *Model) view(c *ui.Context) {
+	frameStart := time.Now()
 	m.drain()
+	if dbgFrames {
+		if d := time.Since(frameStart); d > 150*time.Millisecond {
+			dbgLog("drain took %v (events backlog)", d)
+		}
+	}
 	if c.Shortcut(ui.Ctrl, ui.Key1) {
 		m.page = processPage
 	}
@@ -832,6 +849,37 @@ func tableChrome(c *ui.Context, build func() ui.Element) ui.Element {
 		p.Fill(ui.Rect{X: r.X, Y: r.Y + orig.Space(8), W: r.W, H: 1}, orig.Border, 0)
 	})
 	return e
+}
+
+// menuHit is one table row's vertical span in window coordinates, recorded
+// by the row's first cell while the table builds.
+type menuHit struct {
+	y1, y2 float32
+	id     int
+}
+
+// tableRowMenu resolves a right-click to a row through the spans the cells
+// recorded last frame, then opens the row's menu. It replaces cell-local
+// menus: they left the padding, gaps and indent wedges between contents
+// without a menu element — clicks there looked ignored — and their element
+// ids could go stale between the press and release frames, losing the
+// release. The table element outlives both, so every click on a row opens
+// the menu on the first try.
+func tableRowMenu(el ui.Element, hits *[]menuHit, open func(id int, menu *ui.Menu)) {
+	el.ContextMenu(func(menu *ui.Menu) {
+		_, py, _ := el.PointerPosition()
+		y := el.Bounds().Y + py
+		const slop = 6 // spans cover the content, not the row's full height
+		for _, h := range *hits {
+			if y < h.y1-slop {
+				break // spans are recorded in row order
+			}
+			if y < h.y2+slop {
+				open(h.id, menu)
+				return
+			}
+		}
+	})
 }
 
 func (m *Model) captureFrames() {

@@ -588,6 +588,7 @@ func (m *Model) prepareDiskRows() {
 }
 func (m *Model) diskTable(c *ui.Context) {
 	s := m.diskSnapshot
+	m.diskMenuHits = m.diskMenuHits[:0]
 	cols := []ui.TableColumn{{ID: "name", Title: "Name", Width: 280, Sortable: true}, {ID: "logical", Title: "Logical size", Width: 110, Align: ui.End, Sortable: true}, {ID: "allocated", Title: "Allocated", Width: 110, Align: ui.End, Sortable: true}, {Title: "% of folder", Width: 110, Align: ui.End}, {Title: "Path / status"}}
 	cell := func(id, col int) {
 		n := s.Nodes[id]
@@ -609,7 +610,7 @@ func (m *Model) diskTable(c *ui.Context) {
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 					ui.Progress(c, pct/100).Width(42).Height(4)
 					ui.Text(c, format.Percent(pct)).SingleLine()
-				}).Tooltip(s.FullPath(id)).ContextMenu(func(menu *ui.Menu) { m.diskMenu(menu, id) })
+				}).Tooltip(s.FullPath(id))
 				return
 			}
 		case 4:
@@ -618,16 +619,23 @@ func (m *Model) diskTable(c *ui.Context) {
 				text = n.Error
 			}
 		}
-		ui.Text(c, text).SingleLine().Tooltip(s.FullPath(id)).ContextMenu(func(menu *ui.Menu) { m.diskMenu(menu, id) })
+		e := ui.Text(c, text).SingleLine().Tooltip(s.FullPath(id))
+		if col == 0 {
+			if b := e.Bounds(); b.H > 0 {
+				m.diskMenuHits = append(m.diskMenuHits, menuHit{y1: b.Y, y2: b.Y + b.H, id: id})
+			}
+		}
 	}
 	selectedID := -1
 	submitted := false
 	if m.diskMode == "Tree" && m.diskQuery == "" && m.extensionFilter == "" {
 		m.diskTree.List.Selected = &m.diskSelected
 		m.diskTree.List.Sort = &m.diskSort
-		submitted = tableChrome(c, func() ui.Element {
+		tbl := tableChrome(c, func() ui.Element {
 			return ui.OutlineTable(c, &m.diskTree, cols, m.diskRows, func(id int) []int { return s.Nodes[id].Children }, cell)
-		}).Fill().Label("Disk table").Submitted()
+		}).Fill().Label("Disk table")
+		tableRowMenu(tbl, &m.diskMenuHits, func(id int, menu *ui.Menu) { m.diskMenu(menu, id) })
+		submitted = tbl.Submitted()
 		if m.diskSelected >= 0 && m.diskSelected < m.diskTree.Rows() {
 			selectedID = m.diskTree.Item(m.diskSelected)
 		}
@@ -635,9 +643,11 @@ func (m *Model) diskTable(c *ui.Context) {
 		m.diskFiles.Selected = &m.diskSelected
 		m.diskFiles.Sort = &m.diskSort
 		m.diskFiles.Key = func(i int) any { return m.diskRows[i] }
-		submitted = tableChrome(c, func() ui.Element {
+		tbl := tableChrome(c, func() ui.Element {
 			return ui.Table(c, &m.diskFiles, cols, len(m.diskRows), func(i, col int) { cell(m.diskRows[i], col) })
-		}).Fill().Label("Disk table").Submitted()
+		}).Fill().Label("Disk table")
+		tableRowMenu(tbl, &m.diskMenuHits, func(id int, menu *ui.Menu) { m.diskMenu(menu, id) })
+		submitted = tbl.Submitted()
 		if m.diskSelected >= 0 && m.diskSelected < len(m.diskRows) {
 			selectedID = m.diskRows[m.diskSelected]
 		}

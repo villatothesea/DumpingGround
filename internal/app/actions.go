@@ -39,6 +39,9 @@ func (m *Model) exportDisk() {
 	}()
 }
 func (m *Model) processMenu(menu *ui.Menu, r process.Info) {
+	if dbgMenu {
+		dbgLog("processMenu build pid=%d name=%s", r.PID, r.Name)
+	}
 	if menu.Item("Properties").Chosen() {
 		m.showDetails = true
 		m.requestInspection(r.PID)
