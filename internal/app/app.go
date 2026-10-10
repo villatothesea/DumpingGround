@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
+	"log"
 	"os"
 	"sync/atomic"
 	"time"
@@ -14,6 +16,12 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
+
+// appIcon is the rendered product mark (logo option 10) for the window
+// and taskbar; regenerate with DG_ICON_OUT=... go test -run TestRenderAppIcon.
+//
+//go:embed appicon.png
+var appIcon []byte
 
 type page uint8
 
@@ -168,7 +176,10 @@ func (m *Model) Run() error {
 		}
 		m.iconCache[""] = systemIcon("")
 		go m.loadIcons()
-		m.window = mygo.NewWindow(mygo.WindowOptions{Title: "DumpingGround", Width: 1180, Height: 760, MinWidth: 880, MinHeight: 580, Content: ui.View(m.view)})
+		m.window = mygo.NewWindow(mygo.WindowOptions{Title: "DumpingGround", Width: 1180, Height: 760, MinWidth: 880, MinHeight: 580, TitleBarStyle: mygo.TitleBarHidden, TitleBarHeight: 40, Content: ui.View(m.view)})
+		if err := m.window.SetIcon(appIcon); err != nil {
+			log.Print("window icon:", err)
+		}
 		mygo.App.OnSecondInstance(func(_ []string, _ string) { m.window.Restore(); m.window.Show(); m.window.Focus() })
 		m.window.OnMinimize(func() { m.minimized = true; m.samplerActive.Store(false) })
 		m.window.OnRestore(func() {
@@ -395,10 +406,16 @@ func (m *Model) view(c *ui.Context) {
 	}
 }
 
-// topBar is the 40 DIP strip of the redesign: brand, underline tabs, live
-// system meters, the page-scoped search field and window-level tools.
+// topBar is the 40 DIP strip of the redesign: brand, underline tabs, the
+// selection actions, the page-scoped search field and window-level tools.
+// The window's title bar is hidden, so the strip doubles as the drag
+// region and leaves the room c.TitleBar reports to the system buttons.
 func (m *Model) topBar(c *ui.Context, t *ui.Theme) {
-	bar := ui.Row(c).FillWidth().Height(40).Shrink(0).PaddingX(12).Gap(4).AlignItems(ui.Center).Background(t.Surface)
+	right := float32(12)
+	if tb := c.TitleBar(); tb.Right > 0 {
+		right = tb.Right + 4
+	}
+	bar := ui.Row(c).FillWidth().Height(40).Shrink(0).Padding(0, right, 0, 12).Gap(4).AlignItems(ui.Center).Background(t.Surface).DragWindow()
 	bar.Draw(func(p *ui.Painter, r ui.Rect) { p.Fill(ui.Rect{X: r.X, Y: r.Y + r.H - 1, W: r.W, H: 1}, t.Border, 0) })
 	bar.Children(func() {
 		ui.Row(c).Width(168).Shrink(0).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -511,7 +528,7 @@ func (m *Model) selActs(c *ui.Context, t *ui.Theme) {
 // pactButton is the prototype's .pact: a 28×28 icon-only toolbar button.
 func (m *Model) pactButton(c *ui.Context, name, tip string) ui.Element {
 	t := c.Theme()
-	e := ui.Row(c).Size(28, 28).Radius(t.Radius).AlignItems(ui.Center).Background(t.Surface).Label(tip).Tooltip(tip)
+	e := ui.Row(c).Size(28, 28).Radius(t.Radius).Center().Background(t.Surface).Label(tip).Tooltip(tip)
 	e.BorderWidth(1).BorderColor(t.Border)
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
 		if e.Pressed() {
@@ -524,9 +541,9 @@ func (m *Model) pactButton(c *ui.Context, name, tip string) ui.Element {
 	return e
 }
 
-// statMeter is the status-bar gauge of the redesign: muted label plus a
-// value that turns orange at 75% and red at 90%.
-func (m *Model) statMeter(c *ui.Context, t *ui.Theme, label, value string, pct float64, tip string) {
+// statMeter is the status-bar gauge of the redesign: icon, muted label and
+// a value that turns orange at 75% and red at 90%.
+func (m *Model) statMeter(c *ui.Context, t *ui.Theme, glyphName, label, value string, pct float64, tip string) {
 	e := ui.Row(c).Height(22).PaddingX(6).Gap(5).AlignItems(ui.Center).Radius(4).Shrink(0).Tooltip(tip)
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
 		if e.Hovered() {
@@ -534,6 +551,7 @@ func (m *Model) statMeter(c *ui.Context, t *ui.Theme, label, value string, pct f
 		}
 	})
 	e.Children(func() {
+		icon(c, glyphName, 12).TextColor(t.TextMuted)
 		ui.Text(c, label).FontSize(11).TextColor(t.TextMuted)
 		v := ui.Text(c, value).FontSize(11)
 		switch {
@@ -548,7 +566,7 @@ func (m *Model) statMeter(c *ui.Context, t *ui.Theme, label, value string, pct f
 }
 
 // rateMeter shows a label with down/up throughput figures.
-func (m *Model) rateMeter(c *ui.Context, t *ui.Theme, label, tip string, down, up uint64) {
+func (m *Model) rateMeter(c *ui.Context, t *ui.Theme, glyphName, label, tip string, down, up uint64) {
 	e := ui.Row(c).Height(22).PaddingX(6).Gap(4).AlignItems(ui.Center).Radius(4).Shrink(0).Tooltip(tip)
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
 		if e.Hovered() {
@@ -556,6 +574,7 @@ func (m *Model) rateMeter(c *ui.Context, t *ui.Theme, label, tip string, down, u
 		}
 	})
 	e.Children(func() {
+		icon(c, glyphName, 12).TextColor(t.TextMuted)
 		ui.Text(c, label).FontSize(11).TextColor(t.TextMuted)
 		ui.Row(c).Gap(1).AlignItems(ui.Center).Children(func() {
 			icon(c, "dn", 10).TextColor(t.TextMuted)
@@ -591,7 +610,7 @@ func (m *Model) iconTextButton(c *ui.Context, name, label string) ui.Element {
 // iconButton is the top bar's 34×28 glyph button with hover and press states.
 func (m *Model) iconButton(c *ui.Context, name, tip string) ui.Element {
 	t := c.Theme()
-	e := ui.Row(c).Size(34, 28).Radius(6).AlignItems(ui.Center).Tooltip(tip).Label(tip)
+	e := ui.Row(c).Size(34, 28).Radius(6).Center().Tooltip(tip).Label(tip)
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
 		if e.Pressed() {
 			p.Fill(r, t.SurfacePressed, 6)
@@ -619,15 +638,15 @@ func (m *Model) statusBar(c *ui.Context, t *ui.Theme) {
 			text = "Ready"
 		}
 		ui.Text(c, text).SingleLine().MinWidth(0).TextColor(t.TextMuted)
-		m.statMeter(c, t, "CPU", fmt.Sprintf("%.0f%%", m.sys.cpu), m.sys.cpu, fmt.Sprintf("Total CPU usage %.0f%%", m.sys.cpu))
-		m.statMeter(c, t, "MEM", fmt.Sprintf("%d%%", m.sys.memLoad), float64(m.sys.memLoad), fmt.Sprintf("Memory %.1f of %.1f GB used (%d%%)", float64(m.sys.memUsed)/1073741824, float64(m.sys.memTotal)/1073741824, m.sys.memLoad))
+		m.statMeter(c, t, "cpu", "CPU", fmt.Sprintf("%.0f%%", m.sys.cpu), m.sys.cpu, fmt.Sprintf("Total CPU usage %.0f%%", m.sys.cpu))
+		m.statMeter(c, t, "mem", "MEM", fmt.Sprintf("%d%%", m.sys.memLoad), float64(m.sys.memLoad), fmt.Sprintf("Memory %.1f of %.1f GB used (%d%%)", float64(m.sys.memUsed)/1073741824, float64(m.sys.memTotal)/1073741824, m.sys.memLoad))
 		var rd, wr uint64
 		for _, r := range m.processRows {
 			rd += r.ReadRate
 			wr += r.WriteRate
 		}
-		m.rateMeter(c, t, "I/O", fmt.Sprintf("Process disk I/O  read %s  ·  write %s", format.Rate(rd), format.Rate(wr)), rd, wr)
-		m.rateMeter(c, t, "NET", fmt.Sprintf("Network  down %s  ·  up %s", format.Rate(m.sys.netInRate), format.Rate(m.sys.netOutRate)), m.sys.netInRate, m.sys.netOutRate)
+		m.rateMeter(c, t, "hdd", "I/O", fmt.Sprintf("Process disk I/O  read %s  ·  write %s", format.Rate(rd), format.Rate(wr)), rd, wr)
+		m.rateMeter(c, t, "net", "NET", fmt.Sprintf("Network  down %s  ·  up %s", format.Rate(m.sys.netInRate), format.Rate(m.sys.netOutRate)), m.sys.netInRate, m.sys.netOutRate)
 		ui.Spacer(c)
 		hint := "F5 refresh · Ctrl+1–4 pages"
 		if m.page == diskPage {
@@ -679,7 +698,7 @@ func (m *Model) reservedView(c *ui.Context, glyphName, title, desc string) {
 	t := c.Theme()
 	ui.Column(c).Grow(1).MinHeight(0).AlignItems(ui.Center).Children(func() {
 		ui.Spacer(c)
-		ui.Box(c).Size(56, 56).Radius(14).Background(t.Surface).Children(func() {
+		ui.Box(c).Size(56, 56).Radius(14).Center().Background(t.Surface).Children(func() {
 			icon(c, glyphName, 26).TextColor(t.TextMuted)
 		}).Draw(func(p *ui.Painter, r ui.Rect) { p.Stroke(r, t.Border, 14, 1) })
 		ui.Text(c, title).FontSize(15).Bold().PaddingY(4)

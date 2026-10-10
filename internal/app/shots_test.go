@@ -41,6 +41,7 @@ func TestScreenshotStates(t *testing.T) {
 	m.rebuildProcessTree()
 	tt := ui.NewTester(m.view, 1180, 760)
 	tt.SetDark(true)
+	tt.SetTitleBar(ui.TitleBar{Height: 40, Right: 138})
 	tt.Click("beta.exe")
 	m.showDetails = true
 	tt.Frame()

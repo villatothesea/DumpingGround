@@ -271,7 +271,7 @@ func (m *Model) modeButton(c *ui.Context, t *ui.Theme, label string, on bool, ch
 	e.BorderWidth(1).BorderColor(t.Border)
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
 		if on {
-			p.Fill(r, t.SurfacePressed, t.Radius)
+			p.Fill(r, t.Selection, t.Radius)
 		} else if e.Hovered() {
 			p.Fill(r, t.SurfaceHover, t.Radius)
 		}
@@ -381,7 +381,7 @@ func (m *Model) segPair(c *ui.Context, t *ui.Theme, name string, labels []string
 			e := ui.Row(c).Height(26).PaddingX(10).AlignItems(ui.Center).Radius(5).Label(name)
 			e.Draw(func(p *ui.Painter, r ui.Rect) {
 				if on {
-					p.Fill(r, t.SurfacePressed, 5)
+					p.Fill(r, t.Selection, 5)
 				} else if e.Hovered() {
 					p.Fill(r, t.SurfaceHover, 5)
 				}

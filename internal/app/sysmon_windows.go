@@ -30,7 +30,7 @@ type memoryStatusEx struct {
 // systemUsage samples total CPU and physical memory. sampleSystem calls it
 // at frame pace; cpu stays at the last reading when too little time passed.
 type systemUsage struct {
-	idle, busy            uint64
+	total, busy           uint64
 	cpu                   float64
 	memLoad               uint32
 	memTotal              uint64
@@ -44,12 +44,15 @@ func (s *systemUsage) sample() {
 	var idle, kernel, user [2]uint32
 	r, _, _ := procGetSystemTimes.Call(uintptr(unsafe.Pointer(&idle)), uintptr(unsafe.Pointer(&kernel)), uintptr(unsafe.Pointer(&user)))
 	if r != 0 {
+		// GetSystemTimes counts idle inside its kernel figure: busy work
+		// is kernel + user - idle against a total of kernel + user.
 		i := uint64(idle[0]) | uint64(idle[1])<<32
-		b := (uint64(kernel[0]) | uint64(kernel[1])<<32) + (uint64(user[0]) | uint64(user[1])<<32)
-		if d := i + b - s.idle - s.busy; d > 0 && s.busy > 0 {
+		tot := (uint64(kernel[0]) | uint64(kernel[1])<<32) + (uint64(user[0]) | uint64(user[1])<<32)
+		b := tot - i
+		if d := tot - s.total; d > 0 && s.total > 0 {
 			s.cpu = float64(b-s.busy) / float64(d) * 100
 		}
-		s.idle, s.busy = i, b
+		s.total, s.busy = tot, b
 	}
 	var m memoryStatusEx
 	m.Length = uint32(unsafe.Sizeof(m))
