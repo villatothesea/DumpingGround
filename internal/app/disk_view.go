@@ -410,7 +410,7 @@ func (m *Model) scanningCard(c *ui.Context, t *ui.Theme) {
 	p := m.diskProgress
 	ui.Column(c).Grow(1).MinHeight(0).AlignItems(ui.Center).Children(func() {
 		ui.Spacer(c)
-		card := ui.Column(c).Width(460).Padding(16, 20).Gap(10).Background(t.Surface).Radius(8)
+		card := ui.Column(c).Width(560).Padding(16, 20).Gap(10).Background(t.Surface).Radius(8)
 		card.BorderWidth(1).BorderColor(t.Border)
 		card.Children(func() {
 			title := "Scanning"
@@ -422,7 +422,7 @@ func (m *Model) scanningCard(c *ui.Context, t *ui.Theme) {
 			}
 			ui.Text(c, title).FontSize(14).Bold()
 			ui.Row(c).Gap(28).FillWidth().Children(func() {
-				m.stat(c, t, "Files", format.Int(p.Files)+" files")
+				m.stat(c, t, "Files", format.Int(p.Files))
 				m.stat(c, t, "Folders", format.Int(p.Dirs))
 				m.stat(c, t, "Tallied", format.Bytes(p.Allocated))
 				m.stat(c, t, "Elapsed", fmt.Sprintf("%.1f s", time.Since(m.diskStarted).Seconds()))

@@ -26,7 +26,7 @@ func TestCancelOwnsWorkerUntilCompletion(t *testing.T) {
 	m.diskDone = make(chan scanResult, 1)
 	m.diskProgress = disk.Progress{Current: "pending", Files: 123, Bytes: 456}
 	tt := ui.NewTester(m.view, 880, 580)
-	if !tt.HasText("123 files") {
+	if !tt.HasText("123") {
 		t.Fatal("live progress is not visible")
 	}
 	if err := tt.Click("Cancel"); err != nil {
