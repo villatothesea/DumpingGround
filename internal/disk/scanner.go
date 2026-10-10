@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
+	"runtime/debug"
 	"sort"
 	"sync/atomic"
 	"time"
@@ -86,6 +88,14 @@ func (s *Scanner) Active() bool { return s.active.Load() }
 // consumers must use the returned snapshot as the authoritative final state.
 // Cancellation returns a partial snapshot as well as context.Canceled.
 func (s *Scanner) Scan(ctx context.Context, root string, progress chan<- Progress) (*Snapshot, error) {
+	// The index allocates on the order of a million nodes; running the
+	// collector through that churn only slows the scan. Pause it and pay
+	// one collection when the snapshot settles.
+	prevGC := debug.SetGCPercent(-1)
+	defer func() {
+		debug.SetGCPercent(prevGC)
+		runtime.GC()
+	}()
 	if len(root) == 3 && root[1:] == ":\\" {
 		fast, fastErr := fastVolumeScan(ctx, root, progress)
 		if fastErr == nil || errors.Is(fastErr, context.Canceled) || errors.Is(fastErr, context.DeadlineExceeded) {
