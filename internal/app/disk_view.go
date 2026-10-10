@@ -375,10 +375,8 @@ func (m *Model) diskView(c *ui.Context) {
 		m.scanningCard(c, t)
 		return
 	}
-	if m.diskSnapshot == nil {
-		m.idleCard(c, t)
-		return
-	}
+	// The Rust report is self-contained and checked first — it can be up
+	// with no index at all after a Rust-only scan releases its snapshot.
 	if m.rustMode && m.rustReport != nil {
 		m.rustResultsView(c, t)
 		return
@@ -387,6 +385,10 @@ func (m *Model) diskView(c *ui.Context) {
 		// The scan just settled and artifact analysis is running — skip the
 		// one-frame treemap flash before the report lands.
 		m.rustAnalyzingView(c, t)
+		return
+	}
+	if m.diskSnapshot == nil {
+		m.idleCard(c, t)
 		return
 	}
 	m.resultsView(c, t, m.diskSnapshot)
