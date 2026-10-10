@@ -235,6 +235,31 @@ func TestExplorerChildrenStandAsRoots(t *testing.T) {
 	}
 }
 
+func TestTopRanksOnlyVisibleRows(t *testing.T) {
+	// A collapsed subtree's aggregates shadow one another down the chain:
+	// without the visible-rows rule the hidden children would occupy every
+	// top-ten slot and leave the other roots bare.
+	m := testModel(t)
+	m.processTreeMode = true
+	m.processRows = []process.Info{{PID: 1, Name: "big.exe", Memory: 100}}
+	for i := uint32(0); i < 9; i++ {
+		m.processRows = append(m.processRows, process.Info{PID: 10 + i, PPID: 1, Name: "kid.exe", Memory: uint64(90 - i)})
+	}
+	m.processRows = append(m.processRows, process.Info{PID: 2, Name: "small.exe", Memory: 50})
+	m.rebuildProcessTree()
+	tt := ui.NewTester(m.view, 1180, 400)
+	tt.Frame() // populate the outline's visible rows, collapsed to roots
+	m.rankProcessColumns()
+	if m.procTop[3][2] == 0 {
+		t.Fatalf("visible root not ranked while hidden children were: %v", m.procTop[3])
+	}
+	for i := uint32(0); i < 9; i++ {
+		if m.procTop[3][10+i] != 0 {
+			t.Fatalf("collapsed child ranked: %v", m.procTop[3])
+		}
+	}
+}
+
 func TestProcessDir(t *testing.T) {
 	cases := map[string]string{
 		`C:\Windows\System32\x.exe`: `C:\Windows\System32`,

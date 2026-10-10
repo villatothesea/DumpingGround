@@ -221,12 +221,26 @@ func (m *Model) selectProcessRow(pid uint32) {
 	}
 }
 
-// rankProcessColumns ranks the rows' values per metric column so cells can
-// tint the ten largest: rank 1 in the accent's full strength, rank 10 faded
-// toward the background.
+// rankProcessColumns ranks the visible rows' values per metric column so
+// cells can tint the ten largest: rank 1 in the accent's full strength,
+// rank 10 faded toward the background.
 func (m *Model) rankProcessColumns() {
 	m.procTop = nil
-	if len(m.processFlat) < 2 {
+	var ids []uint32
+	if m.processTreeMode {
+		// Only the rows on screen compete: collapsed subtrees would spend
+		// the ten slots on ancestors that share a root's aggregate, leaving
+		// the visible rows almost bare.
+		if n := m.processTree.Rows(); n > 0 {
+			ids = make([]uint32, 0, n)
+			for i := 0; i < n; i++ {
+				ids = append(ids, m.processTree.Item(i))
+			}
+		}
+	} else {
+		ids = slices.Clone(m.processFlat)
+	}
+	if len(ids) < 2 {
 		return
 	}
 	metrics := []struct {
@@ -240,7 +254,6 @@ func (m *Model) rankProcessColumns() {
 		{6, func(r process.Info) float64 { return float64(r.WriteRate) }},
 		{7, func(r process.Info) float64 { return float64(r.Threads) }},
 	}
-	ids := slices.Clone(m.processFlat)
 	for _, mt := range metrics {
 		slices.SortFunc(ids, func(a, b uint32) int {
 			return cmp.Compare(mt.val(m.displayProcess(b)), mt.val(m.displayProcess(a)))
