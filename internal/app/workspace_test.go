@@ -151,10 +151,7 @@ func TestScanButtonCompletesAndClearReleasesState(t *testing.T) {
 	if len(m.diskRects) == 0 {
 		t.Fatal("treemap did not lay out files")
 	}
-	if err := tt.Click("More"); err != nil {
-		t.Fatal(err)
-	}
-	if err := tt.ChooseMenuItem("Clear index"); err != nil {
+	if err := tt.Click("Clear index"); err != nil {
 		t.Fatal(err)
 	}
 	if m.diskSnapshot != nil || m.diskItems != nil || m.diskRects != nil {
