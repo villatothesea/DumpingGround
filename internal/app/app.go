@@ -168,10 +168,14 @@ func New() *Model {
 		diskStatus: "Choose a drive or folder to scan", diskMode: "Tree", diskMetric: "Allocated", diskSelected: -1, diskNode: -1, extensionSelected: -1, mapRoot: -1, diskSplit: 300, animateMap: true, detailTab: "Properties"}
 }
 func (m *Model) Run() error {
-	mygo.App.SetName("DumpingGround")
-	if !mygo.App.RequestSingleInstanceLock() {
-		m.close()
-		return nil
+	if os.Getenv("DG_DEBUG_INSTANCE") != "" {
+		mygo.App.SetName("DumpingGroundDebug")
+	} else {
+		mygo.App.SetName("DumpingGround")
+		if !mygo.App.RequestSingleInstanceLock() {
+			m.close()
+			return nil
+		}
 	}
 	mygo.App.WhenReady(func() {
 		if m.InitialPage == "disk" {

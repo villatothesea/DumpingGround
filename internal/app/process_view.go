@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dumpingground/dumpingground/internal/format"
 	"github.com/dumpingground/dumpingground/internal/process"
@@ -375,12 +376,21 @@ func (m *Model) processIcon(path string) *ui.Bitmap {
 	return m.iconCache[""]
 }
 
+// loadIcons resolves icons on this goroutine and applies them to the cache in
+// batches: a post per icon would queue a frame request each, and the storm of
+// frames delays input handling (e.g. the first right-click's menu frame).
 func (m *Model) loadIcons() {
-	for {
-		select {
-		case path := <-m.iconRequests:
-			icon := systemIcon(path)
-			m.post(func() {
+	pending := make(map[string]*ui.Bitmap)
+	var flush <-chan time.Time
+	var timer *time.Timer
+	apply := func() {
+		if len(pending) == 0 {
+			return
+		}
+		batch := pending
+		pending = make(map[string]*ui.Bitmap)
+		m.post(func() {
+			for path, icon := range batch {
 				delete(m.iconPending, path)
 				if icon == nil {
 					icon = m.iconCache[""]
@@ -388,8 +398,25 @@ func (m *Model) loadIcons() {
 				if len(m.iconCache) < 256 {
 					m.iconCache[path] = icon
 				}
-			})
+			}
+		})
+	}
+	for {
+		select {
+		case path := <-m.iconRequests:
+			pending[path] = systemIcon(path)
+			if timer == nil {
+				timer = time.NewTimer(300 * time.Millisecond)
+				flush = timer.C
+			}
+		case <-flush:
+			apply()
+			timer = nil
+			flush = nil
 		case <-m.ctx.Done():
+			if timer != nil {
+				timer.Stop()
+			}
 			return
 		}
 	}
