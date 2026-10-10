@@ -28,6 +28,7 @@ type page uint8
 const (
 	processPage page = iota
 	diskPage
+	hardwarePage
 	uninstallPage
 	startupPage
 )
@@ -360,16 +361,19 @@ func (m *Model) view(c *ui.Context) {
 		}
 	}
 	if c.Shortcut(ui.Ctrl, ui.Key1) {
-		m.page = processPage
+		m.setPage(processPage)
 	}
 	if c.Shortcut(ui.Ctrl, ui.Key2) {
-		m.page = diskPage
+		m.setPage(diskPage)
 	}
 	if c.Shortcut(ui.Ctrl, ui.Key3) {
-		m.page = uninstallPage
+		m.setPage(hardwarePage)
 	}
 	if c.Shortcut(ui.Ctrl, ui.Key4) {
-		m.page = startupPage
+		m.setPage(uninstallPage)
+	}
+	if c.Shortcut(ui.Ctrl, ui.Key5) {
+		m.setPage(startupPage)
 	}
 	if c.Shortcut(0, ui.KeyF5) {
 		if m.page == processPage {
@@ -387,12 +391,15 @@ func (m *Model) view(c *ui.Context) {
 	if m.diskCancel != nil {
 		c.After(100 * time.Millisecond)
 	}
-	// Live-index work continues on the next frames: pending journal events
-	// need folding in, and a dirty view flushes once its cadence arrives.
-	if len(m.diskPending) > 0 {
-		c.After(50 * time.Millisecond)
-	} else if m.diskLiveDirty {
-		c.After(250 * time.Millisecond)
+	// Live-index work continues on the next frames while the disk page is
+	// on screen; hidden pages cost no frames — journal events keep
+	// accumulating on the volume and replay on return.
+	if m.page == diskPage {
+		if len(m.diskPending) > 0 {
+			c.After(50 * time.Millisecond)
+		} else if m.diskLiveDirty {
+			c.After(250 * time.Millisecond)
+		}
 	}
 	if m.dirtyProcesses || m.lastQuery != m.processQuery || m.lastSort != m.processSort {
 		m.rebuildProcessTree()
@@ -430,6 +437,8 @@ func (m *Model) view(c *ui.Context) {
 			m.processView(c)
 		case diskPage:
 			m.diskView(c)
+		case hardwarePage:
+			m.reservedView(c, "cpu", "Hardware", "Monitors CPU, memory, GPU, disk and network utilization with live charts. Tab position, shortcut and the shared search box are reserved.")
 		case uninstallPage:
 			m.reservedView(c, "pkg", "Uninstall", "Lists installed software with search, size sorting and removal. Tab position, shortcut and the shared search box are reserved.")
 		case startupPage:
@@ -491,20 +500,21 @@ func (m *Model) topBar(c *ui.Context, t *ui.Theme) {
 		})
 		ui.Row(c).Gap(2).Shrink(0).Children(func() {
 			m.pageTab(c, t, processPage, "Processes")
-			m.pageTab(c, t, diskPage, "Disk usage")
+			m.pageTab(c, t, diskPage, "Disk Usage")
+			m.pageTab(c, t, hardwarePage, "Hardware")
 			m.pageTab(c, t, uninstallPage, "Uninstall")
 			m.pageTab(c, t, startupPage, "Startup")
 		})
 		ui.Spacer(c)
 		switch m.page {
 		case processPage:
-			if ui.SearchField(c, &m.processQuery).Label("Search processes").Placeholder("Name, PID or path").Width(240).Changed() {
+			if ui.SearchField(c, &m.processQuery).Label("Search processes").Placeholder("Name, PID or path").Width(190).Changed() {
 				m.dirtyProcesses = true
 			}
 		case diskPage:
-			ui.SearchField(c, &m.diskQuery).Label("Filter files").Placeholder("Filter files").Width(240).Disabled(m.diskSnapshot == nil)
+			ui.SearchField(c, &m.diskQuery).Label("Filter files").Placeholder("Filter files").Width(190).Disabled(m.diskSnapshot == nil)
 		default:
-			ui.SearchField(c, &m.reservedQuery).Label("Search").Placeholder("Not available on this page").Width(240).Disabled(true)
+			ui.SearchField(c, &m.reservedQuery).Label("Search").Placeholder("Not available on this page").Width(190).Disabled(true)
 		}
 		dark := t.Dark
 		th := m.iconButton(c, map[bool]string{true: "sun", false: "moon"}[dark], map[bool]string{true: "Switch to light theme", false: "Switch to dark theme"}[dark])
@@ -532,7 +542,7 @@ func (m *Model) pageTab(c *ui.Context, t *ui.Theme, pg page, label string) {
 	if pill {
 		height, radius = 28, 6
 	}
-	e := ui.Row(c).Height(height).PaddingX(10).AlignItems(ui.Center).Radius(radius).Label(label)
+	e := ui.Row(c).Height(height).PaddingX(8).AlignItems(ui.Center).Radius(radius).Label(label)
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
 		switch {
 		case on && pill:
@@ -555,7 +565,19 @@ func (m *Model) pageTab(c *ui.Context, t *ui.Theme, pg page, label string) {
 		}
 	})
 	if e.Clicked() {
-		m.page = pg
+		m.setPage(pg)
+	}
+}
+
+// setPage switches the top-level page. Coming back to Processes forces
+// one sample so the table is never a stale frame behind.
+func (m *Model) setPage(pg page) {
+	if m.page == pg {
+		return
+	}
+	m.page = pg
+	if pg == processPage {
+		m.refreshOnce()
 	}
 }
 
@@ -751,9 +773,9 @@ func (m *Model) statusBar(c *ui.Context, t *ui.Theme) {
 		m.rateMeter(c, t, "hdd", "I/O", fmt.Sprintf("Process disk I/O  read %s  ·  write %s", format.Rate(rd), format.Rate(wr)), rd, wr)
 		m.rateMeter(c, t, "net", "NET", fmt.Sprintf("Network  down %s  ·  up %s", format.Rate(m.sys.netInRate), format.Rate(m.sys.netOutRate)), m.sys.netInRate, m.sys.netOutRate)
 		ui.Spacer(c)
-		hint := "F5 refresh · Ctrl+1–4 pages"
+		hint := "F5 refresh · Ctrl+1–5 pages"
 		if m.page == diskPage {
-			hint = "F5 scan · Backspace up · Ctrl+1–4 pages"
+			hint = "F5 scan · Backspace up · Ctrl+1–5 pages"
 		}
 		ui.Text(c, hint).FontSize(11).TextColor(t.TextMuted).Shrink(0)
 		if m.page == diskPage {

@@ -162,7 +162,10 @@ func (m *Model) stopWatch() {
 }
 func (m *Model) drainWatch() {
 	s := m.diskSnapshot
-	if s == nil {
+	// Off the disk page the watch sleeps: the events channel backs up, the
+	// reader blocks, and the journal keeps recording on the volume. Events
+	// resume replaying, in order, the frame the page comes back.
+	if s == nil || m.page != diskPage {
 		return
 	}
 	for {
