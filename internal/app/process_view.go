@@ -324,8 +324,8 @@ func (m *Model) processView(c *ui.Context) {
 		{ID: "cpu", Title: "CPU %", Width: 75, Align: ui.End, Sortable: true}, {ID: "memory", Title: "Working set", Width: 104, Align: ui.End, Sortable: true},
 		{ID: "private", Title: "Private bytes", Width: 104, Align: ui.End, Sortable: true}, {ID: "read", Title: "Read /s", Width: 96, Align: ui.End, Sortable: true},
 		{ID: "write", Title: "Write /s", Width: 96, Align: ui.End, Sortable: true}, {ID: "threads", Title: "Threads", Width: 74, Align: ui.End, Sortable: true},
-		{ID: "user", Title: "User", Width: 130, Sortable: true},
-		{ID: "dir", Title: "Directory", MinWidth: 160, Sortable: true},
+		{ID: "user", Title: "User", Width: 180, Sortable: true},
+		{ID: "dir", Title: "Directory", MinWidth: 260, Sortable: true},
 	}
 	cell := func(id uint32, col int) {
 		r := m.displayProcess(id)
