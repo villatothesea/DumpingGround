@@ -6,7 +6,140 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
+
+// classRoot is one Classes hive view plus its subkey names, enumerated
+// once — the ProgID list is thousands of entries and every
+// location-less app asks the same question.
+type classRoot struct {
+	root, access uintptr
+	sub          string
+	names        []string
+}
+
+var (
+	classRootsOnce sync.Once
+	classRoots     []classRoot
+)
+
+func classesRoots() []classRoot {
+	classRootsOnce.Do(func() {
+		for _, h := range []struct {
+			root, access uintptr
+			sub          string
+		}{
+			{hkeyLocalMachine, keyRead, `SOFTWARE\Classes`},
+			{hkeyCurrentUser, keyRead, `SOFTWARE\Classes`},
+			{hkeyLocalMachine, keyRead, `SOFTWARE\WOW6432Node\Classes`},
+		} {
+			k, err := openKey(h.root, h.access, h.sub)
+			if err != nil {
+				continue
+			}
+			classRoots = append(classRoots, classRoot{h.root, h.access, h.sub, mustSubKeys(k)})
+			k.close()
+		}
+	})
+	return classRoots
+}
+
+// assocLocation infers the install dir from the app's registered
+// file associations — a ProgID like "BitwigStudio.bwproject" has a
+// shell\open\command (and often DefaultIcon) containing the exe path.
+// Links that store an AppUserModelID instead of a path resolve this
+// way; PackagedApps-style entries do too. The result is a guess:
+// footprint lists it as Likely, never Confirmed.
+func (e *Entry) assocLocation() (dir, iconPath string) {
+	names := e.matchTokens()
+	matches := func(progID string) bool {
+		for _, seg := range strings.Split(progID, ".") {
+			if names[norm(seg)] {
+				return true
+			}
+		}
+		return false
+	}
+	for _, h := range classesRoots() {
+		for _, id := range h.names {
+			if !matches(id) {
+				continue
+			}
+			// shell\open\command gives the exe; DefaultIcon gives an
+			// icon when the command carries none.
+			for _, leaf := range []string{`shell\open\command`, "DefaultIcon"} {
+				k, err := openKey(h.root, h.access, h.sub+`\`+id+`\`+leaf)
+				if err != nil {
+					continue
+				}
+				vals, _ := k.values()
+				k.close()
+				raw := vals[""].str()
+				if raw == "" {
+					continue
+				}
+				exe, _ := SplitCmdline(raw)
+				if leaf == "DefaultIcon" {
+					exe = cleanIconValue(raw)
+				}
+				if exe == "" {
+					continue
+				}
+				if leaf == "DefaultIcon" && iconPath == "" {
+					iconPath = exe
+				}
+				if d := filepath.Dir(exe); dir == "" && saneLocation(d) {
+					dir = d
+				}
+			}
+			if dir != "" && iconPath != "" {
+				break
+			}
+		}
+		if dir != "" {
+			break
+		}
+	}
+	return dir, iconPath
+}
+
+// appPathsLocation checks HKLM\...\App Paths\<name>.exe — the shell's
+// "where is this app" table. Cheap and authoritative when present.
+func (e *Entry) appPathsLocation() string {
+	names := e.matchTokens()
+	for _, h := range []struct {
+		root uintptr
+		sub  string
+	}{
+		{hkeyLocalMachine, `SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths`},
+		{hkeyCurrentUser, `SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths`},
+	} {
+		ap, err := openKey(h.root, keyRead, h.sub)
+		if err != nil {
+			continue
+		}
+		for _, sub := range mustSubKeys(ap) {
+			stem := norm(strings.TrimSuffix(sub, filepath.Ext(sub)))
+			if !names[stem] {
+				continue
+			}
+			k, err := openKey(h.root, keyRead, h.sub+`\`+sub)
+			if err != nil {
+				continue
+			}
+			vals, _ := k.values()
+			k.close()
+			if exe := vals[""].str(); exe != "" {
+				if d := filepath.Dir(regPath(exe)); saneLocation(d) {
+					ap.close()
+					return d
+				}
+			}
+		}
+		ap.close()
+	}
+	return ""
+}
 
 // shortcutLocation infers the install dir from a Start Menu or
 // Desktop shortcut named after the app — the last resort for entries

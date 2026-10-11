@@ -116,7 +116,14 @@ func (e *Entry) IconPath() string {
 
 // displayIconPath cleans the registry DisplayIcon value.
 func (e *Entry) displayIconPath() string {
-	s := regPath(e.Icon)
+	return cleanIconValue(e.Icon)
+}
+
+// cleanIconValue normalizes a stored icon reference — unquoted,
+// ",N" index stripped, env vars expanded — and drops it unless the
+// file exists.
+func cleanIconValue(s string) string {
+	s = regPath(s)
 	if i := strings.LastIndex(s, ","); i > 0 {
 		if _, err := strconv.Atoi(strings.TrimSpace(s[i+1:])); err == nil {
 			s = s[:i]

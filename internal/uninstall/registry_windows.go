@@ -239,6 +239,20 @@ func enumUninstall() []Entry {
 					e.LocationGuessed = true
 				}
 			}
+			if e.Location == "" || e.Icon == "" {
+				// File associations and App Paths carry exe/icon
+				// paths for apps whose uninstall record is bare.
+				if d := e.appPathsLocation(); e.Location == "" && d != "" {
+					e.Location, e.LocationGuessed = d, true
+				}
+				d, ic := e.assocLocation()
+				if e.Location == "" && d != "" {
+					e.Location, e.LocationGuessed = d, true
+				}
+				if e.Icon == "" && ic != "" {
+					e.Icon = ic
+				}
+			}
 			if e.Location != "" && !saneLocation(e.Location) {
 				e.Location = "" // a fallback found a root, not a folder
 			}
