@@ -134,23 +134,23 @@ func (m *Model) uninstallView(c *ui.Context, t *ui.Theme) {
 						}
 						ui.Text(c, e.Name).SingleLine().TextColor(text).Tooltip(e.Name + "  " + e.Version)
 					case 1:
-						ui.Text(c, e.Version).FontSize(11).SingleLine().TextColor(text).Tooltip(e.Version)
+						ui.Text(c, e.Version).SingleLine().TextColor(text).Tooltip(e.Version)
 					case 2:
-						ui.Text(c, e.Publisher).FontSize(11).TextColor(muted).SingleLine().Tooltip(e.Publisher)
+						ui.Text(c, e.Publisher).TextColor(muted).SingleLine().Tooltip(e.Publisher)
 					case 3:
 						sz := "—"
 						if e.EstimatedSize {
 							sz = format.Bytes(e.SizeBytes)
 						}
-						ui.Text(c, sz).FontSize(11).TextColor(text)
+						ui.Text(c, sz).TextColor(text)
 					case 4:
 						d := e.Date()
 						if d == "" {
 							d = "—"
 						}
-						ui.Text(c, d).FontSize(11).TextColor(muted).Tooltip(e.InstallDate)
+						ui.Text(c, d).TextColor(muted).Tooltip(e.InstallDate)
 					case 5:
-						ui.Text(c, e.Location).FontSize(10).TextColor(muted).SingleLine().Tooltip(e.Location)
+						ui.Text(c, e.Location).TextColor(muted).SingleLine().Tooltip(e.Location)
 					default:
 						m.uninstRowActions(c, t, e)
 					}
@@ -211,7 +211,7 @@ func (m *Model) uninstRowActions(c *ui.Context, t *ui.Theme, e *uninstall.Entry)
 	ui.Row(c).Gap(6).Justify(ui.End).AlignItems(ui.Center).Children(func() {
 		// The folder button always renders — grayed without a location —
 		// so the Uninstall button sits at the same offset on every row.
-		op := ui.Row(c).Height(22).PaddingX(7).Gap(4).AlignItems(ui.Center).Radius(t.Radius).
+		op := ui.Row(c).Height(24).PaddingX(7).Gap(4).AlignItems(ui.Center).Radius(t.Radius).
 			Cursor(ui.CursorPointer).Label("Open install folder")
 		if e.Location == "" {
 			op = op.Disabled(true).Tooltip("no install location recorded in the registry")
@@ -241,7 +241,7 @@ func (m *Model) uninstRowActions(c *ui.Context, t *ui.Theme, e *uninstall.Entry)
 			label = "Sure?"
 		}
 		busy := m.uninstBusy != ""
-		u := ui.Row(c).Height(22).PaddingX(8).Gap(4).AlignItems(ui.Center).Radius(t.Radius).
+		u := ui.Row(c).Height(24).PaddingX(8).Gap(4).AlignItems(ui.Center).Radius(t.Radius).
 			Cursor(ui.CursorPointer).Label("Uninstall " + e.Name).
 			Tooltip("Launch the app's own uninstaller: " + e.Uninstall)
 		u.BorderWidth(1).BorderColor(t.Border).Background(t.Surface)
@@ -263,7 +263,7 @@ func (m *Model) uninstRowActions(c *ui.Context, t *ui.Theme, e *uninstall.Entry)
 		})
 		u.Children(func() {
 			icon(c, "trash", 11).TextColor(t.Danger)
-			ui.Text(c, label).FontSize(11).TextColor(t.Danger).SingleLine()
+			ui.Text(c, label).TextColor(t.Danger).SingleLine()
 		})
 		if u.Clicked() && !busy {
 			if !armed {
