@@ -300,6 +300,9 @@ func (m *Model) clearDisk() {
 	m.rustFilterCat = -1
 	m.rustPathsCat = -1
 	m.rustPathsOpen = false
+	m.junkSel = -1
+	m.junkConfirm = -1
+	m.junkRowConfirm = ""
 	m.diskStatus = "Index cleared"
 	// Dropping the index frees hundreds of MB; return them to the OS now
 	// instead of letting the runtime sit on the released heap. Async so the
@@ -374,6 +377,9 @@ func (m *Model) diskView(c *ui.Context) {
 		if m.rustButton(c, m.rustBusy || scanning && !m.rustPending).Clicked() {
 			m.rustScan()
 		}
+		if m.junkButton(c, m.junkBusy).Clicked() {
+			m.junkScan()
+		}
 	})
 	if scanning {
 		m.scanningCard(c, t)
@@ -389,6 +395,15 @@ func (m *Model) diskView(c *ui.Context) {
 		// The scan just settled and artifact analysis is running — skip the
 		// one-frame treemap flash before the report lands.
 		m.rustAnalyzingView(c, t)
+		return
+	}
+	// The junk report is self-contained too — no index is involved.
+	if m.junkMode && m.junkReport != nil {
+		m.junkResultsView(c, t)
+		return
+	}
+	if m.junkBusy && m.junkReport == nil {
+		m.junkAnalyzingView(c, t)
 		return
 	}
 	if m.diskSnapshot == nil {

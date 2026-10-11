@@ -69,6 +69,7 @@ func (m *Model) rustAnalyze() {
 			m.rustBusy = false
 			m.rustReport = rep
 			m.rustMode = true
+			m.junkMode = false
 			m.rustSel = -1
 			m.rustConfirm = -1
 			m.rustRowConfirm = ""

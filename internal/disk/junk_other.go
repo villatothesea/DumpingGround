@@ -1,0 +1,14 @@
+//go:build !windows
+
+package disk
+
+import "os"
+
+// RecycleBinStats is a no-op off Windows — the junk report only runs there.
+func RecycleBinStats() (bytes, items uint64) { return 0, 0 }
+
+// EmptyRecycleBin is a no-op off Windows.
+func EmptyRecycleBin() error { return nil }
+
+// junkReparse only needs the portable symlink bit elsewhere.
+func junkReparse(e os.DirEntry) bool { return e.Type()&os.ModeSymlink != 0 }

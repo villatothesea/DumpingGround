@@ -187,6 +187,21 @@ type Model struct {
 	rustMsg                         string
 	rustGone                        map[string]bool
 	rustList                        ui.ListState
+	junkBusy                        bool // junk measurement or cleaning in flight
+	junkReport                      *disk.JunkReport
+	junkMode                        bool // the disk page shows the junk report
+	junkSel                         int  // preset card previewing its rows, -1 none
+	junkConfirm                     int  // preset armed for the second click, -1 none
+	junkRowConfirm                  string // path whose row clean button is armed
+	junkFilterCat                   int    // category filtering the row list, -1 all
+	junkGroupSafe                   bool   // group rows under risk-level headers
+	junkAnCat                       int    // category currently being measured
+	junkPathsCat                    int    // category whose path list the modal shows, -1 none
+	junkPathsOpen                   bool
+	junkPathsList                   ui.ListState
+	junkMsg                         string
+	junkDoneMsg                     string // outcome of the last clean, shown once the re-measure lands
+	junkList                        ui.ListState
 	events                          chan func()
 	// CaptureDir writes only this application's frames during explicit diagnostics.
 	CaptureDir  string
@@ -204,7 +219,7 @@ func New() *Model {
 		iconPending: make(map[string]bool), iconRequests: make(chan string, 32),
 		diskStatus: "Choose a drive or folder to scan", diskMode: "Tree", diskMetric: "Allocated", diskSelected: -1, diskNode: -1, extensionSelected: -1, mapRoot: -1, diskSplit: 300, animateMap: true, detailTab: "Properties", memRelease: "Automatic",
 		rustGone: map[string]bool{}, rustSel: -1, rustConfirm: -1, rustRecycle: true, rustPathsCat: -1,
-		rustFilterCat: -1}
+		rustFilterCat: -1, junkSel: -1, junkConfirm: -1, junkFilterCat: -1, junkPathsCat: -1}
 }
 func (m *Model) Run() error {
 	if os.Getenv("DG_DEBUG_INSTANCE") != "" {

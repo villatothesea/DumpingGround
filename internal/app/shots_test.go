@@ -104,6 +104,65 @@ func TestScreenshotStates(t *testing.T) {
 	m3.rustGroupSafe = true
 	tt5.Frame()
 	dump(t, tt5, dest, "rust-filtered.png")
+
+	// The junk report: presets, the 12-badge filter strip, rows for
+	// every location — including a guarded browser cache and the
+	// review-only Windows.old.
+	m4 := testModel(t)
+	m4.page = diskPage
+	m4.junkMode = true
+	m4.junkReport = testJunkReport()
+	tt6 := ui.NewTester(m4.view, 1180, 760)
+	tt6.SetDark(true)
+	tt6.Frame()
+	dump(t, tt6, dest, "junk-report.png")
+	m4.junkGroupSafe = true
+	m4.junkSel = 0
+	tt6.Frame()
+	dump(t, tt6, dest, "junk-grouped.png")
+}
+
+// testJunkReport fabricates a cleanup report resembling a real measure.
+func testJunkReport() *disk.JunkReport {
+	rep := &disk.JunkReport{}
+	add := func(cat int, path string, bytes uint64, files int) {
+		d := disk.JunkDir{Path: path, Bytes: bytes, Files: files, Base: filepath.Base(path), Mode: disk.JunkKids}
+		rep.Cats[cat].Dirs = append(rep.Cats[cat].Dirs, d)
+		rep.Cats[cat].Bytes += bytes
+		rep.Bytes += bytes
+	}
+	for i, c := range []struct{ name, note string; risk int }{
+		{"User temp", "old temp files", disk.RustRiskSafe},
+		{"Windows temp", "old files in Windows\\Temp", disk.RustRiskSafe},
+		{"Browser caches", "per-profile cache dirs", disk.RustRiskSafe},
+		{"Thumbnail cache", "explorer caches", disk.RustRiskSafe},
+		{"Shader cache", "DirectX shaders", disk.RustRiskSafe},
+		{"Error reports", "WER archives", disk.RustRiskSafe},
+		{"Recycle Bin", "bin contents", disk.RustRiskSafe},
+		{"Update downloads", "update staging", disk.RustRiskModerate},
+		{"Crash dumps", "minidumps", disk.RustRiskModerate},
+		{"Windows logs", "setup and servicing logs", disk.RustRiskModerate},
+		{"Dev caches", "go-build and friends", disk.RustRiskModerate},
+		{"Windows.old", "rollback data", disk.RustRiskReview},
+	} {
+		rep.Cats[i].Name, rep.Cats[i].Note, rep.Cats[i].Risk = c.name, c.note, c.risk
+	}
+	add(disk.JunkCatUserTemp, `C:\Users\me\AppData\Local\Temp`, 4<<30, 4300)
+	add(disk.JunkCatWinTemp, `C:\Windows\Temp`, 700<<20, 120)
+	add(disk.JunkCatBrowser, `…\User Data\Default\Cache`, 900<<20, 5100)
+	rep.Cats[disk.JunkCatBrowser].Dirs = append(rep.Cats[disk.JunkCatBrowser].Dirs,
+		disk.JunkDir{Path: `…\User Data\Profile 1\GPUCache`, Bytes: 60 << 20, Files: 40,
+			Base: "GPUCache", Mode: disk.JunkKids, Skip: "Chrome is running"})
+	add(disk.JunkCatThumbs, `C:\Users\me\AppData\Local\Microsoft\Windows\Explorer\thumbcache_1280.db`, 220<<20, 1)
+	add(disk.JunkCatShader, `C:\Users\me\AppData\Local\D3DSCache`, 410<<20, 900)
+	add(disk.JunkCatWER, `C:\ProgramData\Microsoft\Windows\WER\ReportArchive`, 130<<20, 60)
+	add(disk.JunkCatRecycleBin, "all drives", 6<<30, 2400)
+	add(disk.JunkCatUpdateDl, `C:\Windows\SoftwareDistribution\Download`, 2<<30, 800)
+	add(disk.JunkCatDumps, `C:\Windows\memory.dmp`, 3<<30, 1)
+	add(disk.JunkCatWinLogs, `C:\Windows\Logs\CBS\CBS.log`, 80<<20, 1)
+	add(disk.JunkCatDevCaches, `C:\Users\me\AppData\Local\go-build`, 9<<30, 40000)
+	add(disk.JunkCatWindowsOld, `C:\Windows.old`, 24<<30, 0)
+	return rep
 }
 
 // testRustReport fabricates a report resembling a real scan for shot tests.
