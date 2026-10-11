@@ -30,6 +30,7 @@ func (m *Model) startScan() {
 	}
 	m.scanPath = path
 	m.rustMode = false
+	m.junkMode = false // a disk scan means "show me the disk" — the junk page would hide the fresh index
 	m.rustReport = nil
 	m.stopWatch()
 	ctx, cancel := context.WithCancel(m.ctx)
@@ -351,6 +352,8 @@ func (m *Model) browse() {
 				m.diskStatus = err.Error()
 			} else if len(paths) > 0 {
 				m.diskPath = paths[0]
+				m.rustMode = false // same reset selectDrive does — a new
+				m.junkMode = false // target means "show me that disk"
 			}
 		})
 	}()
@@ -533,9 +536,15 @@ func (m *Model) driveCard(c *ui.Context, t *ui.Theme, v disk.Volume) {
 // Scan button does. Returning to the drive whose index produced the Rust
 // report puts that report back up.
 func (m *Model) selectDrive(path string) {
+	same := strings.EqualFold(m.diskPath, path)
 	m.diskDrive = path
 	m.diskPath = path
 	m.rustMode = m.rustReport != nil && strings.EqualFold(m.scanPath, path)
+	if !same {
+		// Picking a different drive is "show me that disk" intent — the
+		// junk report is drive-agnostic and would hide the unscanned view.
+		m.junkMode = false
+	}
 }
 
 // indexIsStale reports whether the loaded index was built from a path
