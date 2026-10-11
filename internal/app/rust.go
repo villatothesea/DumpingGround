@@ -440,6 +440,17 @@ func rustRiskLabel(risk int) string {
 	return []string{"SAFE", "MODERATE", "CAREFUL", "REVIEW"}[risk]
 }
 
+// rustRiskNote is the group header's explanation — what membership means
+// and what deleting costs.
+func rustRiskNote(risk int) string {
+	return []string{
+		"re-downloaded or regenerated on demand — nothing to rebuild",
+		"back after the next cargo build or a rustup reinstall",
+		"optimized binaries — the slowest to rebuild; check nothing runs from them",
+		"contains files Cargo may not own — check the paths first",
+	}[risk]
+}
+
 // rustConfirmText is the arm prompt for a delete batch — it says "Recycle"
 // while the bin toggle is on so the verb matches what will happen.
 func (m *Model) rustConfirmText(jobs []disk.RustDir) string {
@@ -526,8 +537,9 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 			ui.List(c, &m.rustList, len(rows), func(i int) {
 				r := rows[i]
 				if r.head != "" {
-					ui.Row(c).FillWidth().Height(26).Padding(0, 10).AlignItems(ui.Center).Children(func() {
-						ui.Text(c, r.head).FontSize(11).Bold().TextColor(rustRiskColor(t, r.risk))
+					ui.Row(c).FillWidth().Height(26).Padding(0, 10).Gap(6).AlignItems(ui.Center).Children(func() {
+						ui.Text(c, r.head).FontSize(11).Bold().TextColor(rustRiskColor(t, r.risk)).Shrink(0)
+						ui.Text(c, "· "+rustRiskNote(r.risk)).FontSize(11).TextColor(t.TextMuted).SingleLine().MinWidth(0)
 					})
 					return
 				}

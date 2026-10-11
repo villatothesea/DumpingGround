@@ -250,10 +250,12 @@ func FindRustTargets(s *Snapshot, gone func(string) bool, progress func(stage, v
 				if !d.Dir {
 					// Loose files at the target root are not Cargo's —
 					// logs, scripts and dumps a developer dropped there.
-					// Cargo keeps exactly two root files of its own.
+					// Cargo keeps three root files of its own: the cache
+					// marker, the rustc probe cache and the future-incompat
+					// report it writes when deps warn.
 					if f.id == i {
 						name := strings.ToLower(d.Name)
-						if name != "cachedir.tag" && name != ".rustc_info.json" {
+						if name != "cachedir.tag" && name != ".rustc_info.json" && name != ".future-incompat-report.json" {
 							add(RustCatStray, s.FullPath(sub), d.Allocated, d.Name, true)
 							item.Stray += d.Allocated
 						}

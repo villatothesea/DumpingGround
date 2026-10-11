@@ -16,7 +16,7 @@ func rustSnapshot() *Snapshot {
 		{ID: 0, Parent: -1, Dir: true, Name: `C:\ws`, Children: []int{1, 8, 14}},
 		{ID: 1, Parent: 0, Dir: true, Name: "proj", Children: []int{2, 3}},
 		{ID: 2, Parent: 1, Name: "Cargo.toml"},
-		{ID: 3, Parent: 1, Dir: true, Name: "target", Allocated: 216, Children: []int{4, 5, 10, 15, 16, 17}},
+		{ID: 3, Parent: 1, Dir: true, Name: "target", Allocated: 216, Children: []int{4, 5, 10, 15, 16, 17, 20}},
 		{ID: 4, Parent: 3, Dir: true, Name: "debug", Allocated: 70, Children: []int{6, 7}},
 		{ID: 5, Parent: 3, Dir: true, Name: "release", Allocated: 30, Children: []int{11}},
 		{ID: 6, Parent: 4, Dir: true, Name: "incremental", Allocated: 10},
@@ -33,6 +33,7 @@ func rustSnapshot() *Snapshot {
 		{ID: 17, Parent: 3, Name: "CACHEDIR.TAG", Allocated: 0},
 		{ID: 18, Parent: 14, Dir: true, Name: "target", Allocated: 77, Children: []int{19}},
 		{ID: 19, Parent: 18, Name: "CACHEDIR.TAG"},
+		{ID: 20, Parent: 3, Name: ".future-incompat-report.json", Allocated: 0},
 	}}
 }
 
