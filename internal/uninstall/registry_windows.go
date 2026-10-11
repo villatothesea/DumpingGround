@@ -4,6 +4,7 @@ package uninstall
 
 import (
 	"fmt"
+	"os/exec"
 	"strings"
 	"syscall"
 	"unsafe"
@@ -16,6 +17,8 @@ var (
 	procRegEnumKeyEx  = advapi.NewProc("RegEnumKeyExW")
 	procRegEnumValue  = advapi.NewProc("RegEnumValueW")
 	procRegQueryValue = advapi.NewProc("RegQueryValueExW")
+	procRegCreateKey  = advapi.NewProc("RegCreateKeyExW")
+	procRegSetValue   = advapi.NewProc("RegSetValueExW")
 )
 
 const (
@@ -210,3 +213,36 @@ func enumUninstall() []Entry {
 }
 
 func (e Entry) String() string { return fmt.Sprintf("%s %s", e.Name, e.Version) }
+
+// OpenInRegedit jumps Registry Editor to this entry's Uninstall key —
+// Regedit restores its last position from the LastKey value.
+func (e *Entry) OpenInRegedit() error {
+	if e.Key == "" {
+		return fmt.Errorf("no registry key")
+	}
+	sub := `Software\Microsoft\Windows\CurrentVersion\Applets\Regedit`
+	p, err := syscall.UTF16PtrFromString(sub)
+	if err != nil {
+		return err
+	}
+	var h uintptr
+	r, _, _ := procRegCreateKey.Call(hkeyCurrentUser, uintptr(unsafe.Pointer(p)),
+		0, 0, 0, 0x2001F /*KEY_ALL_ACCESS*/, 0, uintptr(unsafe.Pointer(&h)), 0)
+	if r != 0 {
+		return syscall.Errno(r)
+	}
+	defer procRegCloseKey.Call(h)
+	full := e.Hive + `\` + e.Key
+	full = strings.Replace(full, "HKLM", "HKEY_LOCAL_MACHINE", 1)
+	full = strings.Replace(full, "HKCU", "HKEY_CURRENT_USER", 1)
+	name, _ := syscall.UTF16PtrFromString("LastKey")
+	data, _ := syscall.UTF16FromString(full)
+	r, _, _ = procRegSetValue.Call(h, uintptr(unsafe.Pointer(name)), 0,
+		uintptr(regSz), uintptr(unsafe.Pointer(&data[0])), uintptr(len(data)*2))
+	if r != 0 {
+		return syscall.Errno(r)
+	}
+	cmd := exec.Command("regedit")
+	hideWindow(cmd)
+	return cmd.Start()
+}

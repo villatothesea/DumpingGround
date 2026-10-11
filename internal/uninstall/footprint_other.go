@@ -3,6 +3,7 @@
 package uninstall
 
 import (
+	"fmt"
 	"os"
 	"syscall"
 )
@@ -37,5 +38,10 @@ func regFootprint(e *Entry) []Item { return nil }
 
 // Gone has no registry to consult off-Windows.
 func (e *Entry) Gone() bool { return true }
+
+// OpenInRegedit is meaningless off-Windows.
+func (e *Entry) OpenInRegedit() error {
+	return fmt.Errorf("regedit is Windows-only")
+}
 
 var _ = syscall.Errno(0)

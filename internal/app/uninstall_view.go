@@ -75,6 +75,7 @@ func (m *Model) uninstallView(c *ui.Context, t *ui.Theme) {
 			if row.Hovered() {
 				row.Background(t.SurfaceHover)
 			}
+			m.uninstContextMenu(c, row, e)
 			row.Children(func() {
 				if bmp := m.processIcon(e.IconPath()); bmp != nil {
 					ui.Image(c, bmp).Size(16, 16).Shrink(0)
@@ -253,6 +254,59 @@ func (m *Model) uninstRowActions(c *ui.Context, t *ui.Theme, e *uninstall.Entry)
 			m.launchUninstall(e)
 		}
 	})
+}
+
+// uninstContextMenu is the right-click menu for one installed app:
+// the same Uninstall flow, folder/registry shortcuts, a standalone
+// leftover scan, and clipboard copies of the raw registry data.
+func (m *Model) uninstContextMenu(c *ui.Context, row ui.Element, e *uninstall.Entry) {
+	row.ContextMenu(func(mm *ui.Menu) {
+		if mm.Item("Uninstall").Chosen() {
+			m.uninstArmed = ""
+			m.launchUninstall(e)
+		}
+		mm.Separator()
+		if mm.Item("Open install folder").Disabled(e.Location == "").Chosen() {
+			_ = exec.Command("explorer", e.Location).Start()
+		}
+		if mm.Item("Find leftovers").Chosen() {
+			m.startSweep(e)
+		}
+		mm.Separator()
+		if mm.Item("Copy uninstall command").Chosen() {
+			c.WriteClipboard(e.Uninstall)
+		}
+		if mm.Item("Copy details").Chosen() {
+			c.WriteClipboard(fmt.Sprintf("%s %s — %s\nInstalled: %s\nLocation: %s\n%s",
+				e.Name, e.Version, e.Publisher, e.Date(), e.Location, e.Uninstall))
+		}
+		mm.Separator()
+		if mm.Item("Open in Registry Editor").Chosen() {
+			if err := e.OpenInRegedit(); err != nil {
+				m.uninstMsg = "regedit: " + err.Error()
+			}
+		}
+	})
+}
+
+// startSweep scans an entry's leftovers without uninstalling it — the
+// "Find leftovers" menu action. Same review modal as the post-uninstall
+// flow.
+func (m *Model) startSweep(e *uninstall.Entry) {
+	m.sweepName, m.sweepArmed = e.Name, false
+	all := append([]uninstall.Entry(nil), m.uninstRows...)
+	entry := *e
+	go func() {
+		items := uninstall.Footprint(&entry, all)
+		m.post(func() {
+			m.sweepItems = items
+			m.sweepSel = make([]bool, len(items))
+			for i := range items {
+				m.sweepSel[i] = items[i].Confidence != uninstall.Review
+			}
+			m.sweepOpen = true
+		})
+	}()
 }
 
 // launchUninstall starts the vendor uninstaller, waits for it to exit,
