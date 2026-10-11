@@ -46,7 +46,7 @@ const sherbNoUI = 0x1 | 0x2 | 0x4 // no confirmation, no progress, no sound
 func RecycleBinStats() (bytes, items uint64) {
 	var q shQueryRBInfo
 	q.size = int32(unsafe.Sizeof(q))
-	hr, _, _ := procSHQueryRecycle.Call(0, 0, uintptr(unsafe.Pointer(&q)))
+	hr, _, _ := procSHQueryRecycle.Call(0, uintptr(unsafe.Pointer(&q)))
 	if int32(hr) < 0 {
 		return 0, 0
 	}
