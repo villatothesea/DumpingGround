@@ -19,13 +19,13 @@ func TestFsFootprint(t *testing.T) {
 		}
 		return p
 	}
-	mk(root, "Obsidian")                   // exact — Likely
-	mk(root, "ObsidianTools")              // prefix — Review
-	pub := mk(root, "ExampleCorp")         // publisher container
-	mk(pub, "Obsidian")                    // child under publisher — Likely
-	other := mk(root, "OtherApp")          // claimed by another entry
-	shared := mk(root, "Microsoft")        // generic — never flagged
-	mk(shared, "Edge")                     // inside a generic vendor dir
+	mk(root, "Obsidian")                // exact — Likely
+	prefix := mk(root, "ObsidianTools") // prefix-similar — never listed
+	pub := mk(root, "ExampleCorp")      // publisher container
+	mk(pub, "Obsidian")                 // child under publisher — Likely
+	other := mk(root, "OtherApp")       // claimed by another entry
+	shared := mk(root, "Microsoft")     // generic — never flagged
+	mk(shared, "Edge")                  // inside a generic vendor dir
 	loc := mk(t.TempDir(), "Install")
 	if err := os.WriteFile(filepath.Join(loc, "app.exe"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
@@ -66,16 +66,37 @@ func TestFsFootprint(t *testing.T) {
 	if !has(Likely, filepath.Join(pub, "Obsidian")) {
 		t.Error("app dir under publisher dir should be Likely")
 	}
-	if !has(Review, filepath.Join(root, "ObsidianTools")) {
-		t.Error("prefix-similar dir should be Review")
+	if has(Review, prefix) || has(Likely, prefix) || has(Confirmed, prefix) {
+		t.Error("similar-but-inexact dir must never be flagged")
 	}
 	if !has(Likely, filepath.Join(short, "Obsidian.lnk")) {
 		t.Error("app-named shortcut should be Likely")
 	}
-	for _, p := range paths(Review) {
-		if p == filepath.Join(root, "OtherApp") || p == shared {
-			t.Errorf("claimed/generic dir must never be flagged: %s", p)
+	for _, items := range byConf {
+		for _, it := range items {
+			if it.Path == filepath.Join(root, "OtherApp") || it.Path == shared {
+				t.Errorf("claimed/generic dir must never be flagged: %s", it.Path)
+			}
 		}
+	}
+}
+
+// A CJK app name used to normalize to an empty string — and an empty
+// match string flags every file scanned. Chinese names must survive
+// normalization and match by exact normalized equality only.
+func TestNormCJK(t *testing.T) {
+	n := norm("千问办公")
+	if n != "千问办公" {
+		t.Fatalf("CJK name must survive norm: %q", n)
+	}
+	root := t.TempDir()
+	mk := filepath.Join(root, "别的程序")
+	if err := os.MkdirAll(mk, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	e := &Entry{Name: "千问办公"}
+	if items := fsFootprint(e, []Entry{*e}, []string{root}, nil); len(items) != 0 {
+		t.Fatalf("unrelated dir must not be flagged: %v", items)
 	}
 }
 

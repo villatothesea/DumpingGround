@@ -4,11 +4,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 )
 
 // Confidence is how sure the scanner is that an item belongs to the
-// app — the leftover review list pre-checks Confirmed and Likely and
-// leaves Review items for the user to tick explicitly.
+// app. Only certain items are ever reported — nothing fuzzy is listed
+// for the user to adjudicate, because the tool, not the user, carries
+// the responsibility for a correct list.
 type Confidence uint8
 
 const (
@@ -65,12 +67,6 @@ func fsFootprint(e *Entry, all []Entry, roots, shortcuts []string) []Item {
 	var out []Item
 	nName := norm(e.Name)
 	nPub := norm(e.Publisher)
-	// The app's significant first word, for prefix matching dirs like
-	// "Docker" that hold "Docker Desktop" data.
-	first := ""
-	if w := strings.Fields(e.Name); len(w) > 0 {
-		first = norm(w[0])
-	}
 
 	// The install folder itself — the registry said so.
 	if e.Location != "" && isDir(e.Location) {
@@ -108,13 +104,10 @@ func fsFootprint(e *Entry, all []Entry, roots, shortcuts []string) []Item {
 							Why: "app folder under the publisher's folder"})
 					}
 				}
-			case similarName(dn, nName, first):
-				if claimed(p, e, all) {
-					continue
-				}
-				out = append(out, Item{Path: p, Kind: KindDir, Confidence: Review,
-					Why: "folder name is similar — verify before removing"})
 			}
+			// No fuzzy or prefix matching: a leftover list must be
+			// certain, not "probably this app's". Similar names are
+			// shown nowhere rather than guessed at.
 		}
 	}
 
@@ -134,14 +127,10 @@ func fsFootprint(e *Entry, all []Entry, roots, shortcuts []string) []Item {
 				return nil
 			}
 			base := norm(strings.TrimSuffix(d.Name(), filepath.Ext(d.Name())))
-			conf := Review
-			why := "shortcut with a similar name"
-			if base == nName || base == norm("uninstall "+e.Name) || base == norm(e.Name+" uninstaller") {
-				conf, why = Likely, "shortcut to the app"
-			} else if !similarName(base, nName, first) && !strings.Contains(base, nName) {
+			if base != nName && base != norm("uninstall "+e.Name) && base != norm(e.Name+" uninstaller") {
 				return nil
 			}
-			out = append(out, Item{Path: p, Kind: KindDir, Confidence: conf, Why: why})
+			out = append(out, Item{Path: p, Kind: KindDir, Confidence: Likely, Why: "shortcut to the app"})
 			return nil
 		})
 	}
@@ -174,22 +163,14 @@ func claimed(p string, self *Entry, all []Entry) bool {
 	return false
 }
 
-// similarName: the dir starts with the app's significant first word —
-// catches "Docker" holding "Docker Desktop" data while generic words
-// like "Tools" or "System" never prefix-match.
-func similarName(dirNorm, nameNorm, first string) bool {
-	if dirNorm == nameNorm {
-		return false // exact matches are Likely, not Review
-	}
-	return len(first) >= 5 && !generic[first] && strings.HasPrefix(dirNorm, first)
-}
-
-// norm reduces a display name or directory name to lowercase
-// alphanumerics, so "Docker Desktop" matches "DockerDesktop".
+// norm reduces a display name or directory name to lowercase letters
+// and digits, so "Docker Desktop" matches "DockerDesktop". Unicode
+// letters survive — CJK app names must not collapse to an empty string
+// (an empty match string flags *everything*).
 func norm(s string) string {
 	var b strings.Builder
 	for _, r := range strings.ToLower(s) {
-		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
 			b.WriteRune(r)
 		}
 	}

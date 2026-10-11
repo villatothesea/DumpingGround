@@ -85,44 +85,46 @@ func (m *Model) uninstallView(c *ui.Context, t *ui.Theme) {
 			{Title: "Size", Width: 80, MinWidth: 50, Align: ui.End, Sortable: true},
 			{Title: "Installed", Width: 90, MinWidth: 70, Align: ui.End, Sortable: true},
 			{Title: "Install location", MinWidth: 240, Sortable: true},
-			{Title: "", ID: "actions", Width: 132, Fixed: true, Align: ui.End},
+			{Title: "", ID: "actions", Width: 152, Fixed: true, Align: ui.End},
 		}
-		ui.Table(c, &m.uninstList, cols, len(rows), func(row, col int) {
-			e := rows[row]
-			cell := ui.Row(c).Fill().Height(26).Gap(6).AlignItems(ui.Center)
-			m.uninstContextMenu(c, cell, e)
-			cell.Children(func() {
-				switch col {
-				case 0:
-					if bmp := m.processIcon(e.IconPath()); bmp != nil {
-						ui.Image(c, bmp).Size(16, 16).Shrink(0)
-					} else {
-						icon(c, "pkg", 13).TextColor(t.TextMuted)
+		tableChrome(c, func() ui.Element {
+			return ui.Table(c, &m.uninstList, cols, len(rows), func(row, col int) {
+				e := rows[row]
+				cell := ui.Row(c).Fill().Height(26).Gap(6).AlignItems(ui.Center)
+				m.uninstContextMenu(c, cell, e)
+				cell.Children(func() {
+					switch col {
+					case 0:
+						if bmp := m.processIcon(e.IconPath()); bmp != nil {
+							ui.Image(c, bmp).Size(16, 16).Shrink(0)
+						} else {
+							icon(c, "pkg", 13).TextColor(t.TextMuted)
+						}
+						ui.Text(c, e.Name).SingleLine().Tooltip(e.Name + "  " + e.Version)
+					case 1:
+						ui.Text(c, e.Version).FontSize(11).SingleLine().Tooltip(e.Version)
+					case 2:
+						ui.Text(c, e.Publisher).FontSize(11).TextColor(t.TextMuted).SingleLine().Tooltip(e.Publisher)
+					case 3:
+						sz := "—"
+						if e.EstimatedSize {
+							sz = format.Bytes(e.SizeBytes)
+						}
+						ui.Text(c, sz).FontSize(11)
+					case 4:
+						d := e.Date()
+						if d == "" {
+							d = "—"
+						}
+						ui.Text(c, d).FontSize(11).TextColor(t.TextMuted).Tooltip(e.InstallDate)
+					case 5:
+						ui.Text(c, e.Location).FontSize(10).TextColor(t.TextMuted).SingleLine().Tooltip(e.Location)
+					default:
+						m.uninstRowActions(c, t, e)
 					}
-					ui.Text(c, e.Name).SingleLine().Tooltip(e.Name + "  " + e.Version)
-				case 1:
-					ui.Text(c, e.Version).FontSize(11).SingleLine().Tooltip(e.Version)
-				case 2:
-					ui.Text(c, e.Publisher).FontSize(11).TextColor(t.TextMuted).SingleLine().Tooltip(e.Publisher)
-				case 3:
-					sz := "—"
-					if e.EstimatedSize {
-						sz = format.Bytes(e.SizeBytes)
-					}
-					ui.Text(c, sz).FontSize(11)
-				case 4:
-					d := e.Date()
-					if d == "" {
-						d = "—"
-					}
-					ui.Text(c, d).FontSize(11).TextColor(t.TextMuted).Tooltip(e.InstallDate)
-				case 5:
-					ui.Text(c, e.Location).FontSize(10).TextColor(t.TextMuted).SingleLine().Tooltip(e.Location)
-				default:
-					m.uninstRowActions(c, t, e)
-				}
-			})
-		}).Grow(1).MinHeight(0).FillWidth()
+				})
+			}).Grow(1).MinHeight(0).FillWidth()
+		})
 	})
 }
 
@@ -194,8 +196,8 @@ func (m *Model) uninstRowActions(c *ui.Context, t *ui.Theme, e *uninstall.Entry)
 		}
 		busy := m.uninstBusy != ""
 		u := ui.Row(c).Height(22).PaddingX(8).Gap(4).AlignItems(ui.Center).Radius(t.Radius).
-			Cursor(ui.CursorPointer).Label("Uninstall "+e.Name).
-			Tooltip("Launch the app's own uninstaller: "+e.Uninstall)
+			Cursor(ui.CursorPointer).Label("Uninstall " + e.Name).
+			Tooltip("Launch the app's own uninstaller: " + e.Uninstall)
 		u.BorderWidth(1).BorderColor(t.Border).Background(t.Surface)
 		if busy {
 			u.Cursor(ui.CursorDefault).Tooltip("Another uninstaller is running")
@@ -217,9 +219,6 @@ func (m *Model) uninstRowActions(c *ui.Context, t *ui.Theme, e *uninstall.Entry)
 			icon(c, "trash", 11).TextColor(t.Danger)
 			ui.Text(c, label).FontSize(11).TextColor(t.Danger).SingleLine()
 		})
-		if busy {
-			ui.Text(c, "…").FontSize(11).TextColor(t.TextMuted)
-		}
 		if u.Clicked() && !busy {
 			if !armed {
 				m.uninstArmed = e.Name
@@ -361,9 +360,9 @@ func sweepConfLabel(conf uninstall.Confidence) string {
 // explanation of reversibility, and the armed two-click Remove.
 func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 	ui.Modal(c, &m.sweepOpen, func() {
-		ui.Column(c).Width(780).MaxHeight(560).Padding(6, 16, 14, 16).Gap(10).Children(func() {
+		ui.Column(c).Width(920).MaxHeight(680).Padding(6, 16, 14, 16).Gap(10).Children(func() {
 			ui.Text(c, "Leftovers — "+m.sweepName).Bold().FontSize(16)
-			ui.Text(c, "Folders and shortcuts go to the Recycle Bin. Registry items are exported to a .reg backup in the log folder before removal. REVIEW rows are unchecked — tick them only after looking.").
+			ui.Text(c, "Everything listed belongs to "+m.sweepName+" — CONFIRMED items come from its registry record, LIKELY items match its exact name. Folders go to the Recycle Bin; registry items are exported to a .reg backup in the log folder first.").
 				FontSize(11).TextColor(t.TextMuted)
 			if len(m.sweepItems) == 0 {
 				ui.Text(c, "No leftovers found — the uninstaller left a clean machine.").FontSize(11).TextColor(t.TextMuted)

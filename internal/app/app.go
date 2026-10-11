@@ -10,11 +10,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dumpingground/dumpingground/internal/applog"
 	"github.com/dumpingground/dumpingground/internal/disk"
 	"github.com/dumpingground/dumpingground/internal/format"
 	"github.com/dumpingground/dumpingground/internal/process"
 	"github.com/dumpingground/dumpingground/internal/treemap"
-	"github.com/dumpingground/dumpingground/internal/applog"
 	"github.com/dumpingground/dumpingground/internal/uninstall"
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -168,23 +168,23 @@ type Model struct {
 	diskWatchErr                    chan error
 	diskLive                        bool
 	scanPath                        string // the path the current snapshot was built from
-	rustPending                     bool // analyze for Rust artifacts once a running scan settles
-	rustBusy                        bool // analysis or deletion in flight
-	rustOwnsIndex                   bool // the index was built for a Rust scan and is released after it
+	rustPending                     bool   // analyze for Rust artifacts once a running scan settles
+	rustBusy                        bool   // analysis or deletion in flight
+	rustOwnsIndex                   bool   // the index was built for a Rust scan and is released after it
 	rustReport                      *disk.RustReport
 	rustMode                        bool // the disk page shows the artifact report
 	rustSel                         int  // the cleanup tier previewing its files, -1 none
 	rustConfirm                     int
-	rustRowConfirm                  string // target path whose row clean button is armed
-	rustSortIdle                    bool   // sort report rows by idle days instead of size
-	rustRecycle                     bool   // send deletions to the recycle bin where possible
-	rustFilterCat                   int    // category filtering the row list, -1 all
-	rustGroupSafe                   bool   // group rows under risk-level headers
+	rustRowConfirm                  string       // target path whose row clean button is armed
+	rustSortIdle                    bool         // sort report rows by idle days instead of size
+	rustRecycle                     bool         // send deletions to the recycle bin where possible
+	rustFilterCat                   int          // category filtering the row list, -1 all
+	rustGroupSafe                   bool         // group rows under risk-level headers
 	rustCollapsed                   map[int]bool // collapsed risk groups
-	rustAnStage                     int    // analysis progress stage (disk.RustStage*)
-	rustAnVis                       int    // index nodes visited so far
-	rustAnFound                     int    // project targets found so far
-	rustPathsCat                    int // category whose path list the modal shows, -1 none
+	rustAnStage                     int          // analysis progress stage (disk.RustStage*)
+	rustAnVis                       int          // index nodes visited so far
+	rustAnFound                     int          // project targets found so far
+	rustPathsCat                    int          // category whose path list the modal shows, -1 none
 	rustPathsOpen                   bool
 	rustPathsList                   ui.ListState
 	rustMsg                         string
@@ -192,17 +192,17 @@ type Model struct {
 	rustList                        ui.ListState
 	junkBusy                        bool // junk measurement or cleaning in flight
 	junkReport                      *disk.JunkReport
-	junkMode                        bool // the disk page shows the junk report
-	junkSel                         int  // preset card previewing its rows, -1 none
-	junkConfirm                     int  // preset armed for the second click, -1 none
-	junkRowConfirm                  string // path whose row clean button is armed
-	junkFilterCat                   int    // category filtering the row list, -1 all
-	junkGroupRisk                   bool   // group rows under risk-level headers
-	junkGroupCat                    bool   // group rows under category headers — stacks with risk
-	junkCatFirst                    bool   // when both groupings are on, category is the outer level
+	junkMode                        bool            // the disk page shows the junk report
+	junkSel                         int             // preset card previewing its rows, -1 none
+	junkConfirm                     int             // preset armed for the second click, -1 none
+	junkRowConfirm                  string          // path whose row clean button is armed
+	junkFilterCat                   int             // category filtering the row list, -1 all
+	junkGroupRisk                   bool            // group rows under risk-level headers
+	junkGroupCat                    bool            // group rows under category headers — stacks with risk
+	junkCatFirst                    bool            // when both groupings are on, category is the outer level
 	junkCollapsed                   map[string]bool // collapsed group headers, keyed by group path
-	junkAnCat                       int    // category currently being measured
-	junkPathsCat                    int    // category whose path list the modal shows, -1 none
+	junkAnCat                       int             // category currently being measured
+	junkPathsCat                    int             // category whose path list the modal shows, -1 none
 	junkPathsOpen                   bool
 	junkPathsList                   ui.ListState
 	junkLegendOpen                  bool // the badge-legend modal
@@ -211,12 +211,12 @@ type Model struct {
 	junkDoneMsg                     string // outcome of the last clean, shown once the re-measure lands
 	junkList                        ui.ListState
 	uninstRows                      []uninstall.Entry
-	uninstLoaded                    bool   // the registry list has been read at least once
+	uninstLoaded                    bool // the registry list has been read at least once
 	uninstLoading                   bool
 	uninstQuery                     string
 	uninstSort                      ui.SortOrder // the Table header drives this directly
-	uninstArmed                     string // entry name armed for the second-click confirm
-	uninstBusy                      string // entry whose uninstaller is still running — one at a time
+	uninstArmed                     string       // entry name armed for the second-click confirm
+	uninstBusy                      string       // entry whose uninstaller is still running — one at a time
 	uninstMsg                       string
 	uninstList                      ui.ListState
 	sweepName                       string // entry whose leftover scan the modal shows
@@ -632,6 +632,8 @@ func (m *Model) pageTab(c *ui.Context, t *ui.Theme, pg page, label string) {
 			tx.TextColor(t.AccentText)
 		case on:
 			tx.Bold()
+		case e.Hovered():
+			tx.TextColor(t.Text)
 		default:
 			tx.TextColor(t.TextMuted)
 		}
