@@ -73,10 +73,13 @@ func deadEntryItems(installed []Entry) []Item {
 	return out
 }
 
-// deadShortcutItems flags .lnk files whose target no longer exists.
-// Links storing only an AppUserModelID yield no path at all — never
-// flagged, because nothing was proven dead.
+// deadShortcutItems flags .lnk files Windows itself can no longer
+// resolve — the recorded target is gone and IShellLink::Resolve's own
+// search fails. Links storing only an AppUserModelID have no path to
+// verify and are never flagged.
 func deadShortcutItems(roots []string) []Item {
+	res := newLinkResolver()
+	defer res.close()
 	var out []Item
 	for _, root := range roots {
 		filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
@@ -92,7 +95,7 @@ func deadShortcutItems(roots []string) []Item {
 			if isReparse(d) || !strings.HasSuffix(strings.ToLower(d.Name()), ".lnk") {
 				return nil
 			}
-			if t := linkTargetRaw(p); t != "" && !fileExists(t) {
+			if res.linkDead(p) {
 				out = append(out, Item{Path: p, Kind: KindDir,
 					Confidence: Confirmed,
 					Why:        "shortcut to a file that no longer exists"})

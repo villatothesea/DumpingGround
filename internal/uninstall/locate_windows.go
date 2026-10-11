@@ -197,18 +197,6 @@ func linkTarget(path string) string {
 	return scanLink(data, absPath)
 }
 
-// linkTargetRaw is the link's true target whether it still exists or
-// not — the orphan scan wants precisely the dead ones. It parses the
-// LinkInfo structure rather than scanning bytes: byte scans misread
-// ANSI strings as UTF-16 at odd offsets and invent path-shaped runs.
-func linkTargetRaw(path string) string {
-	data, err := os.ReadFile(path)
-	if err != nil || len(data) > 1<<20 {
-		return ""
-	}
-	return parseLinkTarget(data)
-}
-
 // parseLinkTarget reads the LinkInfo local base path — the shortcut's
 // recorded target — from the shell-link binary layout (MS-SHLLINK).
 // "" when the link stores none (AppUserModelID links, network-only

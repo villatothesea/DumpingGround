@@ -7,13 +7,15 @@ import (
 	"encoding/binary"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"unicode/utf16"
+	"unsafe"
 )
 
 // fakeLnk writes a minimal but structurally valid shell link: header,
 // no IDList, and a LinkInfo block whose UTF-16 local base path is the
-// given target.
+// given target — enough for parseLinkTarget tests, not for resolution.
 func fakeLnk(t *testing.T, dir, name, target string) string {
 	t.Helper()
 	u := utf16.Encode([]rune(target))
@@ -34,6 +36,9 @@ func fakeLnk(t *testing.T, dir, name, target string) string {
 	var out bytes.Buffer
 	head := make([]byte, 0x4C)
 	binary.LittleEndian.PutUint32(head, 0x4C)
+	// The shell-link CLSID — IPersistFile::Load rejects links without it.
+	copy(head[4:], []byte{0x01, 0x14, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46})
 	binary.LittleEndian.PutUint32(head[0x14:], 0x2) // HasLinkInfo
 	out.Write(head)
 	out.Write(li.Bytes())
@@ -44,33 +49,60 @@ func fakeLnk(t *testing.T, dir, name, target string) string {
 	return p
 }
 
-// fakeAumidLnk writes a link header with no LinkInfo — the shape of
-// AppUserModelID-only links, which must never be flagged.
-func fakeAumidLnk(t *testing.T, dir, name string) string {
+// saveLink writes a real .lnk through IShellLinkW::SetPath +
+// IPersistFile::Save — the only way to fixture a link whose IDList the
+// resolver genuinely consults.
+func saveLink(t *testing.T, r *linkResolver, lnk, target string) {
 	t.Helper()
-	head := make([]byte, 0x4C)
-	binary.LittleEndian.PutUint32(head, 0x4C)
-	p := filepath.Join(dir, name)
-	if err := os.WriteFile(p, append(head, []byte("SomeApp!Entry")...), 0o644); err != nil {
+	up, err := syscall.UTF16PtrFromString(target)
+	if err != nil {
 		t.Fatal(err)
 	}
-	return p
+	// IShellLinkW::SetPath — index 20.
+	if comVtable(r.shell, 20, uintptr(unsafe.Pointer(up))) != 0 {
+		t.Fatal("SetPath failed")
+	}
+	lp, err := syscall.UTF16PtrFromString(lnk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// IPersistFile::Save — index 6, fRemember=TRUE.
+	if comVtable(r.pers, 6, uintptr(unsafe.Pointer(lp)), 1) != 0 {
+		t.Fatal("Save failed")
+	}
+}
+
+func TestParseLinkTarget(t *testing.T) {
+	target := `D:\Apps\Some App\app.exe`
+	data, err := os.ReadFile(fakeLnk(t, t.TempDir(), "app.lnk", target))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := parseLinkTarget(data); got != target {
+		t.Fatalf("parseLinkTarget = %q, want %q", got, target)
+	}
 }
 
 func TestDeadShortcutItems(t *testing.T) {
+	r := newLinkResolver()
+	defer r.close()
 	root := t.TempDir()
-	missing := fakeLnk(t, root, "dead.lnk", `C:\Nonexistent\GoneApp12345\app.exe`)
-	// A link whose target still exists is not a leftover.
-	live := filepath.Join(root, "real.exe")
-	if err := os.WriteFile(live, []byte("x"), 0o644); err != nil {
+	liveExe := filepath.Join(root, "real.exe")
+	goneExe := filepath.Join(root, "gone.exe")
+	for _, p := range []string{liveExe, goneExe} {
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	saveLink(t, r, filepath.Join(root, "live.lnk"), liveExe)
+	dead := filepath.Join(root, "dead.lnk")
+	saveLink(t, r, dead, goneExe)
+	if err := os.Remove(goneExe); err != nil {
 		t.Fatal(err)
 	}
-	fakeLnk(t, root, "live.lnk", live)
-	// A link with no LinkInfo (AppUserModelID style) is not flagged.
-	fakeAumidLnk(t, root, "aumid.lnk")
 
 	items := deadShortcutItems([]string{root})
-	if len(items) != 1 || items[0].Path != missing {
+	if len(items) != 1 || items[0].Path != dead {
 		t.Fatalf("want only the dead link flagged, got %+v", items)
 	}
 	if items[0].Confidence != Confirmed {
