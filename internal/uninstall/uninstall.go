@@ -167,6 +167,50 @@ func (e *Entry) exeFallback() string {
 	return ""
 }
 
+// locationFromUninstall guesses the install dir from the uninstall
+// command's own path when the registry leaves InstallLocation empty —
+// Inno/NSIS per-user installs put their uninstaller next to the app.
+// System executables (msiexec, rundll32) give up: their directory is
+// Windows, not the app.
+func (e *Entry) locationFromUninstall() string {
+	exe, _ := SplitCmdline(e.Uninstall)
+	if exe == "" {
+		return ""
+	}
+	base := strings.ToLower(filepath.Base(exe))
+	if base == "msiexec.exe" || base == "rundll32.exe" || base == "rundll32" || base == "cmd.exe" || base == "regsvr32.exe" {
+		return ""
+	}
+	dir := filepath.Dir(exe)
+	if dir == "." || dir == "" {
+		return ""
+	}
+	if windir := os.Getenv("WINDIR"); windir != "" && pathWithin(dir, windir) {
+		return ""
+	}
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		return ""
+	}
+	return dir
+}
+
+// locationFallback tries the uninstall string first, then the icon's
+// own directory — DisplayIcon usually points at the app exe itself.
+func (e *Entry) locationFallback() string {
+	if d := e.locationFromUninstall(); d != "" {
+		return d
+	}
+	if s := e.displayIconPath(); s != "" {
+		dir := filepath.Dir(s)
+		if windir := os.Getenv("WINDIR"); windir == "" || !pathWithin(dir, windir) {
+			if isUninstallerName(s) == false {
+				return dir
+			}
+		}
+	}
+	return ""
+}
+
 // isUninstallerName reports whether a path names an uninstaller,
 // updater or setup stub — never a good app icon.
 func isUninstallerName(path string) bool {

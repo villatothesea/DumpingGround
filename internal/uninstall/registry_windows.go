@@ -19,6 +19,8 @@ var (
 	procRegQueryValue = advapi.NewProc("RegQueryValueExW")
 	procRegCreateKey  = advapi.NewProc("RegCreateKeyExW")
 	procRegSetValue   = advapi.NewProc("RegSetValueExW")
+	msiDLL            = syscall.NewLazyDLL("msi.dll")
+	procMsiInfo       = msiDLL.NewProc("MsiGetProductInfoW")
 )
 
 const (
@@ -194,12 +196,18 @@ func enumUninstall() []Entry {
 				Wow32:       h.access&0x100 != 0,
 				Hive:        map[bool]string{true: "HKLM", false: "HKCU"}[h.system],
 			}
-			if e.Location == "" {
-				e.Location = vals["InstallSource"].str()
-			}
 			// Installers store these quoted or with %VARS% — normalize
 			// once so open-folder, footprint and icon code stay simple.
 			e.Location = regPath(e.Location)
+			if e.Location == "" {
+				// InstallSource is the installer *media* dir, not the
+				// install dir — the uninstall string's own folder is a
+				// better guess for per-user Inno/NSIS installs.
+				e.Location = e.locationFallback()
+			}
+			if e.Location == "" {
+				e.Location = msiInstallLocation(e.Uninstall)
+			}
 			e.Icon = regPath(e.Icon)
 			if sz := vals["EstimatedSize"].dword(); sz > 0 {
 				e.SizeBytes = sz * 1024 // EstimatedSize is kilobytes
@@ -213,6 +221,30 @@ func enumUninstall() []Entry {
 }
 
 func (e Entry) String() string { return fmt.Sprintf("%s %s", e.Name, e.Version) }
+
+// msiInstallLocation asks Windows Installer where a product lives —
+// MSI entries never write InstallLocation, and their MsiExec uninstall
+// string reveals nothing about the folder.
+func msiInstallLocation(uninstall string) string {
+	start := strings.Index(uninstall, "{")
+	end := strings.Index(uninstall, "}")
+	if start < 0 || end <= start {
+		return ""
+	}
+	guid, err1 := syscall.UTF16PtrFromString(uninstall[start : end+1])
+	prop, err2 := syscall.UTF16PtrFromString("InstallLocation")
+	if err1 != nil || err2 != nil {
+		return ""
+	}
+	buf := make([]uint16, 512)
+	n := uint32(len(buf))
+	r, _, _ := procMsiInfo.Call(uintptr(unsafe.Pointer(guid)), uintptr(unsafe.Pointer(prop)),
+		uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&n)))
+	if r != 0 || n == 0 {
+		return ""
+	}
+	return syscall.UTF16ToString(buf[:n])
+}
 
 // OpenInRegedit jumps Registry Editor to this entry's Uninstall key —
 // Regedit restores its last position from the LastKey value.
