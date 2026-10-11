@@ -570,8 +570,10 @@ func (m *Model) junkPresetCard(c *ui.Context, t *ui.Theme, p int) {
 			}
 		})
 		ui.Text(c, pre.note).FontSize(10).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Tooltip(pre.note)
-		ui.Text(c, pre.cost).FontSize(10).TextColor(t.Warning).SingleLine().Ellipsis("…").Tooltip(pre.cost)
-		ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
+		// Cost line and Clean share the card's last row — the button's
+		// bottom edge lines up with the text baseline.
+		ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
+			ui.Text(c, pre.cost).FontSize(10).TextColor(t.Warning).SingleLine().Ellipsis("…").Grow(1).MinWidth(0).Tooltip(pre.cost)
 			if m.dangerButton(c, "broom", "Clean").Disabled(bytes == 0 || m.junkBusy).Clicked() {
 				m.junkConfirm = p
 			}
@@ -603,7 +605,7 @@ func (m *Model) junkPresetCard(c *ui.Context, t *ui.Theme, p int) {
 // confirmed Clean for those who want it gone anyway. Same height as
 // the plan cards, narrower; the buttons pin to the bottom row.
 func (m *Model) junkDownloadsCard(c *ui.Context, t *ui.Theme, dl *disk.JunkDir) {
-	card := ui.Column(c).Width(300).Padding(10, 12).Gap(6).Background(t.Surface).Radius(8)
+	card := ui.Column(c).Grow(0.5).Padding(10, 12).Gap(6).Background(t.Surface).Radius(8)
 	card.BorderWidth(1).BorderColor(t.Border)
 	card.Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
