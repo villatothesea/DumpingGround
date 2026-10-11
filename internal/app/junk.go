@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"os/exec"
 	"sort"
 	"strings"
 
@@ -338,6 +339,13 @@ func (m *Model) junkResultsView(c *ui.Context, t *ui.Theme) {
 				}).BorderWidth(1).BorderColor(t.Border)
 			}
 		})
+		// Downloads is the user's call, not ours — measured for a
+		// reminder card with an Open shortcut, never part of a plan.
+		if rep.Downloads != nil {
+			ui.Row(c).FillWidth().Gap(10).Children(func() {
+				m.junkDownloadsCard(c, t, rep.Downloads)
+			})
+		}
 		m.junkFilterStrip(c, t)
 		rows := m.junkRows()
 		if len(rows) == 0 {
@@ -590,6 +598,70 @@ func (m *Model) junkPresetCard(c *ui.Context, t *ui.Theme, p int) {
 			m.junkSel = p
 		}
 	}
+}
+
+// junkDownloadsCard is the reminder strip under the plans: Downloads
+// holds user files, so we only measure it, offer an Open shortcut to
+// look, and a confirmed Clean for those who want it gone anyway.
+func (m *Model) junkDownloadsCard(c *ui.Context, t *ui.Theme, dl *disk.JunkDir) {
+	card := ui.Row(c).FillWidth().Padding(8, 14).Gap(12).AlignItems(ui.Center).Background(t.Surface).Radius(8)
+	card.BorderWidth(1).BorderColor(t.Border)
+	card.Children(func() {
+		icon(c, "folder", 16).TextColor(t.Warning)
+		ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
+			ui.Text(c, fmt.Sprintf("Downloads — %s · %s files", format.Bytes(dl.Bytes), format.Int(uint64(dl.Files)))).
+				FontSize(12).Bold().SingleLine()
+			ui.Text(c, "Your files — no plan touches this. Look and decide yourself.").
+				FontSize(10).TextColor(t.TextMuted).SingleLine().MinWidth(0)
+		})
+		op := ui.Row(c).Height(24).PaddingX(10).Gap(5).AlignItems(ui.Center).Radius(t.Radius).
+			Cursor(ui.CursorPointer).Label("Open Downloads").Tooltip("Open in Explorer")
+		op.BorderWidth(1).BorderColor(t.Border).Background(t.Surface)
+		op.Draw(func(p *ui.Painter, r ui.Rect) {
+			if op.Pressed() {
+				p.Fill(r, t.SurfacePressed, t.Radius)
+			} else if op.Hovered() {
+				p.Fill(r, t.SurfaceHover, t.Radius)
+			}
+		})
+		op.Children(func() {
+			icon(c, "folder", 12).TextColor(t.Accent)
+			ui.Text(c, "Open").FontSize(11).TextColor(t.Accent)
+		})
+		if op.Clicked() {
+			_ = exec.Command("explorer", dl.Path).Start()
+		}
+		armed := m.junkRowConfirm == dl.Path
+		label := "Clean"
+		if armed {
+			label = "Sure?"
+		}
+		cl := ui.Row(c).Height(24).PaddingX(10).Gap(5).AlignItems(ui.Center).Radius(t.Radius).
+			Cursor(ui.CursorPointer).Label("Clean Downloads").
+			Tooltip("Delete everything inside Downloads — the folder itself stays")
+		cl.BorderWidth(1).BorderColor(t.Border).Background(t.Surface)
+		if armed {
+			cl.Background(t.Danger.Alpha(0.12)).BorderColor(t.Danger)
+		}
+		cl.Draw(func(p *ui.Painter, r ui.Rect) {
+			if cl.Pressed() {
+				p.Fill(r, t.SurfacePressed, t.Radius)
+			} else if cl.Hovered() {
+				p.Fill(r, t.SurfaceHover, t.Radius)
+			}
+		})
+		cl.Children(func() {
+			icon(c, "trash", 12).TextColor(t.Danger)
+			ui.Text(c, label).FontSize(11).TextColor(t.Danger)
+		})
+		if cl.Disabled(m.junkBusy).Clicked() {
+			if armed {
+				m.junkDelete([]*disk.JunkDir{dl})
+			} else {
+				m.junkRowConfirm = dl.Path
+			}
+		}
+	})
 }
 
 // junkPathsLink opens the category's path-list modal — the "check what

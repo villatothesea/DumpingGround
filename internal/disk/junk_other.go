@@ -2,7 +2,19 @@
 
 package disk
 
-import "os"
+import (
+	"os"
+	"path/filepath"
+)
+
+// DownloadsDir is the profile default off Windows.
+func DownloadsDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, "Downloads")
+}
 
 // RecycleBinStats is a no-op off Windows — the junk report only runs there.
 func RecycleBinStats() (bytes, items uint64) { return 0, 0 }

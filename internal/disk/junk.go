@@ -72,6 +72,9 @@ type JunkCat struct {
 type JunkReport struct {
 	Cats  [JunkCatCount]JunkCat
 	Bytes uint64
+	// Downloads is measured for the reminder card only — it is user
+	// content, not junk, and never enters Bytes or any preset.
+	Downloads *JunkDir
 }
 
 // JunkOpts feeds FindJunk: Running reports whether an exe name (lower
@@ -236,6 +239,12 @@ func FindJunk(opts JunkOpts) *JunkReport {
 			}
 		}
 	})
+	if dl := DownloadsDir(); dl != "" {
+		if bytes, files := junkDirStats(dl); files > 0 {
+			rep.Downloads = &JunkDir{Path: dl, Bytes: bytes, Files: files,
+				Base: filepath.Base(dl), Mode: JunkKids}
+		}
+	}
 	for _, cat := range rep.Cats {
 		rep.Bytes += cat.Bytes
 	}

@@ -177,6 +177,8 @@ func testJunkReport() *disk.JunkReport {
 	add(disk.JunkCatWinLogs, `C:\Windows\Logs\CBS\CBS.log`, 80<<20, 1)
 	add(disk.JunkCatDevCaches, `C:\Users\me\AppData\Local\go-build`, 9<<30, 40000)
 	add(disk.JunkCatWindowsOld, `C:\Windows.old`, 24<<30, 0)
+	rep.Downloads = &disk.JunkDir{Path: `C:\Users\me\Downloads`, Bytes: 12 << 30, Files: 210,
+		Base: "Downloads", Mode: disk.JunkKids}
 	return rep
 }
 
