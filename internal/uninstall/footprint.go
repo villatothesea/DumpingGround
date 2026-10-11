@@ -68,13 +68,18 @@ func fsFootprint(e *Entry, all []Entry, roots, shortcuts []string) []Item {
 	names := e.matchTokens()
 	nPub := norm(e.Publisher)
 
-	// The install folder itself — the registry said so. saneLocation
-	// is belt-and-braces: entries sanitize at enumeration, but a
-	// restored pending item could predate the check.
+	// The install folder itself — the registry said so. A
+	// shortcut-inferred location stays Likely: it is a real folder
+	// that app put there, but not proven to be the whole install.
+	// saneLocation is belt-and-braces: entries sanitize at
+	// enumeration, but a restored pending item could predate it.
 	if e.Location != "" && saneLocation(e.Location) && isDir(e.Location) {
+		conf, why := Confirmed, "the app's install folder, left behind"
+		if e.LocationGuessed {
+			conf, why = Likely, "install folder inferred from a shortcut"
+		}
 		out = append(out, Item{
-			Path: e.Location, Kind: KindDir, Confidence: Confirmed,
-			Why: "the app's install folder, left behind",
+			Path: e.Location, Kind: KindDir, Confidence: conf, Why: why,
 		})
 	}
 

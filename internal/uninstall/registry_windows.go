@@ -232,6 +232,13 @@ func enumUninstall() []Entry {
 			if e.Location == "" {
 				e.Location = e.programFilesLocation()
 			}
+			if e.Location == "" {
+				// Custom-path installs (Bitwig) record nothing — a
+				// shortcut named after the app points back at it.
+				if e.Location = e.shortcutLocation(); e.Location != "" {
+					e.LocationGuessed = true
+				}
+			}
 			if e.Location != "" && !saneLocation(e.Location) {
 				e.Location = "" // a fallback found a root, not a folder
 			}

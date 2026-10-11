@@ -31,6 +31,10 @@ type Entry struct {
 	Hive          string // "HKLM" or "HKCU" — the display root of Key
 	Wow32         bool   // Key lives in the 32-bit (WOW6432Node) view
 	EstimatedSize bool   // false when the app never reported a size
+	// LocationGuessed marks a Location inferred from a shortcut
+	// target rather than the registry — footprint downgrades it to
+	// Likely so it is never treated as proven.
+	LocationGuessed bool
 }
 
 // List returns every installed program with a name and an uninstall
