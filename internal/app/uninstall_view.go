@@ -393,11 +393,10 @@ func (m *Model) startOrphanScan() {
 }
 
 // launchUninstall starts the vendor uninstaller, waits for it to exit,
-// then checks whether the registry entry went away. When the app is
-// gone the leftover review opens automatically; when the entry is
-// still there the modal opens anyway (the user may have removed files
-// by hand, or the uninstaller was cancelled — the Review items say
-// which is which).
+// then checks whether the registry entry went away. Only a gone entry
+// means a real uninstall — a surviving entry means the user cancelled
+// or the uninstaller bailed, and sweeping then would list the live
+// install folder as a leftover.
 func (m *Model) launchUninstall(e *uninstall.Entry) {
 	if m.uninstBusy != "" || m.sweepOpen {
 		return // serialized — and a review in progress owns sweepItems
@@ -433,10 +432,25 @@ func (m *Model) launchUninstall(e *uninstall.Entry) {
 			frac := 0.05 + 0.25*float64(i)/30
 			m.post(func() { m.sweepScanFrac = frac })
 		}
+		if !gone {
+			// The entry is still listed — the uninstaller was
+			// cancelled or bailed out. Scanning now would list the
+			// live install folder as a leftover, so don't: the row
+			// is still there and Uninstall can be retried.
+			applog.Logf("uninstaller exited with entry still listed  %s — sweep skipped", entry.Name)
+			m.post(func() {
+				m.uninstBusy = ""
+				m.sweepOpen = false
+				m.sweepPhase = sweepReview
+				m.uninstMsg = entry.Name + " — uninstaller closed but the entry is still listed; nothing swept. " +
+					"Retry Uninstall, or right-click → Find leftovers for a manual sweep"
+			})
+			return
+		}
 		// The entry vanishing does not mean file deletion finished —
 		// spawned children keep working. Wait until the install
 		// folder's size holds still across two samples.
-		if gone && uninstall.SaneLocation(entry.Location) {
+		if uninstall.SaneLocation(entry.Location) {
 			m.post(func() { m.sweepScanText = "Waiting for file cleanup to settle…" })
 			last := uninstall.DirSize(entry.Location)
 			for i := 0; i < 8; i++ {
@@ -455,19 +469,14 @@ func (m *Model) launchUninstall(e *uninstall.Entry) {
 			m.uninstBusy = ""
 			m.uninstLoaded = false // the listing changed
 			m.sweepName = entry.Name
-			if gone {
-				// The name keeps finding leftovers later — log-driven
-				// history is the orphan scan's name source.
-				uninstall.RecordUninstalled(entry.Name)
-			}
-			switch {
-			case len(items) == 0 && gone:
+			// The name keeps finding leftovers later — log-driven
+			// history is the orphan scan's name source.
+			uninstall.RecordUninstalled(entry.Name)
+			if len(items) == 0 {
 				m.uninstMsg = entry.Name + " uninstalled — no leftovers found"
 				applog.Logf("clean uninstall  %s", entry.Name)
-			case gone:
+			} else {
 				m.uninstMsg = entry.Name + " uninstalled — reviewing leftovers"
-			default:
-				m.uninstMsg = entry.Name + " — uninstaller exited but the entry is still listed; review before removing"
 			}
 			m.finishSweepScan(entry.Name, items)
 		})
