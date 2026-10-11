@@ -233,7 +233,7 @@ func (e *Entry) locationFallback() string {
 // rather than the app's own folder — some installers write
 // "C:\Program Files\" itself, and flagging that as a leftover would
 // be catastrophic.
-func saneLocation(p string) bool {
+func SaneLocation(p string) bool {
 	if p == "" {
 		return false
 	}

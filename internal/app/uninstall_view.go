@@ -324,8 +324,8 @@ func (m *Model) startSweep(e *uninstall.Entry) {
 // by hand, or the uninstaller was cancelled — the Review items say
 // which is which).
 func (m *Model) launchUninstall(e *uninstall.Entry) {
-	if m.uninstBusy != "" {
-		return // serialized: MSI rejects concurrent installs anyway
+	if m.uninstBusy != "" || m.sweepOpen {
+		return // serialized — and a review in progress owns sweepItems
 	}
 	cmd, err := e.Launch()
 	if err != nil {
@@ -348,6 +348,20 @@ func (m *Model) launchUninstall(e *uninstall.Entry) {
 		for i := 0; i < 30 && !gone; i++ {
 			time.Sleep(2 * time.Second)
 			gone = entry.Gone()
+		}
+		// The entry vanishing does not mean file deletion finished —
+		// spawned children keep working. Wait until the install
+		// folder's size holds still across two samples.
+		if gone && uninstall.SaneLocation(entry.Location) {
+			last := uninstall.DirSize(entry.Location)
+			for i := 0; i < 8; i++ {
+				time.Sleep(2 * time.Second)
+				cur := uninstall.DirSize(entry.Location)
+				if cur == last {
+					break
+				}
+				last = cur
+			}
 		}
 		items := uninstall.Footprint(&entry, all)
 		m.post(func() {
@@ -436,7 +450,7 @@ func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 					FontSize(11).TextColor(t.TextMuted)
 				ui.Spacer(c)
 				if ui.Button(c, "Keep leftovers").Clicked() {
-					uninstall.ClearPending()
+					uninstall.ClearPending(m.sweepName)
 					m.sweepOpen = false
 				}
 				label := "Remove leftovers"
@@ -477,12 +491,13 @@ func (m *Model) runSweepRemoval() {
 	for _, it := range chosen {
 		hasReg = hasReg || it.Registry()
 	}
+	name := m.sweepName // capture now — the goroutine runs later
 	if hasReg {
 		backup = filepath.Join(applog.Dir(), fmt.Sprintf("sweep-%s-%s.reg",
-			sanitizeFileName(m.sweepName), time.Now().Format("20060102-150405")))
+			sanitizeFileName(name), time.Now().Format("20060102-150405")))
 	}
 	go func() {
-		applog.Section("Leftover sweep — " + m.sweepName)
+		applog.Section("Leftover sweep — " + name)
 		var reg io.Writer
 		var f *os.File
 		if backup != "" {
@@ -491,13 +506,14 @@ func (m *Model) runSweepRemoval() {
 			}
 		}
 		errs := uninstall.RemoveItems(chosen, reg)
-		removed, failed := 0, 0
+		removed := 0
+		var failedItems []uninstall.Item
 		for i, err := range errs {
 			if err == nil {
 				removed++
 				applog.Logf("removed  %s  (%s)", chosen[i].Path, chosen[i].Why)
 			} else {
-				failed++
+				failedItems = append(failedItems, chosen[i])
 				applog.Logf("FAILED   %s  — %v", chosen[i].Path, err)
 			}
 		}
@@ -506,15 +522,21 @@ func (m *Model) runSweepRemoval() {
 			applog.Logf("registry backup: %s", backup)
 		}
 		msg := fmt.Sprintf("Removed %d leftover items", removed)
-		if failed > 0 {
-			msg += fmt.Sprintf(", %d failed — see log", failed)
+		if len(failedItems) > 0 {
+			msg += fmt.Sprintf(", %d failed — see log", len(failedItems))
 		}
 		if backup != "" {
 			msg += " · registry backed up"
 		}
 		applog.Logf("%s", msg)
 		m.post(func() {
-			uninstall.ClearPending()
+			if len(failedItems) > 0 {
+				// Locked files and the like stay pending — the next
+				// launch offers them again instead of losing them.
+				uninstall.SavePending(name, failedItems)
+			} else {
+				uninstall.ClearPending(name)
+			}
 			m.sweepOpen = false
 			m.uninstMsg = msg
 			m.uninstLoaded = false // registry listing may be gone now

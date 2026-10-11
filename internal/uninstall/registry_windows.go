@@ -199,7 +199,7 @@ func enumUninstall() []Entry {
 			// Installers store these quoted or with %VARS% — normalize
 			// once so open-folder, footprint and icon code stay simple.
 			e.Location = regPath(e.Location)
-			if e.Location != "" && !saneLocation(e.Location) {
+			if e.Location != "" && !SaneLocation(e.Location) {
 				e.Location = "" // e.g. "C:\Program Files\" itself
 			}
 			if e.Location == "" {
@@ -253,7 +253,7 @@ func enumUninstall() []Entry {
 					e.Icon = ic
 				}
 			}
-			if e.Location != "" && !saneLocation(e.Location) {
+			if e.Location != "" && !SaneLocation(e.Location) {
 				e.Location = "" // a fallback found a root, not a folder
 			}
 			if sz := vals["EstimatedSize"].dword(); sz > 0 {

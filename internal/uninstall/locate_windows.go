@@ -88,7 +88,7 @@ func (e *Entry) assocLocation() (dir, iconPath string) {
 				if leaf == "DefaultIcon" && iconPath == "" {
 					iconPath = exe
 				}
-				if d := filepath.Dir(exe); dir == "" && saneLocation(d) {
+				if d := filepath.Dir(exe); dir == "" && SaneLocation(d) {
 					dir = d
 				}
 			}
@@ -130,7 +130,7 @@ func (e *Entry) appPathsLocation() string {
 			vals, _ := k.values()
 			k.close()
 			if exe := vals[""].str(); exe != "" {
-				if d := filepath.Dir(regPath(exe)); saneLocation(d) {
+				if d := filepath.Dir(regPath(exe)); SaneLocation(d) {
 					ap.close()
 					return d
 				}
@@ -171,7 +171,7 @@ func (e *Entry) shortcutLocation() string {
 			}
 			if target := linkTarget(p); target != "" {
 				dir := filepath.Dir(target)
-				if saneLocation(dir) {
+				if SaneLocation(dir) {
 					found = dir
 				}
 			}

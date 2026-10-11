@@ -58,7 +58,20 @@ func (i Item) Registry() bool { return i.Kind != KindDir }
 func Footprint(e *Entry, all []Entry) []Item {
 	items := fsFootprint(e, all, appRoots(), shortcutRoots())
 	items = append(items, regFootprint(e)...)
-	return items
+	// Dedupe: an install folder sitting inside a scanned root would be
+	// listed twice, and a registry key can be reached through two
+	// views. Path + value name is the identity.
+	seen := map[string]bool{}
+	out := items[:0]
+	for _, it := range items {
+		key := strings.ToLower(it.Path) + "|" + it.RegValue
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, it)
+	}
+	return out
 }
 
 // fsFootprint scans filesystem locations: the install folder,
@@ -73,7 +86,7 @@ func fsFootprint(e *Entry, all []Entry, roots, shortcuts []string) []Item {
 	// that app put there, but not proven to be the whole install.
 	// saneLocation is belt-and-braces: entries sanitize at
 	// enumeration, but a restored pending item could predate it.
-	if e.Location != "" && saneLocation(e.Location) && isDir(e.Location) {
+	if e.Location != "" && SaneLocation(e.Location) && isDir(e.Location) {
 		conf, why := Confirmed, "the app's install folder, left behind"
 		if e.LocationGuessed {
 			conf, why = Likely, "install folder inferred from a shortcut"
@@ -146,7 +159,7 @@ func fsFootprint(e *Entry, all []Entry, roots, shortcuts []string) []Item {
 	// Size every directory item after collection.
 	for i := range out {
 		if out[i].Kind == KindDir {
-			out[i].Bytes = dirSize(out[i].Path)
+			out[i].Bytes = DirSize(out[i].Path)
 		}
 	}
 	return out
@@ -290,8 +303,8 @@ func pathWithin(p, root string) bool {
 	return strings.HasPrefix(p, root+string(filepath.Separator))
 }
 
-// dirSize walks a tree, skipping reparse points.
-func dirSize(root string) uint64 {
+// DirSize walks a tree, skipping reparse points.
+func DirSize(root string) uint64 {
 	var n uint64
 	filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
