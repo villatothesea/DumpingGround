@@ -546,7 +546,7 @@ func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 					}
 					ui.Text(c, it.Why).FontSize(13).TextColor(t.TextMuted).SingleLine().Shrink(0)
 				})
-			}).Grow(1).FillWidth()
+			}).Grow(1).FillWidth().Padding(0, 12, 0, 0)
 			sel, bytes := 0, uint64(0)
 			for i, it := range m.sweepItems {
 				if m.sweepSel[i] {

@@ -1022,6 +1022,9 @@ func tableChrome(c *ui.Context, build func() ui.Element) ui.Element {
 	c.SetTheme(&plain)
 	e := build()
 	c.SetTheme(orig)
+	// Scrollbars overlay the right edge — keep row content (the
+	// selection band, action buttons) from extending beneath them.
+	e.Padding(0, 12, 0, 0)
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
 		p.Fill(ui.Rect{X: r.X, Y: r.Y + orig.Space(8), W: r.W, H: 1}, orig.Border, 0)
 	})

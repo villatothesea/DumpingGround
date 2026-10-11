@@ -118,14 +118,17 @@ func TestEmptyGroupItems(t *testing.T) {
 	os.MkdirAll(filepath.Join(root, "Startup"), 0o755) // system group → never
 	os.MkdirAll(filepath.Join(root, "Full"), 0o755)    // has content → never
 	os.WriteFile(filepath.Join(root, "Full", "a.lnk"), []byte("x"), 0o644)
+	// A group holding only an empty group: the ancestor is the
+	// leftover, not the leaf — flag it once, at the top.
+	os.MkdirAll(filepath.Join(root, "iZotope", "Ozone 12"), 0o755)
 
 	items := emptyGroupItems([]string{root})
 	got := map[string]bool{}
 	for _, it := range items {
 		got[filepath.Base(it.Path)] = true
 	}
-	if len(items) != 2 || !got["Qianwen"] || !got["OnlyIni"] {
-		t.Fatalf("want Qianwen+OnlyIni flagged, got %+v", items)
+	if len(items) != 3 || !got["Qianwen"] || !got["OnlyIni"] || !got["iZotope"] {
+		t.Fatalf("want Qianwen+OnlyIni+iZotope flagged, got %+v", items)
 	}
 }
 

@@ -143,7 +143,7 @@ func deadRunItems() []Item {
 					Path: h.name + `\` + sub, RegValue: name,
 					Kind: KindRegValue, Reg32: h.access&0x100 != 0,
 					Confidence: Confirmed,
-					Why:        "startup entry points to a missing file",
+					Why:        "startup entry " + name + " points to a missing file",
 				})
 			}
 		}
@@ -218,7 +218,9 @@ func deadAssocItems() []Item {
 // emptyGroupItems flags Start Menu program groups holding nothing —
 // the uninstaller removed the shortcuts but left the folder. Windows
 // keeps a few empty groups of its own (Startup must exist); those are
-// on a fixed list and never flagged.
+// on a fixed list and never flagged. A group whose only content is
+// more empty groups flags its topmost ancestor — removing the leaf
+// would just leave an empty parent for the next scan.
 func emptyGroupItems(roots []string) []Item {
 	var out []Item
 	for _, root := range roots {
@@ -229,18 +231,7 @@ func emptyGroupItems(roots []string) []Item {
 			if systemGroups[norm(d.Name())] {
 				return nil
 			}
-			kids, err := os.ReadDir(p)
-			if err != nil {
-				return nil
-			}
-			empty := true
-			for _, k := range kids {
-				if !strings.EqualFold(k.Name(), "desktop.ini") {
-					empty = false
-					break
-				}
-			}
-			if empty {
+			if dirTreeEmpty(p) {
 				out = append(out, Item{Path: p, Kind: KindDir,
 					Confidence: Confirmed,
 					Why:        "empty Start Menu group left behind"})
@@ -250,6 +241,27 @@ func emptyGroupItems(roots []string) []Item {
 		})
 	}
 	return out
+}
+
+// dirTreeEmpty reports whether a directory's whole subtree holds
+// nothing but empty directories and desktop.ini files. Reparse points
+// count as content — never open one to check.
+func dirTreeEmpty(p string) bool {
+	kids, err := os.ReadDir(p)
+	if err != nil {
+		return false
+	}
+	for _, k := range kids {
+		switch {
+		case k.IsDir():
+			if isReparse(k) || !dirTreeEmpty(filepath.Join(p, k.Name())) {
+				return false
+			}
+		case !strings.EqualFold(k.Name(), "desktop.ini"):
+			return false
+		}
+	}
+	return true
 }
 
 // systemGroups are Start Menu groups Windows itself may leave empty.
