@@ -370,7 +370,7 @@ func (m *Model) junkResultsView(c *ui.Context, t *ui.Theme) {
 					if collapsed {
 						g = "caret-r"
 					}
-					he := ui.Row(c).FillWidth().Height(26).Padding(0, float32(10+r.depth*18)).Gap(6).AlignItems(ui.Center).Radius(4).
+					he := ui.Row(c).FillWidth().Height(26).Padding(0, float32(10+r.depth*24)).Gap(6).AlignItems(ui.Center).Radius(4).
 						Cursor(ui.CursorPointer).Label("Toggle group " + r.head)
 					if he.Hovered() {
 						he.Background(t.SurfaceHover)
@@ -395,7 +395,7 @@ func (m *Model) junkResultsView(c *ui.Context, t *ui.Theme) {
 				if m.junkSel >= 0 && m.junkSel < len(junkPresets) && r.d.Skip == "" {
 					hit = r.cat >= junkPresets[m.junkSel].from && r.cat <= junkPresets[m.junkSel].to
 				}
-				row := ui.Row(c).FillWidth().Height(28).Padding(0, float32(10+r.depth*18)).Gap(6).AlignItems(ui.Center).Radius(4)
+				row := ui.Row(c).FillWidth().Height(28).Padding(0, float32(10+r.depth*24)).Gap(6).AlignItems(ui.Center).Radius(4)
 				hovered := row.Hovered()
 				switch {
 				case hit:
@@ -443,6 +443,31 @@ func (m *Model) junkResultsView(c *ui.Context, t *ui.Theme) {
 		}
 	})
 	m.junkCatPathsModal(c, t)
+	m.junkLegendModal(c, t)
+}
+
+// junkLegendModal explains the numbered badges: every category with
+// its badge, name, consequence note and risk level.
+func (m *Model) junkLegendModal(c *ui.Context, t *ui.Theme) {
+	rep := m.junkReport
+	ui.Modal(c, &m.junkLegendOpen, func() {
+		ui.Column(c).Width(640).MaxHeight(520).Padding(6, 16, 14, 16).Gap(10).Children(func() {
+			ui.Text(c, "What the numbers mean").Bold().FontSize(16)
+			ui.Text(c, "Each number is a cleanup category. Every row lights the badge of the category it belongs to; the filter badges above narrow the table to one category.").
+				FontSize(11).TextColor(t.TextMuted)
+			ui.List(c, &m.junkLegendList, disk.JunkCatCount, func(i int) {
+				cat := &rep.Cats[i]
+				ui.Row(c).FillWidth().Height(26).Gap(10).AlignItems(ui.Center).Children(func() {
+					tierBadge(c, t, i+1, len(cat.Dirs) == 0)
+					ui.Row(c).Width(78).Shrink(0).Children(func() {
+						ui.Text(c, rustRiskLabel(cat.Risk)).FontSize(10).Bold().TextColor(rustRiskColor(t, cat.Risk))
+					})
+					ui.Text(c, cat.Name).FontSize(11).Bold().Shrink(0).Width(130)
+					ui.Text(c, cat.Note).FontSize(11).TextColor(t.TextMuted).SingleLine().Grow(1).MinWidth(0).Tooltip(cat.Note)
+				})
+			}).Height(340).FillWidth()
+		})
+	})
 }
 
 // junkFilterStrip is the category filter row — one clickable badge per
@@ -463,6 +488,17 @@ func (m *Model) junkFilterStrip(c *ui.Context, t *ui.Theme) {
 					m.junkFilterCat = cat
 				}
 			}
+		}
+		q := ui.Row(c).Size(16, 16).Shrink(0).Radius(8).BorderWidth(1).BorderColor(t.TextMuted.Alpha(0.5)).
+			Center().Cursor(ui.CursorPointer).Tooltip("What do the numbers mean?").Label("Category legend")
+		q.Children(func() {
+			ui.Text(c, "?").FontSize(10).Bold().TextColor(t.TextMuted)
+		})
+		if q.Hovered() {
+			q.Background(t.SurfaceHover)
+		}
+		if q.Clicked() {
+			m.junkLegendOpen = true
 		}
 		ui.Text(c, "Group:").FontSize(11).TextColor(t.TextMuted).Shrink(0)
 		ui.Checkbox(c, &m.junkGroupRisk, "Risk").Tooltip("Group rows under risk-level headers")

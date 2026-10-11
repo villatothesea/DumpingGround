@@ -125,6 +125,10 @@ func TestScreenshotStates(t *testing.T) {
 	m4.junkCollapsed["r0/c1"] = true
 	tt6.Frame()
 	dump(t, tt6, dest, "junk-nested.png")
+	// The badge legend modal.
+	m4.junkLegendOpen = true
+	tt6.Frame()
+	dump(t, tt6, dest, "junk-legend.png")
 }
 
 // testJunkReport fabricates a cleanup report resembling a real measure.

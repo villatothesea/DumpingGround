@@ -422,7 +422,7 @@ func tierBadge(c *ui.Context, t *ui.Theme, n int, dim bool) ui.Element {
 	if dim {
 		bg, fg = t.TextMuted.Alpha(0.25), t.TextMuted
 	}
-	return ui.Row(c).Size(16, 16).Shrink(0).Radius(4).Background(bg).Center().Children(func() {
+	return ui.Row(c).MinWidth(16).Height(16).Shrink(0).Radius(4).Background(bg).Center().PaddingX(3).Children(func() {
 		ui.Text(c, fmt.Sprint(n)).FontSize(10).Bold().TextColor(fg)
 	})
 }
@@ -564,7 +564,7 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 				hit := m.rustRowHit(r)
 				pad := 10
 				if m.rustGroupSafe {
-					pad += 18
+					pad += 24
 				}
 				row := ui.Row(c).FillWidth().Height(28).Padding(0, float32(pad)).Gap(6).AlignItems(ui.Center).Radius(4)
 				hovered := row.Hovered()

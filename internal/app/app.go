@@ -203,6 +203,8 @@ type Model struct {
 	junkPathsCat                    int    // category whose path list the modal shows, -1 none
 	junkPathsOpen                   bool
 	junkPathsList                   ui.ListState
+	junkLegendOpen                  bool // the badge-legend modal
+	junkLegendList                  ui.ListState
 	junkMsg                         string
 	junkDoneMsg                     string // outcome of the last clean, shown once the re-measure lands
 	junkList                        ui.ListState
