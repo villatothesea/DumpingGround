@@ -71,47 +71,56 @@ func (m *Model) uninstallView(c *ui.Context, t *ui.Theme) {
 			return
 		}
 		rustSectionLabel(c, t, "Installed applications")
-		m.uninstHeader(c, t)
 		m.sweepModal(c, t)
-		ui.List(c, &m.uninstList, len(rows), func(i int) {
-			e := rows[i]
-			row := ui.Row(c).FillWidth().Height(28).Padding(0, 10).Gap(8).AlignItems(ui.Center).Radius(4)
-			if row.Hovered() {
-				row.Background(t.SurfaceHover)
-			}
-			m.uninstContextMenu(c, row, e)
-			row.Children(func() {
-				if bmp := m.processIcon(e.IconPath()); bmp != nil {
-					ui.Image(c, bmp).Size(16, 16).Shrink(0)
-				} else {
-					icon(c, "pkg", 13).TextColor(t.TextMuted)
-				}
-				name := ui.Text(c, e.Name).SingleLine().Grow(1).MinWidth(0)
-				name.Tooltip(e.Name + "  " + e.Version)
-				ui.Row(c).Width(86).Shrink(0).Children(func() {
-					ui.Text(c, e.Version).FontSize(11).SingleLine().Ellipsis("…").Tooltip(e.Version)
-				})
-				ui.Row(c).Width(150).Shrink(0).Children(func() {
-					ui.Text(c, e.Publisher).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Tooltip(e.Publisher)
-				})
-				ui.Row(c).Width(76).Shrink(0).Justify(ui.End).Children(func() {
+		if m.uninstList.Sort == nil {
+			m.uninstSort = ui.SortOrder{Column: "Size", Descending: true}
+			m.uninstList.Sort = &m.uninstSort
+		}
+		// ui.Table owns the header: columns resize at the edges,
+		// double-click an edge to fit content, extra width scrolls.
+		cols := []ui.TableColumn{
+			{Title: "Name", Sortable: true, MinWidth: 140},
+			{Title: "Version", Width: 90, MinWidth: 50, Sortable: true},
+			{Title: "Publisher", Width: 150, MinWidth: 60, Sortable: true},
+			{Title: "Size", Width: 80, MinWidth: 50, Align: ui.End, Sortable: true},
+			{Title: "Installed", Width: 90, MinWidth: 70, Align: ui.End, Sortable: true},
+			{Title: "Install location", MinWidth: 240, Sortable: true},
+			{Title: "", ID: "actions", Width: 132, Fixed: true, Align: ui.End},
+		}
+		ui.Table(c, &m.uninstList, cols, len(rows), func(row, col int) {
+			e := rows[row]
+			cell := ui.Row(c).Fill().Height(26).Gap(6).AlignItems(ui.Center)
+			m.uninstContextMenu(c, cell, e)
+			cell.Children(func() {
+				switch col {
+				case 0:
+					if bmp := m.processIcon(e.IconPath()); bmp != nil {
+						ui.Image(c, bmp).Size(16, 16).Shrink(0)
+					} else {
+						icon(c, "pkg", 13).TextColor(t.TextMuted)
+					}
+					ui.Text(c, e.Name).SingleLine().Tooltip(e.Name + "  " + e.Version)
+				case 1:
+					ui.Text(c, e.Version).FontSize(11).SingleLine().Tooltip(e.Version)
+				case 2:
+					ui.Text(c, e.Publisher).FontSize(11).TextColor(t.TextMuted).SingleLine().Tooltip(e.Publisher)
+				case 3:
 					sz := "—"
 					if e.EstimatedSize {
 						sz = format.Bytes(e.SizeBytes)
 					}
 					ui.Text(c, sz).FontSize(11)
-				})
-				ui.Row(c).Width(86).Shrink(0).Justify(ui.End).Children(func() {
+				case 4:
 					d := e.Date()
 					if d == "" {
 						d = "—"
 					}
 					ui.Text(c, d).FontSize(11).TextColor(t.TextMuted).Tooltip(e.InstallDate)
-				})
-				ui.Row(c).Grow(1).MinWidth(0).Children(func() {
+				case 5:
 					ui.Text(c, e.Location).FontSize(10).TextColor(t.TextMuted).SingleLine().Tooltip(e.Location)
-				})
-				m.uninstRowActions(c, t, e)
+				default:
+					m.uninstRowActions(c, t, e)
+				}
 			})
 		}).Grow(1).MinHeight(0).FillWidth()
 	})
@@ -134,21 +143,21 @@ func (m *Model) uninstRowsFiltered() []*uninstall.Entry {
 	less := func(a, b int) bool {
 		ra, rb := out[a], out[b]
 		var lt bool
-		switch m.uninstSortCol {
-		case 0:
+		switch m.uninstSort.Column {
+		case "Name":
 			lt = strings.ToLower(ra.Name) < strings.ToLower(rb.Name)
-		case 1:
+		case "Version":
 			lt = ra.Version < rb.Version
-		case 2:
+		case "Publisher":
 			lt = strings.ToLower(ra.Publisher) < strings.ToLower(rb.Publisher)
-		case 3:
-			lt = ra.SizeBytes < rb.SizeBytes
-		case 4:
+		case "Installed":
 			lt = ra.InstallDate < rb.InstallDate
-		default:
+		case "Install location":
 			lt = strings.ToLower(ra.Location) < strings.ToLower(rb.Location)
+		default: // "Size"
+			lt = ra.SizeBytes < rb.SizeBytes
 		}
-		if m.uninstSortDesc {
+		if m.uninstSort.Descending {
 			return !lt
 		}
 		return lt
@@ -157,59 +166,11 @@ func (m *Model) uninstRowsFiltered() []*uninstall.Entry {
 	return out
 }
 
-// uninstHeader draws the sortable column header row.
-func (m *Model) uninstHeader(c *ui.Context, t *ui.Theme) {
-	ui.Row(c).FillWidth().Height(24).Shrink(0).Padding(0, 10).Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Box(c).Width(16).Shrink(0)
-		ui.Row(c).Grow(1).MinWidth(0).Children(func() {
-			m.uninstColHead(c, t, 0, "Name", 0)
-		})
-		ui.Row(c).Width(86).Shrink(0).Children(func() {
-			m.uninstColHead(c, t, 1, "Version", 0)
-		})
-		ui.Row(c).Width(150).Shrink(0).Children(func() {
-			m.uninstColHead(c, t, 2, "Publisher", 0)
-		})
-		ui.Row(c).Width(76).Shrink(0).Justify(ui.End).Children(func() {
-			m.uninstColHead(c, t, 3, "Size", 0)
-		})
-		ui.Row(c).Width(86).Shrink(0).Justify(ui.End).Children(func() {
-			m.uninstColHead(c, t, 4, "Installed", 0)
-		})
-		ui.Row(c).Grow(1).MinWidth(0).Children(func() {
-			m.uninstColHead(c, t, 5, "Install location", 0)
-		})
-		ui.Box(c).Width(120).Shrink(0)
-	})
-}
-
-// uninstColHead is one clickable column title — click flips the sort.
-func (m *Model) uninstColHead(c *ui.Context, t *ui.Theme, col int, label string, w float32) {
-	e := ui.Row(c).Gap(3).AlignItems(ui.Center).Cursor(ui.CursorPointer).Label("Sort by " + label)
-	e.Children(func() {
-		ui.Text(c, label).FontSize(11).Bold().TextColor(t.TextMuted)
-		if m.uninstSortCol == col {
-			g := "chup"
-			if m.uninstSortDesc {
-				g = "caret-d"
-			}
-			icon(c, g, 9).TextColor(t.Accent)
-		}
-	})
-	if e.Clicked() {
-		if m.uninstSortCol == col {
-			m.uninstSortDesc = !m.uninstSortDesc
-		} else {
-			m.uninstSortCol, m.uninstSortDesc = col, col == 2
-		}
-	}
-}
-
-// uninstRowActions are the per-row buttons: open the install folder,
-// and an armed two-click Uninstall that launches the app's own
-// uninstaller (which brings its own confirmation UI).
+// uninstRowActions renders the actions cell's content: open the
+// install folder, and an armed two-click Uninstall that launches the
+// app's own uninstaller (which brings its own confirmation UI).
 func (m *Model) uninstRowActions(c *ui.Context, t *ui.Theme, e *uninstall.Entry) {
-	ui.Row(c).Width(120).Shrink(0).Gap(6).Justify(ui.End).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).Gap(6).Justify(ui.End).AlignItems(ui.Center).Children(func() {
 		if e.Location != "" {
 			op := ui.Row(c).Height(22).PaddingX(7).Gap(4).AlignItems(ui.Center).Radius(t.Radius).
 				Cursor(ui.CursorPointer).Label("Open install folder").Tooltip(e.Location)

@@ -214,8 +214,7 @@ type Model struct {
 	uninstLoaded                    bool   // the registry list has been read at least once
 	uninstLoading                   bool
 	uninstQuery                     string
-	uninstSortCol                   int // 0 name · 1 publisher · 2 size · 3 date
-	uninstSortDesc                  bool
+	uninstSort                      ui.SortOrder // the Table header drives this directly
 	uninstArmed                     string // entry name armed for the second-click confirm
 	uninstBusy                      string // entry whose uninstaller is still running — one at a time
 	uninstMsg                       string
