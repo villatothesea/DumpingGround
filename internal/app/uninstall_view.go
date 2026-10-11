@@ -49,7 +49,11 @@ func (m *Model) uninstallView(c *ui.Context, t *ui.Theme) {
 				ui.Text(c, m.uninstMsg).FontSize(11).TextColor(t.TextMuted).SingleLine().MinWidth(0)
 			}
 			ui.Spacer(c)
-			ui.Text(c, "Uninstall launches the app's own uninstaller — nothing is deleted directly.").FontSize(11).TextColor(t.TextMuted).SingleLine()
+			status := "Uninstall launches the app's own uninstaller — nothing is deleted directly."
+			if m.uninstBusy != "" {
+				status = "Waiting for " + m.uninstBusy + "'s uninstaller — rows unlock when it exits."
+			}
+			ui.Text(c, status).FontSize(11).TextColor(t.TextMuted).SingleLine()
 			if m.iconButton(c, "refresh", "Re-read the installed-apps list").Clicked() {
 				m.uninstLoaded = false
 			}
@@ -227,14 +231,21 @@ func (m *Model) uninstRowActions(c *ui.Context, t *ui.Theme, e *uninstall.Entry)
 		if armed {
 			label = "Sure?"
 		}
+		busy := m.uninstBusy != ""
 		u := ui.Row(c).Height(22).PaddingX(8).Gap(4).AlignItems(ui.Center).Radius(t.Radius).
 			Cursor(ui.CursorPointer).Label("Uninstall "+e.Name).
 			Tooltip("Launch the app's own uninstaller: "+e.Uninstall)
 		u.BorderWidth(1).BorderColor(t.Border).Background(t.Surface)
+		if busy {
+			u.Cursor(ui.CursorDefault).Tooltip("Another uninstaller is running")
+		}
 		if armed {
 			u.Background(t.Danger.Alpha(0.12)).BorderColor(t.Danger)
 		}
 		u.Draw(func(p *ui.Painter, r ui.Rect) {
+			if busy {
+				return
+			}
 			if u.Pressed() {
 				p.Fill(r, t.SurfacePressed, t.Radius)
 			} else if u.Hovered() {
@@ -245,7 +256,10 @@ func (m *Model) uninstRowActions(c *ui.Context, t *ui.Theme, e *uninstall.Entry)
 			icon(c, "trash", 11).TextColor(t.Danger)
 			ui.Text(c, label).FontSize(11).TextColor(t.Danger).SingleLine()
 		})
-		if u.Clicked() {
+		if busy {
+			ui.Text(c, "…").FontSize(11).TextColor(t.TextMuted)
+		}
+		if u.Clicked() && !busy {
 			if !armed {
 				m.uninstArmed = e.Name
 				return
@@ -261,7 +275,7 @@ func (m *Model) uninstRowActions(c *ui.Context, t *ui.Theme, e *uninstall.Entry)
 // leftover scan, and clipboard copies of the raw registry data.
 func (m *Model) uninstContextMenu(c *ui.Context, row ui.Element, e *uninstall.Entry) {
 	row.ContextMenu(func(mm *ui.Menu) {
-		if mm.Item("Uninstall").Chosen() {
+		if mm.Item("Uninstall").Disabled(m.uninstBusy != "").Chosen() {
 			m.uninstArmed = ""
 			m.launchUninstall(e)
 		}
@@ -316,6 +330,9 @@ func (m *Model) startSweep(e *uninstall.Entry) {
 // by hand, or the uninstaller was cancelled — the Review items say
 // which is which).
 func (m *Model) launchUninstall(e *uninstall.Entry) {
+	if m.uninstBusy != "" {
+		return // serialized: MSI rejects concurrent installs anyway
+	}
 	cmd, err := e.Launch()
 	if err != nil {
 		m.uninstMsg = "Failed: " + err.Error()
@@ -323,6 +340,7 @@ func (m *Model) launchUninstall(e *uninstall.Entry) {
 		return
 	}
 	m.uninstMsg = e.Name + " — uninstaller is running…"
+	m.uninstBusy = e.Name // one uninstaller at a time — MSI serializes anyway
 	applog.Section("Uninstall — " + e.Name)
 	applog.Logf("launched  %s", e.Uninstall)
 	entry := *e
@@ -339,6 +357,7 @@ func (m *Model) launchUninstall(e *uninstall.Entry) {
 		}
 		items := uninstall.Footprint(&entry, all)
 		m.post(func() {
+			m.uninstBusy = ""
 			m.uninstLoaded = false // the listing changed
 			m.sweepName = entry.Name
 			m.sweepItems = items

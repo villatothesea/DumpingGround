@@ -217,6 +217,7 @@ type Model struct {
 	uninstSortCol                   int // 0 name · 1 publisher · 2 size · 3 date
 	uninstSortDesc                  bool
 	uninstArmed                     string // entry name armed for the second-click confirm
+	uninstBusy                      string // entry whose uninstaller is still running — one at a time
 	uninstMsg                       string
 	uninstList                      ui.ListState
 	sweepName                       string // entry whose leftover scan the modal shows
