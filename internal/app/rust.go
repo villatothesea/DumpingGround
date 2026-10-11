@@ -17,18 +17,20 @@ import (
 var rustOrange = ui.RGB(0xF7, 0x4C, 0x00)
 
 // rustPreset bundles cleanup categories into one recommended action, so
-// the user picks a risk level instead of nine separate switches.
-// allTargets means "every project target dir whole" — the nuke option.
+// the user picks a risk level instead of nine separate switches. The
+// card shows the bundle as the category badges themselves — numbers on
+// this page only ever mean categories. allTargets means "every project
+// target dir whole" — the nuke option.
 type rustPreset struct {
-	name, tag, includes, rebuild string
-	cats                         []int
-	allTargets                   bool
+	name, tag, rebuild string
+	cats               []int
+	allTargets         bool
 }
 
 var rustPresets = []rustPreset{
-	{name: "Light", tag: "SAFE", includes: "Incremental · docs · cargo caches", rebuild: "Rebuild: nothing — Cargo re-downloads", cats: []int{disk.RustCatIncr, disk.RustCatDoc, disk.RustCatRegistry, disk.RustCatGit}},
-	{name: "Deep", tag: "MODERATE", includes: "Light + debug builds", rebuild: "Rebuild: next cargo build", cats: []int{disk.RustCatIncr, disk.RustCatDoc, disk.RustCatDebug, disk.RustCatRegistry, disk.RustCatGit}},
-	{name: "Nuke", tag: "AGGRESSIVE", includes: "All targets + cargo caches", rebuild: "Rebuild: everything incl. release", allTargets: true, cats: []int{disk.RustCatRegistry, disk.RustCatGit}},
+	{name: "Light", tag: "SAFE", rebuild: "Rebuild: nothing — Cargo re-downloads", cats: []int{disk.RustCatIncr, disk.RustCatDoc, disk.RustCatRegistry, disk.RustCatGit}},
+	{name: "Deep", tag: "MODERATE", rebuild: "Rebuild: next cargo build", cats: []int{disk.RustCatIncr, disk.RustCatDoc, disk.RustCatDebug, disk.RustCatRegistry, disk.RustCatGit}},
+	{name: "Nuke", tag: "AGGRESSIVE", rebuild: "Rebuild: everything incl. release", allTargets: true, cats: []int{disk.RustCatRegistry, disk.RustCatGit}},
 }
 
 // rustScan analyzes the current snapshot for Rust build artifacts. When
@@ -497,7 +499,6 @@ func (m *Model) rustPresetCard(c *ui.Context, t *ui.Theme, p int) {
 	card.Tooltip("Click to highlight the files this plan removes")
 	card.Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			tierBadge(c, t, p+1, false)
 			ui.Text(c, pre.name).Bold().FontSize(13)
 			if p == 0 {
 				ui.Text(c, "recommended").FontSize(10).TextColor(t.Accent)
@@ -506,7 +507,17 @@ func (m *Model) rustPresetCard(c *ui.Context, t *ui.Theme, p int) {
 			ui.Text(c, pre.tag).FontSize(10).Bold().TextColor(tagColor)
 		})
 		ui.Text(c, format.Bytes(bytes)).FontSize(18).Bold()
-		ui.Text(c, pre.includes+" — "+pre.rebuild).FontSize(10).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Tooltip(pre.includes + " — " + pre.rebuild)
+		// The plan as the category badges it bundles — numbers are only
+		// ever categories, nowhere else.
+		ui.Row(c).Gap(3).AlignItems(ui.Center).Children(func() {
+			if pre.allTargets {
+				ui.Text(c, "every target").FontSize(10).Bold().TextColor(t.Text)
+			}
+			for _, cat := range pre.cats {
+				tierBadge(c, t, cat+1, false).Tooltip(m.rustReport.Cats[cat].Name)
+			}
+			ui.Text(c, "· "+pre.rebuild).FontSize(10).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Tooltip(pre.rebuild)
+		})
 		ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
 			if m.dangerButton(c, "trash", "Clean").Disabled(bytes == 0 || m.rustBusy).Clicked() {
 				m.rustConfirm = p
