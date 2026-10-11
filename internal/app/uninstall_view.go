@@ -465,7 +465,7 @@ func sweepConfLabel(conf uninstall.Confidence) string {
 // explanation of reversibility, and the armed two-click Remove.
 func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 	ui.Modal(c, &m.sweepOpen, func() {
-		ui.Column(c).Width(700).MaxHeight(900).Padding(6, 16, 14, 16).Gap(10).Children(func() {
+		ui.Column(c).Width(560).MinHeight(560).MaxHeight(900).Padding(6, 16, 14, 16).Gap(10).Children(func() {
 			ui.Text(c, "Leftovers — "+m.sweepName).Bold().FontSize(16)
 			subtitle := "Everything listed belongs to " + m.sweepName + " — CONFIRMED items come from its registry record, LIKELY items match its exact name. Folders go to the Recycle Bin; registry items are exported to a .reg backup in the log folder first."
 			if m.sweepName == orphanScanName {
