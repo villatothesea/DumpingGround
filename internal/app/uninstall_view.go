@@ -449,7 +449,15 @@ func (m *Model) launchUninstall(e *uninstall.Entry) {
 // explanation of reversibility, and the armed two-click Remove.
 func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 	ui.Modal(c, &m.sweepOpen, func() {
-		ui.Column(c).MaxHeight(900).Padding(6, 16, 14, 16).Gap(10).Children(func() {
+		// Height follows the item count — every leftover is visible at
+		// once — until fifteen rows, then the list scrolls rather than
+		// towering over the window. The virtual List only renders rows
+		// its laid-out height shows, so the column carries the size.
+		rows := len(m.sweepItems)
+		if rows > 15 {
+			rows = 15
+		}
+		ui.Column(c).MaxHeight(900).MinHeight(float32(rows)*30+132).Padding(6, 16, 14, 16).Gap(10).Children(func() {
 			ui.Text(c, "Leftovers — "+m.sweepName).Bold().FontSize(16)
 			subtitle := "Everything listed belongs to " + m.sweepName + " — verified against its registry record or its exact name. Folders go to the Recycle Bin; registry items are exported to a .reg backup in the log folder first."
 			if m.sweepName == orphanScanName {
@@ -459,13 +467,6 @@ func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 			if len(m.sweepItems) == 0 {
 				ui.Text(c, "No leftovers found — the uninstaller left a clean machine.").FontSize(11).TextColor(t.TextMuted)
 			} else {
-				// Height follows the item count — every leftover is
-				// visible at once — until fifteen rows, then the list
-				// scrolls rather than towering over the window.
-				rows := len(m.sweepItems)
-				if rows > 15 {
-					rows = 15
-				}
 				ui.List(c, &m.sweepList, len(m.sweepItems), func(i int) {
 					it := m.sweepItems[i]
 					row := ui.Row(c).FillWidth().Height(30).Gap(8).AlignItems(ui.Center).Radius(4)
@@ -481,7 +482,7 @@ func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 						}
 						ui.Text(c, it.Why).FontSize(13).TextColor(t.TextMuted).SingleLine().Shrink(0)
 					})
-				}).Grow(1).Height(float32(rows)*30 + 2).FillWidth()
+				}).Grow(1).FillWidth()
 			}
 			sel, bytes := 0, uint64(0)
 			for i, it := range m.sweepItems {
