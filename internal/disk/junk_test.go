@@ -211,6 +211,35 @@ func TestJunkBrowserGuard(t *testing.T) {
 	}
 }
 
+func TestJunkAppsGuardAndWarn(t *testing.T) {
+	roaming := t.TempDir()
+	cache := filepath.Join(roaming, "Code", "Cache")
+	if err := os.MkdirAll(cache, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cache, "c.bin"), []byte("cache"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rep := &JunkReport{}
+	rep.junkApps(roaming, func(name string) bool { return name == "code.exe" })
+	dirs := rep.Cats[JunkCatAppCaches].Dirs
+	if len(dirs) != 1 {
+		t.Fatalf("expected one app cache row, got %d", len(dirs))
+	}
+	if dirs[0].Skip == "" {
+		t.Fatal("a running app must mark its rows skipped")
+	}
+	if !strings.Contains(dirs[0].Warn, "VS Code") {
+		t.Fatalf("row warn should name the app, got %q", dirs[0].Warn)
+	}
+	rep = &JunkReport{}
+	rep.junkApps(roaming, func(string) bool { return false })
+	if len(rep.Cats[JunkCatAppCaches].Dirs) != 1 ||
+		rep.Cats[JunkCatAppCaches].Dirs[0].Skip != "" {
+		t.Fatal("an idle app's cache should be cleanable")
+	}
+}
+
 func TestJunkDumpWarn(t *testing.T) {
 	if w := junkDumpWarn("memory.dmp"); !strings.Contains(w, "kernel") {
 		t.Fatalf("memory.dmp should mention kernel debugging, got %q", w)

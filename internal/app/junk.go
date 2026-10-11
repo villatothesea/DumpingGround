@@ -22,9 +22,9 @@ type junkPreset struct {
 }
 
 var junkPresets = []junkPreset{
-	{name: "Light", tag: "SAFE", note: "all seven SAFE categories — temp, caches, reports",
+	{name: "Light", tag: "SAFE", note: "all eight SAFE categories — temp, caches, reports",
 		cost: "Cost: nothing — everything regenerates or re-downloads on its own",
-		from: 0, to: disk.JunkCatRecycleBin},
+		from: 0, to: disk.JunkCatAppCaches},
 	{name: "Deep", tag: "+ MODERATE", note: "everything in Light, plus update staging, dumps, logs, dev caches",
 		cost: "Cost: re-downloads, one slower update, lost diagnostic logs",
 		from: 0, to: disk.JunkCatDevCaches},
@@ -349,7 +349,7 @@ func (m *Model) junkResultsView(c *ui.Context, t *ui.Theme) {
 		} else {
 			rustSectionLabel(c, t, "Items — every measured location, one row each")
 			ui.Row(c).FillWidth().Height(24).Shrink(0).Padding(0, 10).Gap(6).AlignItems(ui.Center).Children(func() {
-				ui.Box(c).Width(236).Shrink(0)
+				ui.Box(c).Width(260).Shrink(0)
 				ui.Row(c).Width(78).Shrink(0).Children(func() {
 					ui.Text(c, "Risk").FontSize(11).Bold().TextColor(t.TextMuted)
 				})
@@ -404,7 +404,7 @@ func (m *Model) junkResultsView(c *ui.Context, t *ui.Theme) {
 					row.Background(t.SurfaceHover)
 				}
 				row.Children(func() {
-					ui.Row(c).Width(236).Shrink(0).Gap(4).AlignItems(ui.Center).Children(func() {
+					ui.Row(c).Width(260).Shrink(0).Gap(4).AlignItems(ui.Center).Children(func() {
 						for cat := 0; cat < disk.JunkCatCount; cat++ {
 							dim := cat != r.cat
 							if m.junkFilterCat >= 0 {
@@ -476,7 +476,7 @@ func (m *Model) junkLegendModal(c *ui.Context, t *ui.Theme) {
 					ui.Text(c, cat.Name).FontSize(11).Bold().Shrink(0).Width(130)
 					ui.Text(c, cat.Note).FontSize(11).TextColor(t.TextMuted).SingleLine().Grow(1).MinWidth(0).Tooltip(cat.Note)
 				})
-			}).Height(340).FillWidth()
+			}).Height(390).FillWidth()
 		})
 	})
 }

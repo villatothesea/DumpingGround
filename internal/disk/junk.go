@@ -17,6 +17,7 @@ const (
 	JunkCatShader          // DirectX shader cache — SAFE
 	JunkCatWER             // Windows Error Reporting archives — SAFE
 	JunkCatRecycleBin      // emptied through the shell — SAFE
+	JunkCatAppCaches       // Electron app cache dirs — SAFE
 	JunkCatUpdateDl        // installed updates' download staging — MODERATE
 	JunkCatDumps           // crash dumps — MODERATE
 	JunkCatWinLogs         // whitelisted Windows log files — MODERATE
@@ -94,6 +95,7 @@ var junkCatDefs = [JunkCatCount]struct {
 	{"Shader cache", "Games recompile shaders once — the first launch stutters a bit", RustRiskSafe},
 	{"Error reports", "Old crash reports gone — only matters when diagnosing past crashes", RustRiskSafe},
 	{"Recycle Bin", "Deleted files become unrecoverable — the bin is the last undo", RustRiskSafe},
+	{"App caches", "The app re-caches on next launch — sign-ins and settings stay", RustRiskSafe},
 	{"Update downloads", "Staging files from installed updates — Windows re-downloads if needed", RustRiskModerate},
 	{"Crash dumps", "Crash evidence is gone — keep it if you are diagnosing a crash right now", RustRiskModerate},
 	{"Windows logs", "Setup and servicing history lost — only matters for troubleshooting", RustRiskModerate},
@@ -167,6 +169,7 @@ func FindJunk(opts JunkOpts) *JunkReport {
 			})
 		}
 	})
+	run(JunkCatAppCaches, func() { rep.junkApps(roaming, opts.Running) })
 	run(JunkCatUpdateDl, func() {
 		rep.junkKidsW(JunkCatUpdateDl, filepath.Join(windir, `SoftwareDistribution\Download`), 0,
 			"Re-downloaded if a pending update install resumes — bandwidth, not breakage")
@@ -403,6 +406,58 @@ func (rep *JunkReport) junkBrowsers(local, roaming string, running func(string) 
 			Path: c2, Bytes: bytes, Files: files,
 			Base: "cache2", Mode: JunkKids, Skip: skip,
 		})
+	}
+}
+
+// junkAppCatalog is the fixed list of Electron-class apps whose cache
+// dirs follow Chromium's layout. Spotify is deliberately absent — its
+// Storage dir also holds user-chosen offline downloads.
+var junkAppCatalog = []struct {
+	name, exe, base string // base is relative to APPDATA
+}{
+	{"VS Code", "code.exe", `Code`},
+	{"VS Code Insiders", "code-insiders.exe", `Code - Insiders`},
+	{"Discord", "discord.exe", `discord`},
+	{"Slack", "slack.exe", `Slack`},
+	{"Microsoft Teams", "teams.exe", `Microsoft\Teams`},
+	{"Signal", "signal.exe", `Signal`},
+	{"Notion", "notion.exe", `Notion`},
+	{"Obsidian", "obsidian.exe", `Obsidian`},
+	{"Postman", "postman.exe", `Postman`},
+	{"GitHub Desktop", "githubdesktop.exe", `GitHub Desktop`},
+}
+
+// junkAppCacheSubdirs are the cache dirs Electron apps share — VS Code
+// adds its own Cached* variants.
+var junkAppCacheSubdirs = []string{
+	"Cache", "Code Cache", "GPUCache", "CachedData",
+	"CachedExtensionVSIXs", "CachedProfilesData",
+	`Service Worker\CacheStorage`,
+}
+
+// junkApps measures each app's cache dirs. Like the browsers, a running
+// app guards its rows.
+func (rep *JunkReport) junkApps(roaming string, running func(string) bool) {
+	for _, a := range junkAppCatalog {
+		skip := ""
+		if running != nil && running(a.exe) {
+			skip = a.name + " is running"
+		}
+		for _, sub := range junkAppCacheSubdirs {
+			p := filepath.Join(roaming, a.base, sub)
+			if fi, err := os.Stat(p); err != nil || !fi.IsDir() {
+				continue
+			}
+			bytes, files := junkDirStats(p)
+			if files == 0 {
+				continue
+			}
+			rep.junkAdd(JunkCatAppCaches, JunkDir{
+				Path: p, Bytes: bytes, Files: files,
+				Base: filepath.Base(p), Mode: JunkKids, Skip: skip,
+				Warn: a.name + " re-caches on next launch — sign-ins and settings stay",
+			})
+		}
 	}
 }
 

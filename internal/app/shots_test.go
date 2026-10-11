@@ -148,6 +148,7 @@ func testJunkReport() *disk.JunkReport {
 		{"Shader cache", "DirectX shaders", disk.RustRiskSafe},
 		{"Error reports", "WER archives", disk.RustRiskSafe},
 		{"Recycle Bin", "bin contents", disk.RustRiskSafe},
+		{"App caches", "Electron caches", disk.RustRiskSafe},
 		{"Update downloads", "update staging", disk.RustRiskModerate},
 		{"Crash dumps", "minidumps", disk.RustRiskModerate},
 		{"Windows logs", "setup and servicing logs", disk.RustRiskModerate},
@@ -166,6 +167,11 @@ func testJunkReport() *disk.JunkReport {
 	add(disk.JunkCatShader, `C:\Users\me\AppData\Local\D3DSCache`, 410<<20, 900)
 	add(disk.JunkCatWER, `C:\ProgramData\Microsoft\Windows\WER\ReportArchive`, 130<<20, 60)
 	add(disk.JunkCatRecycleBin, "all drives", 6<<30, 2400)
+	rep.Cats[disk.JunkCatAppCaches].Dirs = append(rep.Cats[disk.JunkCatAppCaches].Dirs,
+		disk.JunkDir{Path: `…\Code\Cache`, Bytes: 800 << 20, Files: 3200,
+			Base: "Cache", Mode: disk.JunkKids, Warn: "VS Code re-caches on next launch"})
+	rep.Cats[disk.JunkCatAppCaches].Bytes += 800 << 20
+	rep.Bytes += 800 << 20
 	add(disk.JunkCatUpdateDl, `C:\Windows\SoftwareDistribution\Download`, 2<<30, 800)
 	add(disk.JunkCatDumps, `C:\Windows\memory.dmp`, 3<<30, 1)
 	add(disk.JunkCatWinLogs, `C:\Windows\Logs\CBS\CBS.log`, 80<<20, 1)
