@@ -416,11 +416,19 @@ func (m *Model) junkResultsView(c *ui.Context, t *ui.Theme) {
 					ui.Row(c).Width(78).Shrink(0).Children(func() {
 						ui.Text(c, rustRiskLabel(r.risk)).FontSize(10).Bold().TextColor(rustRiskColor(t, r.risk))
 					})
-					if r.risk == disk.RustRiskReview {
-						icon(c, "warn", 12).TextColor(t.Warning).Tooltip(rep.Cats[r.cat].Note)
+					note := rep.Cats[r.cat].Note
+					if r.d.Warn != "" {
+						note = r.d.Warn
+					}
+					if r.d.Warn != "" || r.risk == disk.RustRiskReview {
+						warnCol := t.TextMuted
+						if r.risk != disk.RustRiskSafe {
+							warnCol = t.Warning
+						}
+						icon(c, "warn", 12).TextColor(warnCol).Tooltip(note)
 					}
 					ui.Text(c, rep.Cats[r.cat].Name).FontSize(11).TextColor(t.Accent).Shrink(0).
-						Tooltip(rep.Cats[r.cat].Note)
+						Tooltip(note)
 					ptxt := ui.Text(c, r.d.Path).SingleLine().Tooltip(r.d.Path).Grow(1).MinWidth(0)
 					if r.d.Skip != "" {
 						ptxt.TextColor(t.TextMuted)
@@ -621,7 +629,11 @@ func (m *Model) junkCatPathsModal(c *ui.Context, t *ui.Theme) {
 						g = "file"
 					}
 					icon(c, g, 13).TextColor(t.TextMuted)
-					ui.Text(c, d.Path).FontSize(11).SingleLine().Grow(1).MinWidth(0).Tooltip(d.Path)
+					tip := d.Path
+					if d.Warn != "" {
+						tip += " — " + d.Warn
+					}
+					ui.Text(c, d.Path).FontSize(11).SingleLine().Grow(1).MinWidth(0).Tooltip(tip)
 					ui.Text(c, format.Bytes(d.Bytes)).FontSize(11).TextColor(t.TextMuted).Shrink(0)
 				})
 			}).Grow(1).MinHeight(0).FillWidth()

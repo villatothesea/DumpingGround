@@ -40,7 +40,10 @@ const junkTempAge = 7 * 24 * time.Hour
 // uses Base/File like the Rust cleanup; Mode picks the removal method;
 // Age (seconds) limits JunkKids deletes to stale files; Skip, when set,
 // explains why the row cannot be cleaned right now — e.g. the browser
-// holding it is still running.
+// holding it is still running. Warn is a path-specific consequence note
+// that overrides the category's note — set by a handful of locations
+// that deserve their own wording (the catalog is closed, so this stays
+// a field, not a dictionary).
 type JunkDir struct {
 	Path  string
 	Bytes uint64
@@ -50,6 +53,7 @@ type JunkDir struct {
 	Mode  int
 	Age   int64
 	Skip  string
+	Warn  string
 }
 
 // JunkCat is one junk category: a name, what deleting costs, a risk
@@ -148,13 +152,17 @@ func FindJunk(opts JunkOpts) *JunkReport {
 		}
 	})
 	run(JunkCatUpdateDl, func() {
-		rep.junkKids(JunkCatUpdateDl, filepath.Join(windir, `SoftwareDistribution\Download`), 0)
+		rep.junkKidsW(JunkCatUpdateDl, filepath.Join(windir, `SoftwareDistribution\Download`), 0,
+			"Re-downloaded if a pending update install resumes — bandwidth, not breakage")
 	})
 	run(JunkCatDumps, func() {
 		rep.junkGlob(JunkCatDumps, filepath.Join(windir, `Minidump\*.dmp`))
 		rep.junkGlob(JunkCatDumps, filepath.Join(windir, "memory.dmp"))
 		rep.junkGlob(JunkCatDumps, filepath.Join(windir, `LiveKernelReports\*.dmp`))
 		rep.junkGlob(JunkCatDumps, filepath.Join(local, "CrashDumps", "*"))
+		for i := range rep.Cats[JunkCatDumps].Dirs {
+			rep.Cats[JunkCatDumps].Dirs[i].Warn = junkDumpWarn(rep.Cats[JunkCatDumps].Dirs[i].Base)
+		}
 	})
 	run(JunkCatWinLogs, func() {
 		for _, pat := range []string{
@@ -168,18 +176,20 @@ func FindJunk(opts JunkOpts) *JunkReport {
 		}
 	})
 	run(JunkCatDevCaches, func() {
-		for _, p := range []string{
-			filepath.Join(local, "go-build"),
-			filepath.Join(local, "npm-cache"),
-			filepath.Join(roaming, "npm-cache"),
-			filepath.Join(local, `pip\cache`),
-			filepath.Join(home, `.gradle\caches`),
+		for _, dc := range []struct{ p, warn string }{
+			{filepath.Join(local, "go-build"), "the next go build recompiles everything — slower once"},
+			{filepath.Join(local, "npm-cache"), "the next npm install re-downloads every package"},
+			{filepath.Join(roaming, "npm-cache"), "the next npm install re-downloads every package"},
+			{filepath.Join(local, `pip\cache`), "the next pip install re-downloads wheels"},
+			{filepath.Join(home, `.gradle\caches`), "the next Gradle build re-downloads dependencies"},
+			{filepath.Join(home, `.m2\repository`), "the next Maven build re-downloads dependencies"},
 		} {
-			rep.junkKids(JunkCatDevCaches, p, 0)
+			rep.junkKidsW(JunkCatDevCaches, dc.p, 0, "Re-downloads on demand — "+dc.warn)
 		}
 	})
 	run(JunkCatWindowsOld, func() {
 		if d, ok := junkWholeDir(`C:\Windows.old`); ok {
+			d.Warn = "Deleting is permanent — the option to roll back Windows is gone"
 			rep.junkAdd(JunkCatWindowsOld, d)
 		}
 	})
@@ -195,10 +205,13 @@ func (rep *JunkReport) junkAdd(cat int, d JunkDir) {
 	rep.Cats[cat].Bytes += d.Bytes
 }
 
-// junkKids measures a directory's matching contents — files at any
-// depth whose age exceeds the gate (0 means all files) — and records it
-// as a kids-mode row: the dir stays, its stale contents go.
+// junkKids measures a directory's matching contents with no warning.
 func (rep *JunkReport) junkKids(cat int, root string, age time.Duration) {
+	rep.junkKidsW(cat, root, age, "")
+}
+
+// junkKidsW is junkKids plus a path-specific consequence note on the row.
+func (rep *JunkReport) junkKidsW(cat int, root string, age time.Duration, warn string) {
 	if root == "" {
 		return
 	}
@@ -241,8 +254,21 @@ func (rep *JunkReport) junkKids(cat int, root string, age time.Duration) {
 	}
 	rep.junkAdd(cat, JunkDir{
 		Path: root, Bytes: bytes, Files: files,
-		Base: filepath.Base(root), Mode: JunkKids, Age: int64(age.Seconds()),
+		Base: filepath.Base(root), Mode: JunkKids, Age: int64(age.Seconds()), Warn: warn,
 	})
+}
+
+// junkDumpWarn derives a per-file consequence note from a dump's name —
+// the crashed app's name is embedded in user-mode dump filenames, so no
+// lookup table is needed.
+func junkDumpWarn(base string) string {
+	if strings.EqualFold(base, "memory.dmp") {
+		return "Full system memory dump — needed only for kernel-level debugging"
+	}
+	if i := strings.Index(base, ".exe."); i > 0 {
+		return "Evidence of an " + base[:i] + " crash — keep it if you are still diagnosing"
+	}
+	return "Kernel crash evidence — keep it if you are diagnosing a blue screen"
 }
 
 // junkGlob adds every file matching a whitelist glob as its own row.

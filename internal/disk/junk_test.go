@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -207,6 +208,19 @@ func TestJunkBrowserGuard(t *testing.T) {
 	dirs = rep.Cats[JunkCatBrowser].Dirs
 	if len(dirs) != 1 || dirs[0].Skip != "" {
 		t.Fatalf("idle browser row should be cleanable, got %+v", dirs)
+	}
+}
+
+func TestJunkDumpWarn(t *testing.T) {
+	if w := junkDumpWarn("memory.dmp"); !strings.Contains(w, "kernel") {
+		t.Fatalf("memory.dmp should mention kernel debugging, got %q", w)
+	}
+	w := junkDumpWarn("OwlCommander.exe.277692.dmp")
+	if !strings.Contains(w, "OwlCommander") {
+		t.Fatalf("app dump should name the crashed app, got %q", w)
+	}
+	if w := junkDumpWarn("WATCHDOG-20261006-2302.dmp"); !strings.Contains(w, "Kernel") {
+		t.Fatalf("kernel dump should say kernel evidence, got %q", w)
 	}
 }
 
