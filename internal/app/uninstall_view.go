@@ -483,15 +483,15 @@ func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 					}
 					row.Children(func() {
 						ui.Checkbox(c, &m.sweepSel[i], "")
-						ui.Row(c).Width(74).Shrink(0).Children(func() {
-							ui.Text(c, sweepConfLabel(it.Confidence)).FontSize(9).Bold().TextColor(sweepConfColor(t, it.Confidence))
+						ui.Row(c).Width(88).Shrink(0).Children(func() {
+							ui.Text(c, sweepConfLabel(it.Confidence)).Bold().TextColor(sweepConfColor(t, it.Confidence))
 						})
-						ui.Text(c, it.Path).FontSize(11).SingleLine().Grow(1).MinWidth(0).
+						ui.Text(c, it.Path).SingleLine().Grow(1).MinWidth(0).
 							Tooltip(it.Path + "\n" + it.Why)
 						if it.Kind == uninstall.KindDir && it.Bytes > 0 {
-							ui.Text(c, format.Bytes(it.Bytes)).FontSize(11).Shrink(0)
+							ui.Text(c, format.Bytes(it.Bytes)).Shrink(0)
 						}
-						ui.Text(c, it.Why).FontSize(10).TextColor(t.TextMuted).SingleLine().Shrink(0)
+						ui.Text(c, it.Why).TextColor(t.TextMuted).SingleLine().Shrink(0)
 					})
 				}).Grow(1).MinHeight(120).FillWidth()
 			}
