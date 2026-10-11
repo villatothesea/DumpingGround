@@ -30,7 +30,7 @@ type Entry struct {
 	Key           string
 	Hive          string // "HKLM" or "HKCU" — the display root of Key
 	Wow32         bool   // Key lives in the 32-bit (WOW6432Node) view
-	EstimatedSize bool // false when the app never reported a size
+	EstimatedSize bool   // false when the app never reported a size
 }
 
 // List returns every installed program with a name and an uninstall
@@ -127,17 +127,14 @@ func (e *Entry) displayIconPath() string {
 	return s
 }
 
-// exeFallback looks inside the install folder for a plausible app exe:
-// first a name match, then "the only real exe here". Uninstallers and
-// updaters are never picked.
+// exeFallback looks inside the install folder for a plausible app
+// binary: first a name match, then "the only real exe here".
+// Uninstallers and updaters are never picked.
 func (e *Entry) exeFallback() string {
 	if e.Location == "" {
 		return ""
 	}
-	first := ""
-	if w := strings.Fields(e.Name); len(w) > 0 {
-		first = norm(w[0])
-	}
+	names := e.matchTokens()
 	var only string
 	for _, dir := range []string{e.Location, filepath.Join(e.Location, "bin")} {
 		kids, err := os.ReadDir(dir)
@@ -146,7 +143,7 @@ func (e *Entry) exeFallback() string {
 		}
 		count := 0
 		for _, k := range kids {
-			if k.IsDir() || !strings.HasSuffix(strings.ToLower(k.Name()), ".exe") {
+			if k.IsDir() || !isIconBinary(k.Name()) {
 				continue
 			}
 			p := filepath.Join(dir, k.Name())
@@ -155,7 +152,7 @@ func (e *Entry) exeFallback() string {
 			}
 			count++
 			stem := norm(strings.TrimSuffix(k.Name(), filepath.Ext(k.Name())))
-			if stem == norm(e.Name) || len(first) >= 4 && strings.HasPrefix(stem, first) {
+			if names[stem] {
 				return p // name match wins outright
 			}
 			only = p
@@ -165,6 +162,16 @@ func (e *Entry) exeFallback() string {
 		}
 	}
 	return ""
+}
+
+// isIconBinary reports whether a filename can carry an embedded icon —
+// plugins ship as .vst3/.dll, not .exe.
+func isIconBinary(name string) bool {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".exe", ".dll", ".vst3", ".ocx":
+		return true
+	}
+	return false
 }
 
 // locationFromUninstall guesses the install dir from the uninstall
@@ -205,6 +212,60 @@ func (e *Entry) locationFallback() string {
 		if windir := os.Getenv("WINDIR"); windir == "" || !pathWithin(dir, windir) {
 			if isUninstallerName(s) == false {
 				return dir
+			}
+		}
+	}
+	return ""
+}
+
+// saneLocation rejects registry locations that name a well-known root
+// rather than the app's own folder — some installers write
+// "C:\Program Files\" itself, and flagging that as a leftover would
+// be catastrophic.
+func saneLocation(p string) bool {
+	if p == "" {
+		return false
+	}
+	c := filepath.Clean(p)
+	if filepath.Dir(c) == c {
+		return false // a drive root is never an install folder
+	}
+	for _, env := range []string{
+		"PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432",
+		"COMMONPROGRAMFILES", "COMMONPROGRAMFILES(X86)", "COMMONPROGRAMW6432",
+		"PROGRAMDATA", "APPDATA", "LOCALAPPDATA", "USERPROFILE", "WINDIR", "PUBLIC",
+	} {
+		if v := os.Getenv(env); v != "" && strings.EqualFold(filepath.Clean(v), c) {
+			return false
+		}
+	}
+	return true
+}
+
+// programFilesLocation is the last resort for entries whose registry
+// record knows nothing: a top-level folder in Program Files named
+// exactly after the app ("Node.js" → "nodejs") is near-certainly it.
+func (e *Entry) programFilesLocation() string {
+	names := e.matchTokens()
+	seen := map[string]bool{}
+	var roots []string
+	for _, env := range []string{"PROGRAMFILES", "PROGRAMW6432", "PROGRAMFILES(X86)"} {
+		if v := os.Getenv(env); v != "" && !seen[strings.ToLower(v)] {
+			seen[strings.ToLower(v)] = true
+			roots = append(roots, v)
+		}
+	}
+	if l := os.Getenv("LOCALAPPDATA"); l != "" {
+		roots = append(roots, filepath.Join(l, "Programs"))
+	}
+	for _, root := range roots {
+		kids, err := os.ReadDir(root)
+		if err != nil {
+			continue
+		}
+		for _, k := range kids {
+			if k.IsDir() && names[norm(k.Name())] {
+				return filepath.Join(root, k.Name())
 			}
 		}
 	}

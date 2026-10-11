@@ -173,7 +173,10 @@ func testJunkReport() *disk.JunkReport {
 		rep.Cats[cat].Bytes += bytes
 		rep.Bytes += bytes
 	}
-	for i, c := range []struct{ name, note string; risk int }{
+	for i, c := range []struct {
+		name, note string
+		risk       int
+	}{
 		{"User temp", "Apps recreate what they still need; anything touched this week is kept", disk.RustRiskSafe},
 		{"Windows temp", "Same rule as user temp, for system-level temp files", disk.RustRiskSafe},
 		{"Browser caches", "First page loads are slower once — logins, history, passwords and autofill all stay", disk.RustRiskSafe},
@@ -218,7 +221,10 @@ func testJunkReport() *disk.JunkReport {
 // testRustReport fabricates a report resembling a real scan for shot tests.
 func testRustReport() *disk.RustReport {
 	rep := &disk.RustReport{Projects: 3, Scanned: 400 << 30}
-	for i, c := range []struct{ name, note string; risk int }{
+	for i, c := range []struct {
+		name, note string
+		risk       int
+	}{
 		{"Incremental caches", "Compiler fingerprints", disk.RustRiskSafe},
 		{"Doc builds", "cargo doc output", disk.RustRiskSafe},
 		{"Debug builds", "target/debug dirs", disk.RustRiskModerate},

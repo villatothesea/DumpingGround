@@ -219,11 +219,14 @@ type Model struct {
 	uninstBusy                      string       // entry whose uninstaller is still running — one at a time
 	uninstMsg                       string
 	uninstList                      ui.ListState
+	uninstSelected                  int // keeps a row lit while its context menu is open
+	uninstMenuHits                  []menuHit
 	sweepName                       string // entry whose leftover scan the modal shows
 	sweepItems                      []uninstall.Item
 	sweepSel                        []bool
 	sweepOpen                       bool
 	sweepArmed                      bool
+	sweepRestored                   bool // pending review was offered once this launch
 	sweepList                       ui.ListState
 	events                          chan func()
 	// CaptureDir writes only this application's frames during explicit diagnostics.
@@ -236,7 +239,7 @@ type Model struct {
 func New() *Model {
 	applog.Prune() // roll the retention window once per launch
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Model{processSvc: process.NewService(), processByPID: map[uint32]process.Info{}, processSelected: -1,
+	return &Model{processSvc: process.NewService(), processByPID: map[uint32]process.Info{}, processSelected: -1, uninstSelected: -1,
 		processSort: ui.SortOrder{Column: "name"}, processInterval: "1 s", processTreeMode: true, ctx: ctx, close: cancel,
 		processUpdates: make(chan processResult, 1), refresh: make(chan struct{}, 1), inspection: make(chan inspectionResult, 1), events: make(chan func(), 8),
 		iconCache:   make(map[string]*ui.Bitmap),

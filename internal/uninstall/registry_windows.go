@@ -26,7 +26,7 @@ var (
 const (
 	hkeyLocalMachine  = 0x80000002
 	hkeyCurrentUser   = 0x80000001
-	keyRead           = 0x20019 // KEY_READ
+	keyRead           = 0x20019          // KEY_READ
 	keyWow64          = 0x20019 | 0x0100 // KEY_READ | KEY_WOW64_32KEY
 	regSz             = 1
 	regExpandSz       = 2
@@ -39,9 +39,9 @@ const (
 // hives are the three Uninstall keys Windows itself merges: 64-bit
 // machine, 32-bit machine (WOW6432Node) and per-user.
 var hives = []struct {
-	root  uintptr
+	root   uintptr
 	access uintptr
-	sub   string
+	sub    string
 	system bool
 }{
 	{hkeyLocalMachine, keyRead, `SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall`, true},
@@ -199,6 +199,9 @@ func enumUninstall() []Entry {
 			// Installers store these quoted or with %VARS% — normalize
 			// once so open-folder, footprint and icon code stay simple.
 			e.Location = regPath(e.Location)
+			if e.Location != "" && !saneLocation(e.Location) {
+				e.Location = "" // e.g. "C:\Program Files\" itself
+			}
 			if e.Location == "" {
 				// InstallSource is the installer *media* dir, not the
 				// install dir — the uninstall string's own folder is a
@@ -209,6 +212,29 @@ func enumUninstall() []Entry {
 				e.Location = msiInstallLocation(e.Uninstall)
 			}
 			e.Icon = regPath(e.Icon)
+			// Windows Installer keeps its own copy of the metadata
+			// under Installer\UserData — MSI entries that left
+			// InstallLocation/DisplayIcon/InstallDate empty in the
+			// Uninstall key often have them there.
+			if e.Location == "" || e.Icon == "" || e.InstallDate == "" {
+				if props := msiProps(e.Uninstall); props != nil {
+					if e.Location == "" {
+						e.Location = regPath(props["InstallLocation"].str())
+					}
+					if e.Icon == "" {
+						e.Icon = regPath(props["DisplayIcon"].str())
+					}
+					if e.InstallDate == "" {
+						e.InstallDate = props["InstallDate"].str()
+					}
+				}
+			}
+			if e.Location == "" {
+				e.Location = e.programFilesLocation()
+			}
+			if e.Location != "" && !saneLocation(e.Location) {
+				e.Location = "" // a fallback found a root, not a folder
+			}
 			if sz := vals["EstimatedSize"].dword(); sz > 0 {
 				e.SizeBytes = sz * 1024 // EstimatedSize is kilobytes
 				e.EstimatedSize = true
@@ -244,6 +270,69 @@ func msiInstallLocation(uninstall string) string {
 		return ""
 	}
 	return syscall.UTF16ToString(buf[:n])
+}
+
+// msiProps reads a product's InstallProperties from Windows Installer's
+// own store, HKLM\...\Installer\UserData\<SID>\Products\<packed GUID>.
+// The Uninstall key's {GUID} name is the product code in display form;
+// MSI names its keys by the compressed form, which packGUID computes.
+func msiProps(uninstall string) regValues {
+	start := strings.Index(uninstall, "{")
+	end := strings.Index(uninstall, "}")
+	if start < 0 || end <= start {
+		return nil
+	}
+	packed := packGUID(uninstall[start : end+1])
+	if packed == "" {
+		return nil
+	}
+	const userData = `SOFTWARE\Microsoft\Windows\CurrentVersion\Installer\UserData`
+	ud, err := openKey(hkeyLocalMachine, keyRead, userData)
+	if err != nil {
+		return nil
+	}
+	defer ud.close()
+	for _, sid := range mustSubKeys(ud) {
+		k, err := openKey(hkeyLocalMachine, keyRead,
+			userData+`\`+sid+`\Products\`+packed+`\InstallProperties`)
+		if err != nil {
+			continue
+		}
+		vals, err := k.values()
+		k.close()
+		if err == nil {
+			return vals
+		}
+	}
+	return nil
+}
+
+// packGUID reorders a {GUID} into MSI's compressed registry name: the
+// first three fields reverse byte order, the last two swap the nibbles
+// within each byte. {AC0DDDDD-1146-11D4-B4A0-006098C2901C} becomes
+// DDDD0DAC4611D4114B0A0006892C09C1.
+func packGUID(g string) string {
+	g = strings.Trim(g, "{}")
+	parts := strings.Split(g, "-")
+	if len(parts) != 5 {
+		return ""
+	}
+	rev := func(s string) string {
+		var b strings.Builder
+		for i := len(s); i > 0; i -= 2 {
+			b.WriteString(s[i-2 : i])
+		}
+		return b.String()
+	}
+	nib := func(s string) string {
+		var b strings.Builder
+		for i := 0; i+1 < len(s); i += 2 {
+			b.WriteByte(s[i+1])
+			b.WriteByte(s[i])
+		}
+		return b.String()
+	}
+	return rev(parts[0]) + rev(parts[1]) + rev(parts[2]) + nib(parts[3]) + nib(parts[4])
 }
 
 // OpenInRegedit jumps Registry Editor to this entry's Uninstall key —

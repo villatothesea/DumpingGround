@@ -58,6 +58,21 @@ func (m *Model) uninstallView(c *ui.Context, t *ui.Theme) {
 				m.uninstLoaded = false
 			}
 		})
+		// A leftover review that outlived the previous run reopens
+		// once — the file under %LOCALAPPDATA% is written when the
+		// modal opens and cleared only by Remove or "Keep leftovers".
+		if m.uninstLoaded && !m.sweepRestored {
+			m.sweepRestored = true
+			if name, items := uninstall.LoadPending(); name != "" {
+				m.sweepName, m.sweepItems = name, items
+				m.sweepSel = make([]bool, len(items))
+				for i := range items {
+					m.sweepSel[i] = true
+				}
+				m.sweepOpen, m.sweepArmed = true, false
+				m.uninstMsg = name + " — leftover review resumed from before the app was closed"
+			}
+		}
 		rows := m.uninstRowsFiltered()
 		if len(rows) == 0 {
 			msg := "Reading installed apps…"
@@ -78,20 +93,26 @@ func (m *Model) uninstallView(c *ui.Context, t *ui.Theme) {
 		}
 		// ui.Table owns the header: columns resize at the edges,
 		// double-click an edge to fit content, extra width scrolls.
+		m.uninstMenuHits = m.uninstMenuHits[:0]
+		m.uninstList.Selected = &m.uninstSelected
 		cols := []ui.TableColumn{
 			{Title: "Name", Sortable: true, MinWidth: 140},
-			{Title: "Version", Width: 90, MinWidth: 50, Sortable: true},
-			{Title: "Publisher", Width: 150, MinWidth: 60, Sortable: true},
+			{Title: "Version", Width: 120, MinWidth: 60, Sortable: true},
+			{Title: "Publisher", Width: 230, MinWidth: 60, Sortable: true},
 			{Title: "Size", Width: 80, MinWidth: 50, Align: ui.End, Sortable: true},
 			{Title: "Installed", Width: 90, MinWidth: 70, Align: ui.End, Sortable: true},
 			{Title: "Install location", MinWidth: 240, Sortable: true},
 			{Title: "", ID: "actions", Width: 152, Fixed: true, Align: ui.End},
 		}
-		tableChrome(c, func() ui.Element {
+		tbl := tableChrome(c, func() ui.Element {
 			return ui.Table(c, &m.uninstList, cols, len(rows), func(row, col int) {
 				e := rows[row]
 				cell := ui.Row(c).Fill().Height(26).Gap(6).AlignItems(ui.Center)
-				m.uninstContextMenu(c, cell, e)
+				if col == 0 {
+					if b := cell.Bounds(); b.H > 0 {
+						m.uninstMenuHits = append(m.uninstMenuHits, menuHit{y1: b.Y, y2: b.Y + b.H, id: row})
+					}
+				}
 				cell.Children(func() {
 					switch col {
 					case 0:
@@ -124,6 +145,10 @@ func (m *Model) uninstallView(c *ui.Context, t *ui.Theme) {
 					}
 				})
 			}).Grow(1).MinHeight(0).FillWidth()
+		}).Grow(1).MinHeight(0).FillWidth()
+		tableRowMenu(tbl, &m.uninstMenuHits, func(id int, menu *ui.Menu) {
+			m.uninstSelected = id
+			m.uninstMenu(c, menu, rows[id])
 		})
 	})
 }
@@ -173,21 +198,31 @@ func (m *Model) uninstRowsFiltered() []*uninstall.Entry {
 // app's own uninstaller (which brings its own confirmation UI).
 func (m *Model) uninstRowActions(c *ui.Context, t *ui.Theme, e *uninstall.Entry) {
 	ui.Row(c).Gap(6).Justify(ui.End).AlignItems(ui.Center).Children(func() {
-		if e.Location != "" {
-			op := ui.Row(c).Height(22).PaddingX(7).Gap(4).AlignItems(ui.Center).Radius(t.Radius).
-				Cursor(ui.CursorPointer).Label("Open install folder").Tooltip(e.Location)
-			op.BorderWidth(1).BorderColor(t.Border).Background(t.Surface)
-			op.Draw(func(p *ui.Painter, r ui.Rect) {
-				if op.Hovered() {
-					p.Fill(r, t.SurfaceHover, t.Radius)
-				}
-			})
-			op.Children(func() {
-				icon(c, "folder", 11).TextColor(t.Accent)
-			})
-			if op.Clicked() {
-				_ = exec.Command("explorer", e.Location).Start()
+		// The folder button always renders — grayed without a location —
+		// so the Uninstall button sits at the same offset on every row.
+		op := ui.Row(c).Height(22).PaddingX(7).Gap(4).AlignItems(ui.Center).Radius(t.Radius).
+			Cursor(ui.CursorPointer).Label("Open install folder")
+		if e.Location == "" {
+			op = op.Disabled(true).Tooltip("no install location recorded in the registry")
+		} else {
+			op = op.Tooltip(e.Location)
+		}
+		op.BorderWidth(1).BorderColor(t.Border).Background(t.Surface)
+		op.Draw(func(p *ui.Painter, r ui.Rect) {
+			if e.Location != "" && op.Hovered() {
+				p.Fill(r, t.SurfaceHover, t.Radius)
 			}
+		})
+		op.Children(func() {
+			ic := icon(c, "folder", 11)
+			if e.Location == "" {
+				ic.TextColor(t.TextMuted)
+			} else {
+				ic.TextColor(t.Accent)
+			}
+		})
+		if op.Clicked() && e.Location != "" {
+			_ = exec.Command("explorer", e.Location).Start()
 		}
 		armed := m.uninstArmed == e.Name
 		label := "Uninstall"
@@ -230,37 +265,35 @@ func (m *Model) uninstRowActions(c *ui.Context, t *ui.Theme, e *uninstall.Entry)
 	})
 }
 
-// uninstContextMenu is the right-click menu for one installed app:
+// uninstMenu fills the row's right-click menu for one installed app:
 // the same Uninstall flow, folder/registry shortcuts, a standalone
 // leftover scan, and clipboard copies of the raw registry data.
-func (m *Model) uninstContextMenu(c *ui.Context, row ui.Element, e *uninstall.Entry) {
-	row.ContextMenu(func(mm *ui.Menu) {
-		if mm.Item("Uninstall").Disabled(m.uninstBusy != "").Chosen() {
-			m.uninstArmed = ""
-			m.launchUninstall(e)
+func (m *Model) uninstMenu(c *ui.Context, mm *ui.Menu, e *uninstall.Entry) {
+	if mm.Item("Uninstall").Disabled(m.uninstBusy != "").Chosen() {
+		m.uninstArmed = ""
+		m.launchUninstall(e)
+	}
+	mm.Separator()
+	if mm.Item("Open install folder").Disabled(e.Location == "").Chosen() {
+		_ = exec.Command("explorer", e.Location).Start()
+	}
+	if mm.Item("Find leftovers").Chosen() {
+		m.startSweep(e)
+	}
+	mm.Separator()
+	if mm.Item("Copy uninstall command").Chosen() {
+		c.WriteClipboard(e.Uninstall)
+	}
+	if mm.Item("Copy details").Chosen() {
+		c.WriteClipboard(fmt.Sprintf("%s %s — %s\nInstalled: %s\nLocation: %s\n%s",
+			e.Name, e.Version, e.Publisher, e.Date(), e.Location, e.Uninstall))
+	}
+	mm.Separator()
+	if mm.Item("Open in Registry Editor").Chosen() {
+		if err := e.OpenInRegedit(); err != nil {
+			m.uninstMsg = "regedit: " + err.Error()
 		}
-		mm.Separator()
-		if mm.Item("Open install folder").Disabled(e.Location == "").Chosen() {
-			_ = exec.Command("explorer", e.Location).Start()
-		}
-		if mm.Item("Find leftovers").Chosen() {
-			m.startSweep(e)
-		}
-		mm.Separator()
-		if mm.Item("Copy uninstall command").Chosen() {
-			c.WriteClipboard(e.Uninstall)
-		}
-		if mm.Item("Copy details").Chosen() {
-			c.WriteClipboard(fmt.Sprintf("%s %s — %s\nInstalled: %s\nLocation: %s\n%s",
-				e.Name, e.Version, e.Publisher, e.Date(), e.Location, e.Uninstall))
-		}
-		mm.Separator()
-		if mm.Item("Open in Registry Editor").Chosen() {
-			if err := e.OpenInRegedit(); err != nil {
-				m.uninstMsg = "regedit: " + err.Error()
-			}
-		}
-	})
+	}
 }
 
 // startSweep scans an entry's leftovers without uninstalling it — the
@@ -276,8 +309,9 @@ func (m *Model) startSweep(e *uninstall.Entry) {
 			m.sweepItems = items
 			m.sweepSel = make([]bool, len(items))
 			for i := range items {
-				m.sweepSel[i] = items[i].Confidence != uninstall.Review
+				m.sweepSel[i] = true
 			}
+			uninstall.SavePending(entry.Name, items)
 			m.sweepOpen = true
 		})
 	}()
@@ -323,7 +357,7 @@ func (m *Model) launchUninstall(e *uninstall.Entry) {
 			m.sweepItems = items
 			m.sweepSel = make([]bool, len(items))
 			for i := range items {
-				m.sweepSel[i] = items[i].Confidence != uninstall.Review
+				m.sweepSel[i] = true
 			}
 			switch {
 			case len(items) == 0 && gone:
@@ -335,6 +369,9 @@ func (m *Model) launchUninstall(e *uninstall.Entry) {
 			default:
 				m.uninstMsg = entry.Name + " — uninstaller exited but the entry is still listed; review before removing"
 				m.sweepOpen, m.sweepArmed = true, false
+			}
+			if m.sweepOpen {
+				uninstall.SavePending(entry.Name, items)
 			}
 		})
 	}()
@@ -383,7 +420,7 @@ func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 						if it.Kind == uninstall.KindDir && it.Bytes > 0 {
 							ui.Text(c, format.Bytes(it.Bytes)).FontSize(11).Shrink(0)
 						}
-						ui.Text(c, it.Why).FontSize(10).TextColor(t.TextMuted).SingleLine().Shrink(0).MaxWidth(220).Ellipsis("…")
+						ui.Text(c, it.Why).FontSize(10).TextColor(t.TextMuted).SingleLine().Shrink(0)
 					})
 				}).Grow(1).MinHeight(120).FillWidth()
 			}
@@ -398,6 +435,10 @@ func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 				ui.Text(c, fmt.Sprintf("%d of %d selected · %s", sel, len(m.sweepItems), format.Bytes(bytes))).
 					FontSize(11).TextColor(t.TextMuted)
 				ui.Spacer(c)
+				if ui.Button(c, "Keep leftovers").Clicked() {
+					uninstall.ClearPending()
+					m.sweepOpen = false
+				}
 				label := "Remove leftovers"
 				if m.sweepArmed {
 					label = "Sure? Files go to the Recycle Bin"
@@ -473,6 +514,7 @@ func (m *Model) runSweepRemoval() {
 		}
 		applog.Logf("%s", msg)
 		m.post(func() {
+			uninstall.ClearPending()
 			m.sweepOpen = false
 			m.uninstMsg = msg
 			m.uninstLoaded = false // registry listing may be gone now

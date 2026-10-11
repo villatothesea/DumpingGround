@@ -64,7 +64,7 @@ func isReparse(e os.DirEntry) bool {
 // RunOnce values that point into the install folder.
 func regFootprint(e *Entry) []Item {
 	var out []Item
-	nName := norm(e.Name)
+	names := e.matchTokens()
 	nPub := norm(e.Publisher)
 
 	// The Apps-list entry itself — the last thing a thorough removal
@@ -89,20 +89,23 @@ func regFootprint(e *Entry) []Item {
 		{"HKLM", hkeyLocalMachine, keyWow64, `SOFTWARE\WOW6432Node`},
 	}
 	for _, h := range hives {
-		// Direct name matches: SOFTWARE\<App>
-		if keyExists(h.root, h.access, h.base+`\`+e.Name) {
-			out = append(out, Item{
-				Path: h.name + `\` + h.base + `\` + e.Name,
-				Kind: KindRegKey, Reg32: h.access&0x100 != 0,
-				Confidence: Likely, Why: "settings key named after the app",
-			})
+		// Direct name matches: SOFTWARE\<App>, for every stripped
+		// variant of the display name.
+		for _, sub := range mustSubKeysOrNil(h.root, h.access, h.base) {
+			if names[norm(sub)] && norm(sub) != nPub {
+				out = append(out, Item{
+					Path: h.name + `\` + h.base + `\` + sub,
+					Kind: KindRegKey, Reg32: h.access&0x100 != 0,
+					Confidence: Likely, Why: "settings key named after the app",
+				})
+			}
 		}
 		// Publisher containers: SOFTWARE\<Publisher>\<App>
 		if nPub != "" && !generic[nPub] {
 			pk, err := openKey(h.root, h.access, h.base+`\`+e.Publisher)
 			if err == nil {
 				for _, sub := range mustSubKeys(pk) {
-					if norm(sub) == nName {
+					if names[norm(sub)] {
 						out = append(out, Item{
 							Path: h.name + `\` + h.base + `\` + e.Publisher + `\` + sub,
 							Kind: KindRegKey, Reg32: h.access&0x100 != 0,
@@ -127,10 +130,10 @@ func regFootprint(e *Entry) []Item {
 			rk.close()
 			for name, v := range vals {
 				data := v.str()
-				conf, why := Review, "startup value named after the app"
+				conf, why := Likely, "startup entry named after the app"
 				if e.Location != "" && pathWithin(unquote(data), filepath.Clean(e.Location)) {
-					conf, why = Likely, "startup value runs something in the install folder"
-				} else if norm(name) != nName {
+					conf, why = Confirmed, "startup entry runs something in the install folder"
+				} else if !names[norm(name)] {
 					continue
 				}
 				out = append(out, Item{
@@ -179,6 +182,18 @@ func keyExists(root, access uintptr, sub string) bool {
 func mustSubKeys(k regKey) []string {
 	names, _ := k.subKeys()
 	return names
+}
+
+// mustSubKeysOrNil opens a key's child names, nil when it cannot be
+// opened — used where a missing key means "nothing matches", not an
+// error.
+func mustSubKeysOrNil(root, access uintptr, sub string) []string {
+	k, err := openKey(root, access, sub)
+	if err != nil {
+		return nil
+	}
+	defer k.close()
+	return mustSubKeys(k)
 }
 
 // unquote strips a command line's leading quote so path checks can

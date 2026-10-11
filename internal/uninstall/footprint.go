@@ -65,14 +65,16 @@ func Footprint(e *Entry, all []Entry) []Item {
 // well-known app-data roots and shortcut folders.
 func fsFootprint(e *Entry, all []Entry, roots, shortcuts []string) []Item {
 	var out []Item
-	nName := norm(e.Name)
+	names := e.matchTokens()
 	nPub := norm(e.Publisher)
 
-	// The install folder itself — the registry said so.
-	if e.Location != "" && isDir(e.Location) {
+	// The install folder itself — the registry said so. saneLocation
+	// is belt-and-braces: entries sanitize at enumeration, but a
+	// restored pending item could predate the check.
+	if e.Location != "" && saneLocation(e.Location) && isDir(e.Location) {
 		out = append(out, Item{
 			Path: e.Location, Kind: KindDir, Confidence: Confirmed,
-			Why: "InstallLocation recorded in the registry",
+			Why: "the app's install folder, left behind",
 		})
 	}
 
@@ -88,18 +90,18 @@ func fsFootprint(e *Entry, all []Entry, roots, shortcuts []string) []Item {
 			p := filepath.Join(root, kid.Name())
 			dn := norm(kid.Name())
 			switch {
-			case dn == nName:
+			case names[dn]:
 				if claimed(p, e, all) {
 					continue
 				}
 				out = append(out, Item{Path: p, Kind: KindDir, Confidence: Likely,
-					Why: "user-data folder named after the app"})
+					Why: "data folder named after the app"})
 			case dn == nPub && nPub != "" && !generic[nPub]:
 				// A publisher container: flag only children that
 				// carry the app's name — siblings may belong to
 				// other products from the same vendor.
 				for _, sub := range kidNames(p) {
-					if norm(sub) == nName && !claimed(filepath.Join(p, sub), e, all) {
+					if names[norm(sub)] && !claimed(filepath.Join(p, sub), e, all) {
 						out = append(out, Item{Path: filepath.Join(p, sub), Kind: KindDir, Confidence: Likely,
 							Why: "app folder under the publisher's folder"})
 					}
@@ -126,8 +128,9 @@ func fsFootprint(e *Entry, all []Entry, roots, shortcuts []string) []Item {
 			if isReparse(d) || !strings.HasSuffix(strings.ToLower(d.Name()), ".lnk") {
 				return nil
 			}
-			base := norm(strings.TrimSuffix(d.Name(), filepath.Ext(d.Name())))
-			if base != nName && base != norm("uninstall "+e.Name) && base != norm(e.Name+" uninstaller") {
+			nameNoExt := strings.TrimSuffix(d.Name(), filepath.Ext(d.Name()))
+			base := norm(nameNoExt)
+			if !names[base] && !names[norm(strings.TrimPrefix(nameNoExt, "Uninstall "))] {
 				return nil
 			}
 			out = append(out, Item{Path: p, Kind: KindDir, Confidence: Likely, Why: "shortcut to the app"})
@@ -175,6 +178,72 @@ func norm(s string) string {
 		}
 	}
 	return b.String()
+}
+
+// nameTokens is the set of normalized names a leftover may carry and
+// still be the app's own. Display names carry decorations the
+// filesystem never uses — "(User)" scope tags, "版本 2.1.8" and bare
+// "6.1.1" version tails — so every stripped variant joins the set.
+// Exact matches only: "qodercnide" counts, "qoder" does not.
+func nameTokens(name string) map[string]bool {
+	out := map[string]bool{norm(name): true}
+	if i := strings.Index(name, "("); i > 0 {
+		out[norm(name[:i])] = true
+	}
+	if i := strings.Index(name, " - "); i > 0 {
+		out[norm(name[:i])] = true
+	}
+	// Drop trailing version words until a real name is left:
+	// "Bitwig Studio 6.1.1" → "bitwigstudio",
+	// "ACE Studio 版本 2.1.8" → "acestudio".
+	fields := strings.Fields(name)
+	for len(fields) > 1 {
+		last := fields[len(fields)-1]
+		if last != "版本" && !isVersionWord(last) {
+			break
+		}
+		fields = fields[:len(fields)-1]
+		out[norm(strings.Join(fields, " "))] = true
+	}
+	delete(out, "")
+	return out
+}
+
+// isVersionWord reports whether a display-name word is just a version
+// ("6.1.1", "v2", "2024.1") rather than part of the product's name.
+func isVersionWord(w string) bool {
+	w = strings.TrimPrefix(strings.ToLower(w), "v")
+	if w == "" {
+		return false
+	}
+	digits := false
+	for _, r := range w {
+		switch {
+		case r >= '0' && r <= '9':
+			digits = true
+		case r == '.' || r == 'x':
+		default:
+			return false
+		}
+	}
+	return digits
+}
+
+// matchTokens is nameTokens plus the install folder's own basename —
+// "Qoder CN IDE (User)" installs to a folder called "Qoder CN IDE".
+// Generic tokens are dropped: an app actually called "Tools" must not
+// flag every dir named "tools".
+func (e *Entry) matchTokens() map[string]bool {
+	names := nameTokens(e.Name)
+	if e.Location != "" {
+		names[norm(filepath.Base(e.Location))] = true
+	}
+	for t := range names {
+		if generic[t] {
+			delete(names, t)
+		}
+	}
+	return names
 }
 
 // generic names never produce Likely/Review matches on their own.
