@@ -221,8 +221,8 @@ func New() *Model {
 		processUpdates: make(chan processResult, 1), refresh: make(chan struct{}, 1), inspection: make(chan inspectionResult, 1), events: make(chan func(), 8),
 		iconCache:   make(map[string]*ui.Bitmap),
 		iconPending: make(map[string]bool), iconRequests: make(chan string, 32),
-		diskStatus: "Choose a drive or folder to scan", diskMode: "Tree", diskMetric: "Allocated", diskSelected: -1, diskNode: -1, extensionSelected: -1, mapRoot: -1, diskSplit: 300, animateMap: true, detailTab: "Properties", memRelease: "Automatic",
-		rustGone: map[string]bool{}, rustSel: -1, rustConfirm: -1, rustRecycle: true, rustPathsCat: -1,
+		diskStatus: "Choose a drive or folder to scan", diskMode: "Tree", diskMetric: "Allocated", diskSelected: -1, diskNode: -1, extensionSelected: -1, mapRoot: -1, diskSplit: 300, animateMap: true, detailTab: "Properties", memRelease: "Automatic", tabStyle: "Pill",
+		rustGone: map[string]bool{}, rustSel: -1, rustConfirm: -1, rustPathsCat: -1,
 		rustFilterCat: -1, junkSel: -1, junkConfirm: -1, junkFilterCat: -1, junkPathsCat: -1,
 		rustCollapsed: map[int]bool{}, junkCollapsed: map[string]bool{}}
 }
