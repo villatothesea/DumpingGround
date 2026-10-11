@@ -25,6 +25,8 @@ type Entry struct {
 	Icon          string
 	SystemScope   bool // machine-wide (HKLM) vs current-user (HKCU)
 	Key           string
+	Hive          string // "HKLM" or "HKCU" — the display root of Key
+	Wow32         bool   // Key lives in the 32-bit (WOW6432Node) view
 	EstimatedSize bool // false when the app never reported a size
 }
 

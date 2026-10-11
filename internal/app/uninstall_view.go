@@ -2,10 +2,15 @@ package app
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/dumpingground/dumpingground/internal/applog"
 	"github.com/dumpingground/dumpingground/internal/format"
 	"github.com/dumpingground/dumpingground/internal/uninstall"
 	"github.com/egoist/mygo/ui"
@@ -63,6 +68,7 @@ func (m *Model) uninstallView(c *ui.Context, t *ui.Theme) {
 		}
 		rustSectionLabel(c, t, "Installed applications")
 		m.uninstHeader(c, t)
+		m.sweepModal(c, t)
 		ui.List(c, &m.uninstList, len(rows), func(i int) {
 			e := rows[i]
 			row := ui.Row(c).FillWidth().Height(28).Padding(0, 10).Gap(8).AlignItems(ui.Center).Radius(4)
@@ -147,7 +153,7 @@ func (m *Model) uninstHeader(c *ui.Context, t *ui.Theme) {
 		ui.Row(c).Width(86).Shrink(0).Justify(ui.End).Children(func() {
 			m.uninstColHead(c, t, 3, "Installed", 0)
 		})
-		ui.Box(c).Width(150).Shrink(0)
+		ui.Box(c).Width(178).Shrink(0)
 	})
 }
 
@@ -177,7 +183,23 @@ func (m *Model) uninstColHead(c *ui.Context, t *ui.Theme, col int, label string,
 // and an armed two-click Uninstall that launches the app's own
 // uninstaller (which brings its own confirmation UI).
 func (m *Model) uninstRowActions(c *ui.Context, t *ui.Theme, e *uninstall.Entry) {
-	ui.Row(c).Width(150).Shrink(0).Gap(6).Justify(ui.End).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).Width(178).Shrink(0).Gap(6).Justify(ui.End).AlignItems(ui.Center).Children(func() {
+		swp := ui.Row(c).Height(22).PaddingX(7).Gap(4).AlignItems(ui.Center).Radius(t.Radius).
+			Cursor(ui.CursorPointer).Label("Find leftovers").Tooltip(
+			"Scan for files, registry keys and startup entries this app would leave behind")
+		swp.BorderWidth(1).BorderColor(t.Border).Background(t.Surface)
+		swp.Draw(func(p *ui.Painter, r ui.Rect) {
+			if swp.Hovered() {
+				p.Fill(r, t.SurfaceHover, t.Radius)
+			}
+		})
+		swp.Children(func() {
+			icon(c, "search", 11).TextColor(t.Accent)
+			ui.Text(c, "Sweep").FontSize(11)
+		})
+		if swp.Clicked() {
+			m.startSweep(e)
+		}
 		if e.Location != "" {
 			op := ui.Row(c).Height(22).PaddingX(7).Gap(4).AlignItems(ui.Center).Radius(t.Radius).
 				Cursor(ui.CursorPointer).Label("Open install folder").Tooltip(e.Location)
@@ -225,9 +247,187 @@ func (m *Model) uninstRowActions(c *ui.Context, t *ui.Theme, e *uninstall.Entry)
 			m.uninstArmed = ""
 			if err := e.Launch(); err != nil {
 				m.uninstMsg = "Failed: " + err.Error()
+				applog.Logf("uninstall launch FAILED  %s  — %v", e.Name, err)
 			} else {
 				m.uninstMsg = "Uninstaller launched for " + e.Name + " — refresh when it finishes"
+				applog.Logf("uninstall launched  %s  (%s)", e.Name, e.Uninstall)
 			}
 		}
 	})
+}
+
+// startSweep scans one entry's leftovers off the UI goroutine, then
+// opens the review modal. Confirmed and Likely items come pre-checked;
+// Review items need an explicit tick.
+func (m *Model) startSweep(e *uninstall.Entry) {
+	if m.sweepBusy {
+		return
+	}
+	m.sweepBusy, m.sweepName, m.sweepArmed = true, e.Name, false
+	go func() {
+		items := uninstall.Footprint(e, m.uninstRows)
+		m.post(func() {
+			m.sweepBusy = false
+			m.sweepItems = items
+			m.sweepSel = make([]bool, len(items))
+			for i := range items {
+				m.sweepSel[i] = items[i].Confidence != uninstall.Review
+			}
+			m.sweepOpen = true
+		})
+	}()
+}
+
+// sweepConfColor tags each leftover with its confidence.
+func sweepConfColor(t *ui.Theme, conf uninstall.Confidence) ui.Color {
+	switch conf {
+	case uninstall.Confirmed:
+		return t.Accent
+	case uninstall.Likely:
+		return t.Warning
+	default:
+		return t.TextMuted
+	}
+}
+
+func sweepConfLabel(conf uninstall.Confidence) string {
+	return [...]string{"CONFIRMED", "LIKELY", "REVIEW"}[conf]
+}
+
+// sweepModal is the leftover review list — per-item checkboxes, an
+// explanation of reversibility, and the armed two-click Remove.
+func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
+	ui.Modal(c, &m.sweepOpen, func() {
+		ui.Column(c).Width(780).MaxHeight(560).Padding(6, 16, 14, 16).Gap(10).Children(func() {
+			ui.Text(c, "Leftovers — "+m.sweepName).Bold().FontSize(16)
+			ui.Text(c, "Folders and shortcuts go to the Recycle Bin. Registry items are exported to a .reg backup in the log folder before removal. REVIEW rows are unchecked — tick them only after looking.").
+				FontSize(11).TextColor(t.TextMuted)
+			if len(m.sweepItems) == 0 {
+				ui.Text(c, "No leftovers found — the uninstaller left a clean machine.").FontSize(11).TextColor(t.TextMuted)
+			} else {
+				ui.List(c, &m.sweepList, len(m.sweepItems), func(i int) {
+					it := m.sweepItems[i]
+					row := ui.Row(c).FillWidth().Height(30).Gap(8).AlignItems(ui.Center).Radius(4)
+					if row.Hovered() {
+						row.Background(t.SurfaceHover)
+					}
+					row.Children(func() {
+						ui.Checkbox(c, &m.sweepSel[i], "")
+						ui.Row(c).Width(74).Shrink(0).Children(func() {
+							ui.Text(c, sweepConfLabel(it.Confidence)).FontSize(9).Bold().TextColor(sweepConfColor(t, it.Confidence))
+						})
+						ui.Text(c, it.Path).FontSize(11).SingleLine().Grow(1).MinWidth(0).
+							Tooltip(it.Path + "\n" + it.Why)
+						if it.Kind == uninstall.KindDir && it.Bytes > 0 {
+							ui.Text(c, format.Bytes(it.Bytes)).FontSize(11).Shrink(0)
+						}
+						ui.Text(c, it.Why).FontSize(10).TextColor(t.TextMuted).SingleLine().Shrink(0).MaxWidth(220).Ellipsis("…")
+					})
+				}).Grow(1).MinHeight(120).FillWidth()
+			}
+			sel, bytes := 0, uint64(0)
+			for i, it := range m.sweepItems {
+				if m.sweepSel[i] {
+					sel++
+					bytes += it.Bytes
+				}
+			}
+			ui.Row(c).FillWidth().Height(28).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, fmt.Sprintf("%d of %d selected · %s", sel, len(m.sweepItems), format.Bytes(bytes))).
+					FontSize(11).TextColor(t.TextMuted)
+				ui.Spacer(c)
+				label := "Remove leftovers"
+				if m.sweepArmed {
+					label = "Sure? Files go to the Recycle Bin"
+				}
+				if sel == 0 {
+					label = "Remove leftovers"
+				}
+				if m.dangerButton(c, "trash", label).Clicked() && sel > 0 {
+					if !m.sweepArmed {
+						m.sweepArmed = true
+					} else {
+						m.runSweepRemoval()
+					}
+				}
+			})
+		})
+	})
+}
+
+// runSweepRemoval deletes the checked items — dirs to the Recycle Bin,
+// registry items exported to a .reg backup first — and writes the whole
+// operation to the applog.
+func (m *Model) runSweepRemoval() {
+	m.sweepArmed = false
+	var chosen []uninstall.Item
+	for i, it := range m.sweepItems {
+		if m.sweepSel[i] {
+			chosen = append(chosen, it)
+		}
+	}
+	if len(chosen) == 0 {
+		return
+	}
+	backup := ""
+	hasReg := false
+	for _, it := range chosen {
+		hasReg = hasReg || it.Registry()
+	}
+	if hasReg {
+		backup = filepath.Join(applog.Dir(), fmt.Sprintf("sweep-%s-%s.reg",
+			sanitizeFileName(m.sweepName), time.Now().Format("20060102-150405")))
+	}
+	go func() {
+		applog.Section("Leftover sweep — " + m.sweepName)
+		var reg io.Writer
+		var f *os.File
+		if backup != "" {
+			if fh, err := os.Create(backup); err == nil {
+				f, reg = fh, fh
+			}
+		}
+		errs := uninstall.RemoveItems(chosen, reg)
+		removed, failed := 0, 0
+		for i, err := range errs {
+			if err == nil {
+				removed++
+				applog.Logf("removed  %s  (%s)", chosen[i].Path, chosen[i].Why)
+			} else {
+				failed++
+				applog.Logf("FAILED   %s  — %v", chosen[i].Path, err)
+			}
+		}
+		if f != nil {
+			f.Close()
+			applog.Logf("registry backup: %s", backup)
+		}
+		msg := fmt.Sprintf("Removed %d leftover items", removed)
+		if failed > 0 {
+			msg += fmt.Sprintf(", %d failed — see log", failed)
+		}
+		if backup != "" {
+			msg += " · registry backed up"
+		}
+		applog.Logf("%s", msg)
+		m.post(func() {
+			m.sweepOpen = false
+			m.uninstMsg = msg
+			m.uninstLoaded = false // registry listing may be gone now
+		})
+	}()
+}
+
+// sanitizeFileName keeps a backup filename filesystem-safe.
+func sanitizeFileName(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' {
+			b.WriteRune(r)
+		}
+	}
+	if b.Len() == 0 {
+		return "app"
+	}
+	return b.String()
 }

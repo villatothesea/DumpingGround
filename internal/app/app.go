@@ -14,6 +14,7 @@ import (
 	"github.com/dumpingground/dumpingground/internal/format"
 	"github.com/dumpingground/dumpingground/internal/process"
 	"github.com/dumpingground/dumpingground/internal/treemap"
+	"github.com/dumpingground/dumpingground/internal/applog"
 	"github.com/dumpingground/dumpingground/internal/uninstall"
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -218,6 +219,13 @@ type Model struct {
 	uninstArmed                     string // entry name armed for the second-click confirm
 	uninstMsg                       string
 	uninstList                      ui.ListState
+	sweepName                       string // entry whose leftover scan the modal shows
+	sweepItems                      []uninstall.Item
+	sweepSel                        []bool
+	sweepOpen                       bool
+	sweepBusy                       bool
+	sweepArmed                      bool
+	sweepList                       ui.ListState
 	events                          chan func()
 	// CaptureDir writes only this application's frames during explicit diagnostics.
 	CaptureDir  string
@@ -227,6 +235,7 @@ type Model struct {
 }
 
 func New() *Model {
+	applog.Prune() // roll the retention window once per launch
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Model{processSvc: process.NewService(), processByPID: map[uint32]process.Info{}, processSelected: -1,
 		processSort: ui.SortOrder{Column: "name"}, processInterval: "1 s", processTreeMode: true, ctx: ctx, close: cancel,

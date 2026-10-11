@@ -147,6 +147,20 @@ func TestScreenshotStates(t *testing.T) {
 	tt7.SetDark(true)
 	tt7.Frame()
 	dump(t, tt7, dest, "uninstall.png")
+
+	// The leftover sweep modal: confidence-tagged items with Review
+	// unchecked, registry items marked, armed remove pending.
+	m5.sweepName = "Obsidian"
+	m5.sweepItems = []uninstall.Item{
+		{Path: `C:\Users\me\AppData\Roaming\obsidian`, Kind: uninstall.KindDir, Confidence: uninstall.Likely, Why: "user-data folder named after the app", Bytes: 90 << 20},
+		{Path: `C:\Users\me\AppData\Local\obsidian-updater`, Kind: uninstall.KindDir, Confidence: uninstall.Review, Why: "folder name is similar"},
+		{Path: `C:\Users\me\Desktop\Obsidian.lnk`, Kind: uninstall.KindDir, Confidence: uninstall.Likely, Why: "shortcut to the app"},
+		{Path: `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\bd400747`, Kind: uninstall.KindRegKey, Confidence: uninstall.Confirmed, Why: "the entry in the installed-apps list"},
+	}
+	m5.sweepSel = []bool{true, false, true, true}
+	m5.sweepOpen = true
+	tt7.Frame()
+	dump(t, tt7, dest, "uninstall-sweep.png")
 }
 
 // testJunkReport fabricates a cleanup report resembling a real measure.

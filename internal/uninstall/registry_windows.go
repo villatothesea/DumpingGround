@@ -188,6 +188,8 @@ func enumUninstall() []Entry {
 				Icon:        vals["DisplayIcon"].str(),
 				SystemScope: h.system,
 				Key:         h.sub + `\` + name,
+				Wow32:       h.access&0x100 != 0,
+				Hive:        map[bool]string{true: "HKLM", false: "HKCU"}[h.system],
 			}
 			if e.Location == "" {
 				e.Location = vals["InstallSource"].str()
