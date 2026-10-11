@@ -614,9 +614,10 @@ func (m *Model) junkDownloadsCard(c *ui.Context, t *ui.Theme, dl *disk.JunkDir) 
 			ui.Text(c, "your call").FontSize(10).Bold().TextColor(t.Warning)
 		})
 		ui.Text(c, format.Bytes(dl.Bytes)).FontSize(18).Bold()
-		ui.Text(c, fmt.Sprintf("%s files — no plan touches this; look and decide", format.Int(uint64(dl.Files)))).
+		ui.Text(c, fmt.Sprintf("%s files", format.Int(uint64(dl.Files)))).
 			FontSize(10).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
-		ui.Spacer(c)
+		ui.Text(c, "No plan touches this — your call").FontSize(10).TextColor(t.Warning).
+			SingleLine().Ellipsis("…").Tooltip("Your files — no plan touches this; look and decide yourself")
 		ui.Row(c).FillWidth().Justify(ui.End).Gap(8).AlignItems(ui.Center).Children(func() {
 			op := ui.Row(c).Height(24).PaddingX(10).Gap(5).AlignItems(ui.Center).Radius(t.Radius).
 				Cursor(ui.CursorPointer).Label("Open Downloads").Tooltip("Open in Explorer")
