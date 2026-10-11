@@ -141,19 +141,19 @@ func testJunkReport() *disk.JunkReport {
 		rep.Bytes += bytes
 	}
 	for i, c := range []struct{ name, note string; risk int }{
-		{"User temp", "old temp files", disk.RustRiskSafe},
-		{"Windows temp", "old files in Windows\\Temp", disk.RustRiskSafe},
-		{"Browser caches", "per-profile cache dirs", disk.RustRiskSafe},
-		{"Thumbnail cache", "explorer caches", disk.RustRiskSafe},
-		{"Shader cache", "DirectX shaders", disk.RustRiskSafe},
-		{"Error reports", "WER archives", disk.RustRiskSafe},
-		{"Recycle Bin", "bin contents", disk.RustRiskSafe},
-		{"App caches", "Electron caches", disk.RustRiskSafe},
-		{"Update downloads", "update staging", disk.RustRiskModerate},
-		{"Crash dumps", "minidumps", disk.RustRiskModerate},
-		{"Windows logs", "setup and servicing logs", disk.RustRiskModerate},
-		{"Dev caches", "go-build and friends", disk.RustRiskModerate},
-		{"Windows.old", "rollback data", disk.RustRiskReview},
+		{"User temp", "Apps recreate what they still need; anything touched this week is kept", disk.RustRiskSafe},
+		{"Windows temp", "Same rule as user temp, for system-level temp files", disk.RustRiskSafe},
+		{"Browser caches", "First page loads are slower once — logins, history, passwords and autofill all stay", disk.RustRiskSafe},
+		{"Thumbnail cache", "Folder thumbnails redraw slowly until Explorer rebuilds them", disk.RustRiskSafe},
+		{"Shader cache", "Games recompile shaders once — the first launch stutters a bit", disk.RustRiskSafe},
+		{"Error reports", "Old crash reports gone — only matters when diagnosing past crashes", disk.RustRiskSafe},
+		{"Recycle Bin", "Deleted files become unrecoverable — the bin is the last undo", disk.RustRiskSafe},
+		{"App caches", "The app re-caches on next launch — sign-ins and settings stay", disk.RustRiskSafe},
+		{"Update downloads", "Staging files from installed updates — Windows re-downloads if needed", disk.RustRiskModerate},
+		{"Crash dumps", "Crash evidence is gone — keep it if you are diagnosing a crash right now", disk.RustRiskModerate},
+		{"Windows logs", "Setup and servicing history lost — only matters for troubleshooting", disk.RustRiskModerate},
+		{"Dev caches", "The next build re-downloads or recompiles — slower once", disk.RustRiskModerate},
+		{"Windows upgrades", "Rollback data from past installs — deleting is permanent", disk.RustRiskReview},
 	} {
 		rep.Cats[i].Name, rep.Cats[i].Note, rep.Cats[i].Risk = c.name, c.note, c.risk
 	}

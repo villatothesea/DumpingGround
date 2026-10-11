@@ -468,7 +468,7 @@ func (m *Model) junkResultsView(c *ui.Context, t *ui.Theme) {
 func (m *Model) junkLegendModal(c *ui.Context, t *ui.Theme) {
 	rep := m.junkReport
 	ui.Modal(c, &m.junkLegendOpen, func() {
-		ui.Column(c).Width(640).MaxHeight(520).Padding(6, 16, 14, 16).Gap(10).Children(func() {
+		ui.Column(c).Width(800).MaxHeight(520).Padding(6, 16, 14, 16).Gap(10).Children(func() {
 			ui.Text(c, "What the numbers mean").Bold().FontSize(16)
 			ui.Text(c, "Each number is a cleanup category. Every row lights the badge of the category it belongs to; the filter badges above narrow the table to one category.").
 				FontSize(11).TextColor(t.TextMuted)
