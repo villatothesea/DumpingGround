@@ -15,29 +15,26 @@ var junkGreen = ui.RGB(0x1B, 0x8A, 0x5A)
 
 // junkPreset bundles categories by risk tier, like the Rust page's
 // plans. Light is every SAFE category; Deep adds the MODERATE ones.
-// Windows.old stays out of both — review-only. badgesFrom lets a plan
-// draw only its delta — Deep shows "Light + 8 9 10 11".
+// Windows.old stays out of both — review-only.
 type junkPreset struct {
 	name, tag, note, cost string
 	from, to              int // inclusive category range the plan removes
-	badgesFrom            int // first badge drawn on the card
 }
 
 var junkPresets = []junkPreset{
 	{name: "Light", tag: "SAFE", note: "all seven SAFE categories — temp, caches, reports",
 		cost: "Cost: nothing — everything regenerates or re-downloads on its own",
-		from: 0, to: disk.JunkCatRecycleBin, badgesFrom: 0},
+		from: 0, to: disk.JunkCatRecycleBin},
 	{name: "Deep", tag: "+ MODERATE", note: "everything in Light, plus update staging, dumps, logs, dev caches",
 		cost: "Cost: re-downloads, one slower update, lost diagnostic logs",
-		from: 0, to: disk.JunkCatDevCaches, badgesFrom: disk.JunkCatUpdateDl},
+		from: 0, to: disk.JunkCatDevCaches},
 }
 
-// junkGroup* are the row-grouping modes — mutually exclusive, so the
-// table never nests two levels.
+// Grouping dimensions for the junk table. Both can be on at once —
+// the table nests two levels, ordered by junkCatFirst.
 const (
-	junkGroupNone = iota
-	junkGroupRisk
-	junkGroupCat
+	junkDimRisk = iota
+	junkDimCat
 )
 
 // junkScan measures every cleanup location off the UI goroutine. The
@@ -109,19 +106,21 @@ func junkJobsBytes(jobs []*disk.JunkDir) uint64 {
 }
 
 // junkRow is one row in the cleanup table — a group header (head set;
-// catHead marks a category header, otherwise it is a risk header) or
-// one measured location (d set).
+// headDim is the dimension it groups by) or one measured location
+// (d set). depth is the indent level for grouped rows and headers.
 type junkRow struct {
 	head    string
-	catHead bool
+	headDim int    // junkDimRisk / junkDimCat for headers, -1 for data rows
+	key     string // collapse key for headers
+	depth   int
 	cat     int
 	d       *disk.JunkDir
 	risk    int
 }
 
 // junkRows builds the display list: category filter, then size sort,
-// then optional grouping — by risk level or by category, never both.
-// Collapsed groups keep their header but hide members.
+// then grouping by the enabled dimensions — risk and category may nest,
+// outer first per junkCatFirst. Collapsed groups keep their header.
 func (m *Model) junkRows() []junkRow {
 	rep := m.junkReport
 	var rows []junkRow
@@ -134,49 +133,79 @@ func (m *Model) junkRows() []junkRow {
 		}
 	}
 	sort.SliceStable(rows, func(a, b int) bool { return rows[a].d.Bytes > rows[b].d.Bytes })
-	if m.junkGroupMode == junkGroupNone {
-		return rows
-	}
-	grouped := make([]junkRow, 0, len(rows)+4)
-	emit := func(key int, head string, catHead bool, cat, risk int, members []junkRow) {
-		grouped = append(grouped, junkRow{head: head, catHead: catHead, cat: cat, risk: risk})
-		if !m.junkCollapsed[key] {
-			grouped = append(grouped, members...)
+	var dims []int
+	if m.junkCatFirst {
+		if m.junkGroupCat {
+			dims = append(dims, junkDimCat)
+		}
+		if m.junkGroupRisk {
+			dims = append(dims, junkDimRisk)
+		}
+	} else {
+		if m.junkGroupRisk {
+			dims = append(dims, junkDimRisk)
+		}
+		if m.junkGroupCat {
+			dims = append(dims, junkDimCat)
 		}
 	}
-	if m.junkGroupMode == junkGroupCat {
-		for cat := 0; cat < disk.JunkCatCount; cat++ {
-			var members []junkRow
+	if len(dims) == 0 {
+		return rows
+	}
+	var grouped []junkRow
+	var emit func(members []junkRow, depth, dimIdx int, prefix string)
+	emit = func(members []junkRow, depth, dimIdx int, prefix string) {
+		if dimIdx == len(dims) {
+			for _, r := range members {
+				r.depth = depth
+				grouped = append(grouped, r)
+			}
+			return
+		}
+		dim := dims[dimIdx]
+		dimChar := "r"
+		n := disk.RustRiskReview + 1
+		if dim == junkDimCat {
+			dimChar, n = "c", disk.JunkCatCount
+		}
+		for v := 0; v < n; v++ {
+			var sub []junkRow
 			var bytes uint64
-			for _, r := range rows {
-				if r.cat == cat {
-					members = append(members, r)
+			for _, r := range members {
+				key := r.risk
+				if dim == junkDimCat {
+					key = r.cat
+				}
+				if key == v {
+					sub = append(sub, r)
 					bytes += r.d.Bytes
 				}
 			}
-			if len(members) == 0 {
+			if len(sub) == 0 {
 				continue
 			}
-			emit(cat, fmt.Sprintf("%s — %s · %s", rep.Cats[cat].Name,
-				junkItemCount(len(members)), format.Bytes(bytes)), true, cat, rep.Cats[cat].Risk, members)
-		}
-		return grouped
-	}
-	for risk := disk.RustRiskSafe; risk <= disk.RustRiskReview; risk++ {
-		var members []junkRow
-		var bytes uint64
-		for _, r := range rows {
-			if r.risk == risk {
-				members = append(members, r)
-				bytes += r.d.Bytes
+			var head string
+			headRisk := disk.RustRiskSafe
+			if dim == junkDimCat {
+				head = fmt.Sprintf("%s — %s · %s", rep.Cats[v].Name, junkItemCount(len(sub)), format.Bytes(bytes))
+				headRisk = rep.Cats[v].Risk
+			} else {
+				head = fmt.Sprintf("%s — %s · %s", rustRiskLabel(v), junkItemCount(len(sub)), format.Bytes(bytes))
+				headRisk = v
 			}
+			key := prefix + dimChar + fmt.Sprint(v)
+			cat := -1
+			if dim == junkDimCat {
+				cat = v
+			}
+			grouped = append(grouped, junkRow{head: head, headDim: dim, key: key, depth: depth, cat: cat, risk: headRisk})
+			if m.junkCollapsed[key] {
+				continue
+			}
+			emit(sub, depth+1, dimIdx+1, key+"/")
 		}
-		if len(members) == 0 {
-			continue
-		}
-		emit(risk, fmt.Sprintf("%s — %s · %s", rustRiskLabel(risk),
-			junkItemCount(len(members)), format.Bytes(bytes)), false, -1, risk, members)
 	}
+	emit(rows, 0, 0, "")
 	return grouped
 }
 
@@ -336,23 +365,19 @@ func (m *Model) junkResultsView(c *ui.Context, t *ui.Theme) {
 			ui.List(c, &m.junkList, len(rows), func(i int) {
 				r := rows[i]
 				if r.head != "" {
-					key := r.risk
-					if r.catHead {
-						key = r.cat
-					}
-					collapsed := m.junkCollapsed[key]
+					collapsed := m.junkCollapsed[r.key]
 					g := "caret-d"
 					if collapsed {
 						g = "caret-r"
 					}
-					he := ui.Row(c).FillWidth().Height(26).Padding(0, 10).Gap(6).AlignItems(ui.Center).Radius(4).
+					he := ui.Row(c).FillWidth().Height(26).Padding(0, float32(10+r.depth*18)).Gap(6).AlignItems(ui.Center).Radius(4).
 						Cursor(ui.CursorPointer).Label("Toggle group " + r.head)
 					if he.Hovered() {
 						he.Background(t.SurfaceHover)
 					}
 					he.Children(func() {
 						icon(c, g, 10).TextColor(t.TextMuted)
-						if r.catHead {
+						if r.headDim == junkDimCat {
 							tierBadge(c, t, r.cat+1, false)
 							ui.Text(c, r.head).FontSize(11).Bold().TextColor(t.Text).Shrink(0)
 							ui.Text(c, "· "+rep.Cats[r.cat].Note).FontSize(11).TextColor(t.TextMuted).SingleLine().MinWidth(0)
@@ -362,7 +387,7 @@ func (m *Model) junkResultsView(c *ui.Context, t *ui.Theme) {
 						}
 					})
 					if he.Clicked() {
-						m.junkCollapsed[key] = !collapsed
+						m.junkCollapsed[r.key] = !collapsed
 					}
 					return
 				}
@@ -370,7 +395,7 @@ func (m *Model) junkResultsView(c *ui.Context, t *ui.Theme) {
 				if m.junkSel >= 0 && m.junkSel < len(junkPresets) && r.d.Skip == "" {
 					hit = r.cat >= junkPresets[m.junkSel].from && r.cat <= junkPresets[m.junkSel].to
 				}
-				row := ui.Row(c).FillWidth().Height(28).Padding(0, 10).Gap(6).AlignItems(ui.Center).Radius(4)
+				row := ui.Row(c).FillWidth().Height(28).Padding(0, float32(10+r.depth*18)).Gap(6).AlignItems(ui.Center).Radius(4)
 				hovered := row.Hovered()
 				switch {
 				case hit:
@@ -391,6 +416,9 @@ func (m *Model) junkResultsView(c *ui.Context, t *ui.Theme) {
 					ui.Row(c).Width(78).Shrink(0).Children(func() {
 						ui.Text(c, rustRiskLabel(r.risk)).FontSize(10).Bold().TextColor(rustRiskColor(t, r.risk))
 					})
+					if r.risk == disk.RustRiskReview {
+						icon(c, "warn", 12).TextColor(t.Warning).Tooltip(rep.Cats[r.cat].Note)
+					}
 					ui.Text(c, rep.Cats[r.cat].Name).FontSize(11).TextColor(t.Accent).Shrink(0).
 						Tooltip(rep.Cats[r.cat].Note)
 					ptxt := ui.Text(c, r.d.Path).SingleLine().Tooltip(r.d.Path).Grow(1).MinWidth(0)
@@ -437,23 +465,15 @@ func (m *Model) junkFilterStrip(c *ui.Context, t *ui.Theme) {
 			}
 		}
 		ui.Text(c, "Group:").FontSize(11).TextColor(t.TextMuted).Shrink(0)
-		for mode, name := range []string{"None", "Risk", "Category"} {
-			mode := mode
-			seg := ui.Row(c).Height(20).PaddingX(7).Radius(4).AlignItems(ui.Center).Cursor(ui.CursorPointer)
-			if m.junkGroupMode == mode {
-				seg.Background(t.Accent.Alpha(0.18))
-			} else if seg.Hovered() {
-				seg.Background(t.SurfaceHover)
+		ui.Checkbox(c, &m.junkGroupRisk, "Risk").Tooltip("Group rows under risk-level headers")
+		ui.Checkbox(c, &m.junkGroupCat, "Category").Tooltip("Group rows under category headers")
+		if m.junkGroupRisk && m.junkGroupCat {
+			order := "Risk → Category"
+			if m.junkCatFirst {
+				order = "Category → Risk"
 			}
-			seg.Children(func() {
-				col := t.TextMuted
-				if m.junkGroupMode == mode {
-					col = t.Accent
-				}
-				ui.Text(c, name).FontSize(11).TextColor(col)
-			})
-			if seg.Clicked() {
-				m.junkGroupMode = mode
+			if ui.Button(c, "⇄ "+order).Height(20).Clicked() {
+				m.junkCatFirst = !m.junkCatFirst
 			}
 		}
 		if m.junkFilterCat >= 0 {
@@ -492,10 +512,7 @@ func (m *Model) junkPresetCard(c *ui.Context, t *ui.Theme, p int) {
 		})
 		ui.Text(c, format.Bytes(bytes)).FontSize(18).Bold()
 		ui.Row(c).Gap(3).AlignItems(ui.Center).Children(func() {
-			if pre.badgesFrom > pre.from {
-				ui.Text(c, "Light +").FontSize(10).Bold().TextColor(t.Text).Shrink(0)
-			}
-			for cat := pre.badgesFrom; cat <= pre.to; cat++ {
+			for cat := pre.from; cat <= pre.to; cat++ {
 				tierBadge(c, t, cat+1, len(m.junkReport.Cats[cat].Dirs) == 0).Tooltip(m.junkReport.Cats[cat].Name)
 			}
 		})

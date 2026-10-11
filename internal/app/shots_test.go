@@ -116,15 +116,15 @@ func TestScreenshotStates(t *testing.T) {
 	tt6.SetDark(true)
 	tt6.Frame()
 	dump(t, tt6, dest, "junk-report.png")
-	m4.junkGroupMode = junkGroupRisk
+	m4.junkGroupRisk = true
 	m4.junkSel = 0
 	tt6.Frame()
 	dump(t, tt6, dest, "junk-grouped.png")
-	// Category grouping with the SAFE categories collapsed away.
-	m4.junkGroupMode = junkGroupCat
-	m4.junkCollapsed[disk.JunkCatUserTemp] = true
+	// Nested grouping — risk outer, category inner, one group collapsed.
+	m4.junkGroupCat = true
+	m4.junkCollapsed["r0/c1"] = true
 	tt6.Frame()
-	dump(t, tt6, dest, "junk-by-category.png")
+	dump(t, tt6, dest, "junk-nested.png")
 }
 
 // testJunkReport fabricates a cleanup report resembling a real measure.

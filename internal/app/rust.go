@@ -562,7 +562,11 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 					return
 				}
 				hit := m.rustRowHit(r)
-				row := ui.Row(c).FillWidth().Height(28).Padding(0, 10).Gap(6).AlignItems(ui.Center).Radius(4)
+				pad := 10
+				if m.rustGroupSafe {
+					pad += 18
+				}
+				row := ui.Row(c).FillWidth().Height(28).Padding(0, float32(pad)).Gap(6).AlignItems(ui.Center).Radius(4)
 				hovered := row.Hovered()
 				switch {
 				case hit:

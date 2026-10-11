@@ -83,18 +83,18 @@ var junkCatDefs = [JunkCatCount]struct {
 	name, note string
 	risk       int
 }{
-	{"User temp", "Files in %TEMP% untouched for over a week", RustRiskSafe},
-	{"Windows temp", "Files in C:\\Windows\\Temp untouched for over a week", RustRiskSafe},
-	{"Browser caches", "Chrome, Edge and Firefox cache dirs — pages reload slower once", RustRiskSafe},
-	{"Thumbnail cache", "Explorer thumbcache/iconcache — rebuilds while browsing folders", RustRiskSafe},
-	{"Shader cache", "DirectX shader cache — games recompile shaders once", RustRiskSafe},
-	{"Error reports", "Windows Error Reporting archives and queues", RustRiskSafe},
-	{"Recycle Bin", "Files already deleted and held in the bin", RustRiskSafe},
-	{"Update downloads", "Installed updates' staging files — Windows re-downloads when needed", RustRiskModerate},
-	{"Crash dumps", "Minidumps and memory dumps — needed only for diagnosing crashes", RustRiskModerate},
-	{"Windows logs", "Setup, servicing and firewall logs from whitelisted locations", RustRiskModerate},
-	{"Dev caches", "Go, npm, pip and Gradle caches — re-downloaded on demand", RustRiskModerate},
-	{"Windows.old", "Previous Windows installation — deleting removes the rollback option", RustRiskReview},
+	{"User temp", "Apps recreate what they still need; anything touched this week is kept", RustRiskSafe},
+	{"Windows temp", "Same rule as user temp, for system-level temp files", RustRiskSafe},
+	{"Browser caches", "First page loads are slower once — logins, history, passwords and autofill all stay", RustRiskSafe},
+	{"Thumbnail cache", "Folder thumbnails redraw slowly until Explorer rebuilds them", RustRiskSafe},
+	{"Shader cache", "Games recompile shaders once — the first launch stutters a bit", RustRiskSafe},
+	{"Error reports", "Old crash reports gone — only matters when diagnosing past crashes", RustRiskSafe},
+	{"Recycle Bin", "Deleted files become unrecoverable — the bin is the last undo", RustRiskSafe},
+	{"Update downloads", "Staging files from installed updates — Windows re-downloads if needed", RustRiskModerate},
+	{"Crash dumps", "Crash evidence is gone — keep it if you are diagnosing a crash right now", RustRiskModerate},
+	{"Windows logs", "Setup and servicing history lost — only matters for troubleshooting", RustRiskModerate},
+	{"Dev caches", "The next go/npm/pip/gradle run re-downloads — slower once", RustRiskModerate},
+	{"Windows.old", "Cannot roll back to the previous Windows — this is permanent", RustRiskReview},
 }
 
 // JunkCatName reports a category's display name, for progress text.

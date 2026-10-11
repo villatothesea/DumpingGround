@@ -39,6 +39,7 @@ var glyphs = map[string]*ui.SVG{
 	"broom": glyph(`<path d="M17.5 3.5l-8.5 8.5"/><path d="M9 12l3.5 3.5"/><path d="M11.5 12.5l-7.5 7.5"/><path d="M13.5 14.5l-6 6"/><path d="M15.5 16.5l-3.5 3.5"/><path d="M5.5 18.5l-1.5 1.5"/>`),
 	"caret-r": glyph(`<path d="M9 5l7 7-7 7z" fill="currentColor" stroke="none"/>`),
 	"caret-d": glyph(`<path d="M5 9h14l-7 7z" fill="currentColor" stroke="none"/>`),
+	"warn":    glyph(`<path d="M12 3l10 18H2z"/><path d="M12 10v5"/><path d="M12 18.5h.01"/>`),
 	"net":  glyph(`<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>`),
 	"end":  glyph(`<path d="M18.4 6.6a8 8 0 1 0 0 10.8"/><path d="M12 8v4"/>`),
 }

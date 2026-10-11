@@ -195,8 +195,10 @@ type Model struct {
 	junkConfirm                     int  // preset armed for the second click, -1 none
 	junkRowConfirm                  string // path whose row clean button is armed
 	junkFilterCat                   int    // category filtering the row list, -1 all
-	junkGroupMode                   int    // junkGroupNone / junkGroupRisk / junkGroupCat
-	junkCollapsed                   map[int]bool // collapsed groups, keyed by risk or category
+	junkGroupRisk                   bool   // group rows under risk-level headers
+	junkGroupCat                    bool   // group rows under category headers — stacks with risk
+	junkCatFirst                    bool   // when both groupings are on, category is the outer level
+	junkCollapsed                   map[string]bool // collapsed group headers, keyed by group path
 	junkAnCat                       int    // category currently being measured
 	junkPathsCat                    int    // category whose path list the modal shows, -1 none
 	junkPathsOpen                   bool
@@ -222,7 +224,7 @@ func New() *Model {
 		diskStatus: "Choose a drive or folder to scan", diskMode: "Tree", diskMetric: "Allocated", diskSelected: -1, diskNode: -1, extensionSelected: -1, mapRoot: -1, diskSplit: 300, animateMap: true, detailTab: "Properties", memRelease: "Automatic",
 		rustGone: map[string]bool{}, rustSel: -1, rustConfirm: -1, rustRecycle: true, rustPathsCat: -1,
 		rustFilterCat: -1, junkSel: -1, junkConfirm: -1, junkFilterCat: -1, junkPathsCat: -1,
-		rustCollapsed: map[int]bool{}, junkCollapsed: map[int]bool{}}
+		rustCollapsed: map[int]bool{}, junkCollapsed: map[string]bool{}}
 }
 func (m *Model) Run() error {
 	if os.Getenv("DG_DEBUG_INSTANCE") != "" {
