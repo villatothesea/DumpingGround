@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -17,6 +18,7 @@ var (
 	procRegEnumKeyEx  = advapi.NewProc("RegEnumKeyExW")
 	procRegEnumValue  = advapi.NewProc("RegEnumValueW")
 	procRegQueryValue = advapi.NewProc("RegQueryValueExW")
+	procRegQueryInfo  = advapi.NewProc("RegQueryInfoKeyW")
 	procRegCreateKey  = advapi.NewProc("RegCreateKeyExW")
 	procRegSetValue   = advapi.NewProc("RegSetValueExW")
 	msiDLL            = syscall.NewLazyDLL("msi.dll")
@@ -66,6 +68,15 @@ func openKey(root, access uintptr, sub string) (regKey, error) {
 
 func (k regKey) close() {
 	procRegCloseKey.Call(uintptr(k))
+}
+
+// writeTime returns the key's last write time. Installers stamp their
+// Uninstall key when they install (or upgrade), so it stands in for
+// InstallDate when the app never wrote one.
+func (k regKey) writeTime() (t syscall.Filetime, ok bool) {
+	r, _, _ := procRegQueryInfo.Call(uintptr(k), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		uintptr(unsafe.Pointer(&t)))
+	return t, r == 0
 }
 
 // subKeys yields the immediate child key names.
@@ -173,6 +184,7 @@ func enumUninstall() []Entry {
 				continue
 			}
 			vals, err := k.values()
+			stamp, stampOK := k.writeTime()
 			k.close()
 			if err != nil {
 				continue
@@ -232,6 +244,9 @@ func enumUninstall() []Entry {
 			if e.Location == "" {
 				e.Location = e.programFilesLocation()
 			}
+			if e.InstallDate == "" && stampOK {
+				e.InstallDate = time.Unix(0, stamp.Nanoseconds()).Format("20060102")
+			}
 			if e.Location == "" {
 				// Custom-path installs (Bitwig) record nothing — a
 				// shortcut named after the app points back at it.
@@ -255,6 +270,11 @@ func enumUninstall() []Entry {
 			}
 			if e.Location != "" && !SaneLocation(e.Location) {
 				e.Location = "" // a fallback found a root, not a folder
+			}
+			// Installers write InstallLocation with and without a
+			// trailing slash; dedupe and display treat them as one.
+			if len(e.Location) > 3 {
+				e.Location = strings.TrimSuffix(e.Location, `\`)
 			}
 			if sz := vals["EstimatedSize"].dword(); sz > 0 {
 				e.SizeBytes = sz * 1024 // EstimatedSize is kilobytes

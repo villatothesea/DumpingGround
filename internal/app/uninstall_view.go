@@ -445,29 +445,13 @@ func (m *Model) launchUninstall(e *uninstall.Entry) {
 	}()
 }
 
-// sweepConfColor tags each leftover with its confidence.
-func sweepConfColor(t *ui.Theme, conf uninstall.Confidence) ui.Color {
-	switch conf {
-	case uninstall.Confirmed:
-		return t.Accent
-	case uninstall.Likely:
-		return t.Warning
-	default:
-		return t.TextMuted
-	}
-}
-
-func sweepConfLabel(conf uninstall.Confidence) string {
-	return [...]string{"CONFIRMED", "LIKELY", "REVIEW"}[conf]
-}
-
 // sweepModal is the leftover review list — per-item checkboxes, an
 // explanation of reversibility, and the armed two-click Remove.
 func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 	ui.Modal(c, &m.sweepOpen, func() {
 		ui.Column(c).MaxHeight(900).Padding(6, 16, 14, 16).Gap(10).Children(func() {
 			ui.Text(c, "Leftovers — "+m.sweepName).Bold().FontSize(16)
-			subtitle := "Everything listed belongs to " + m.sweepName + " — CONFIRMED items come from its registry record, LIKELY items match its exact name. Folders go to the Recycle Bin; registry items are exported to a .reg backup in the log folder first."
+			subtitle := "Everything listed belongs to " + m.sweepName + " — verified against its registry record or its exact name. Folders go to the Recycle Bin; registry items are exported to a .reg backup in the log folder first."
 			if m.sweepName == orphanScanName {
 				subtitle = "Every item is a verified leftover of something already removed — dead references, empty folders, name-matched traces. Folders go to the Recycle Bin; registry items get a .reg backup in the log folder first."
 			}
@@ -490,9 +474,6 @@ func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 					}
 					row.Children(func() {
 						ui.Checkbox(c, &m.sweepSel[i], "")
-						ui.Row(c).Width(88).Shrink(0).Children(func() {
-							ui.Text(c, sweepConfLabel(it.Confidence)).FontSize(13).Bold().TextColor(sweepConfColor(t, it.Confidence))
-						})
 						ui.Text(c, it.Path).FontSize(13).SingleLine().Grow(1).MinWidth(0).
 							Tooltip(it.Path + "\n" + it.Why)
 						if it.Kind == uninstall.KindDir && it.Bytes > 0 {
@@ -517,7 +498,7 @@ func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 				if len(m.sweepItems) == 0 {
 					keep = "Close"
 				}
-				if ui.Button(c, keep).Clicked() {
+				if m.iconTextButton(c, "right", keep).Clicked() {
 					uninstall.ClearPending(m.sweepName)
 					m.sweepOpen = false
 				}
