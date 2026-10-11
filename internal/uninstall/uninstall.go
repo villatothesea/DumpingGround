@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -98,10 +99,19 @@ func regPath(s string) string {
 	return os.ExpandEnv(s)
 }
 
-// IconPath resolves DisplayIcon into a file the shell can raster an
-// icon from — unquotes it, drops a ",N" icon-index suffix and expands
-// environment variables. Empty when nothing usable remains.
+// IconPath resolves a file the shell can raster an icon from. It
+// prefers DisplayIcon — unquoted, ",N" index stripped, env-expanded —
+// and falls back to the app's exe inside InstallLocation when the
+// registry has no icon or points at the uninstaller itself.
 func (e *Entry) IconPath() string {
+	if s := e.displayIconPath(); s != "" && !isUninstallerName(s) {
+		return s
+	}
+	return e.exeFallback()
+}
+
+// displayIconPath cleans the registry DisplayIcon value.
+func (e *Entry) displayIconPath() string {
 	s := regPath(e.Icon)
 	if i := strings.LastIndex(s, ","); i > 0 {
 		if _, err := strconv.Atoi(strings.TrimSpace(s[i+1:])); err == nil {
@@ -115,6 +125,58 @@ func (e *Entry) IconPath() string {
 		return ""
 	}
 	return s
+}
+
+// exeFallback looks inside the install folder for a plausible app exe:
+// first a name match, then "the only real exe here". Uninstallers and
+// updaters are never picked.
+func (e *Entry) exeFallback() string {
+	if e.Location == "" {
+		return ""
+	}
+	first := ""
+	if w := strings.Fields(e.Name); len(w) > 0 {
+		first = norm(w[0])
+	}
+	var only string
+	for _, dir := range []string{e.Location, filepath.Join(e.Location, "bin")} {
+		kids, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		count := 0
+		for _, k := range kids {
+			if k.IsDir() || !strings.HasSuffix(strings.ToLower(k.Name()), ".exe") {
+				continue
+			}
+			p := filepath.Join(dir, k.Name())
+			if isUninstallerName(p) {
+				continue
+			}
+			count++
+			stem := norm(strings.TrimSuffix(k.Name(), filepath.Ext(k.Name())))
+			if stem == norm(e.Name) || len(first) >= 4 && strings.HasPrefix(stem, first) {
+				return p // name match wins outright
+			}
+			only = p
+		}
+		if count == 1 {
+			return only
+		}
+	}
+	return ""
+}
+
+// isUninstallerName reports whether a path names an uninstaller,
+// updater or setup stub — never a good app icon.
+func isUninstallerName(path string) bool {
+	stem := norm(strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)))
+	for _, bad := range []string{"unins", "uninstall", "unwise", "setup", "update", "install"} {
+		if strings.HasPrefix(stem, bad) {
+			return true
+		}
+	}
+	return false
 }
 
 // SplitCmdline breaks a stored command line into exe and arguments.
