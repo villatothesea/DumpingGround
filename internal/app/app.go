@@ -228,6 +228,7 @@ type Model struct {
 	sweepArmed                      bool
 	sweepRestored                   bool // pending review was offered once this launch
 	sweepList                       ui.ListState
+	orphanScanning                  bool // leftover scan for already-removed apps in flight
 	events                          chan func()
 	// CaptureDir writes only this application's frames during explicit diagnostics.
 	CaptureDir  string

@@ -3,10 +3,12 @@
 package uninstall
 
 import (
+	"encoding/binary"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"unicode/utf16"
 )
 
 // classRoot is one Classes hive view plus its subkey names, enumerated
@@ -192,17 +194,95 @@ func linkTarget(path string) string {
 	if err != nil || len(data) > 1<<20 {
 		return ""
 	}
+	return scanLink(data, absPath)
+}
+
+// linkTargetRaw is the link's true target whether it still exists or
+// not — the orphan scan wants precisely the dead ones. It parses the
+// LinkInfo structure rather than scanning bytes: byte scans misread
+// ANSI strings as UTF-16 at odd offsets and invent path-shaped runs.
+func linkTargetRaw(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil || len(data) > 1<<20 {
+		return ""
+	}
+	return parseLinkTarget(data)
+}
+
+// parseLinkTarget reads the LinkInfo local base path — the shortcut's
+// recorded target — from the shell-link binary layout (MS-SHLLINK).
+// "" when the link stores none (AppUserModelID links, network-only
+// links): nothing was proven about any target then.
+func parseLinkTarget(data []byte) string {
+	if len(data) < 0x4C || binary.LittleEndian.Uint32(data) != 0x4C {
+		return ""
+	}
+	flags := binary.LittleEndian.Uint32(data[0x14:])
+	off := 0x4C
+	if flags&0x1 != 0 { // HasLinkTargetIDList — skip the PIDL block
+		if off+2 > len(data) {
+			return ""
+		}
+		off += 2 + int(binary.LittleEndian.Uint16(data[off:]))
+	}
+	if flags&0x2 == 0 || off+0x1C > len(data) { // no LinkInfo
+		return ""
+	}
+	liSize := int(binary.LittleEndian.Uint32(data[off:]))
+	if liSize < 0x1C || off+liSize > len(data) {
+		return ""
+	}
+	li := data[off : off+liSize]
+	if binary.LittleEndian.Uint32(li[8:])&0x1 == 0 {
+		return "" // no local base path — network-linked only
+	}
+	hdr := int(binary.LittleEndian.Uint32(li[4:]))
+	if hdr >= 0x24 { // newer headers carry a UTF-16 local base path
+		if uoff := int(binary.LittleEndian.Uint32(li[0x1C:])); uoff > 0 && uoff < liSize {
+			if s := utf16StringAt(li[uoff:]); s != "" {
+				return s
+			}
+		}
+	}
+	if aoff := int(binary.LittleEndian.Uint32(li[0x10:])); aoff > 0 && aoff < liSize {
+		return ansiStringAt(li[aoff:])
+	}
+	return ""
+}
+
+// utf16StringAt reads a NUL-terminated UTF-16 string at the start of b.
+func utf16StringAt(b []byte) string {
+	var u []uint16
+	for i := 0; i+1 < len(b); i += 2 {
+		r := binary.LittleEndian.Uint16(b[i:])
+		if r == 0 {
+			break
+		}
+		u = append(u, r)
+	}
+	return strings.TrimSpace(string(utf16.Decode(u)))
+}
+
+// ansiStringAt reads a NUL-terminated byte string at the start of b.
+func ansiStringAt(b []byte) string {
+	if i := strings.IndexByte(string(b), 0); i >= 0 {
+		return strings.TrimSpace(string(b[:i]))
+	}
+	return strings.TrimSpace(string(b))
+}
+
+func scanLink(data []byte, valid func(string) string) string {
 	// The path shows up twice: 8-bit and UTF-16. UTF-16 first — it is
 	// unambiguous — then the ANSI form.
 	for _, off := range []int{0, 1} { // UTF-16 strings may sit at odd offsets
-		if t := scanUTF16Path(data, off); t != "" {
+		if t := scanUTF16Path(data, off, valid); t != "" {
 			return t
 		}
 	}
-	return scanANSIPath(data)
+	return scanANSIPath(data, valid)
 }
 
-func scanUTF16Path(data []byte, off int) string {
+func scanUTF16Path(data []byte, off int, valid func(string) string) string {
 	var b strings.Builder
 	for i := off; i+1 < len(data); i += 2 {
 		r := rune(data[i]) | rune(data[i+1])<<8
@@ -210,27 +290,27 @@ func scanUTF16Path(data []byte, off int) string {
 			b.WriteRune(r)
 			continue
 		}
-		if s := absPath(b.String()); s != "" {
+		if s := valid(b.String()); s != "" {
 			return s
 		}
 		b.Reset()
 	}
-	return absPath(b.String())
+	return valid(b.String())
 }
 
-func scanANSIPath(data []byte) string {
+func scanANSIPath(data []byte, valid func(string) string) string {
 	var b strings.Builder
 	for _, by := range data {
 		if isPathChar(rune(by)) {
 			b.WriteByte(by)
 			continue
 		}
-		if s := absPath(b.String()); s != "" {
+		if s := valid(b.String()); s != "" {
 			return s
 		}
 		b.Reset()
 	}
-	return absPath(b.String())
+	return valid(b.String())
 }
 
 // isPathChar is permissive on purpose — spaces, CJK, punctuation all

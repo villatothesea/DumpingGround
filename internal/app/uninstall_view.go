@@ -54,6 +54,13 @@ func (m *Model) uninstallView(c *ui.Context, t *ui.Theme) {
 				status = "Waiting for " + m.uninstBusy + "'s uninstaller — rows unlock when it exits."
 			}
 			ui.Text(c, status).FontSize(11).TextColor(t.TextMuted).SingleLine()
+			broom := m.iconButton(c, "broom", "Scan for leftovers of apps already removed")
+			if m.orphanScanning {
+				broom = broom.Disabled(true)
+			}
+			if broom.Clicked() {
+				m.startOrphanScan()
+			}
 			if m.iconButton(c, "refresh", "Re-read the installed-apps list").Clicked() {
 				m.uninstLoaded = false
 			}
@@ -317,6 +324,43 @@ func (m *Model) startSweep(e *uninstall.Entry) {
 	}()
 }
 
+// orphanScanName titles the leftover review that aggregates several
+// already-removed apps — each item's Why carries its own context.
+const orphanScanName = "Removed apps"
+
+// startOrphanScan looks for leftovers of software that is already
+// gone — dead shortcuts, dead startup entries, stale associations,
+// empty Start Menu groups — plus name-matched traces of apps this tool
+// uninstalled before (their names live in uninstalled.json and past
+// logs). The same review modal shows what it finds.
+func (m *Model) startOrphanScan() {
+	if m.sweepOpen || m.orphanScanning || m.uninstBusy != "" {
+		return
+	}
+	m.orphanScanning = true
+	m.uninstMsg = "Scanning for leftovers of removed apps…"
+	all := append([]uninstall.Entry(nil), m.uninstRows...)
+	go func() {
+		items := uninstall.Orphans(all)
+		applog.Logf("orphan scan: %d items", len(items))
+		m.post(func() {
+			m.orphanScanning = false
+			if len(items) == 0 {
+				m.uninstMsg = "No leftovers of removed apps found"
+				return
+			}
+			m.sweepName = orphanScanName
+			m.sweepItems = items
+			m.sweepSel = make([]bool, len(items))
+			for i := range items {
+				m.sweepSel[i] = true
+			}
+			uninstall.SavePending(orphanScanName, items)
+			m.sweepOpen, m.sweepArmed = true, false
+		})
+	}()
+}
+
 // launchUninstall starts the vendor uninstaller, waits for it to exit,
 // then checks whether the registry entry went away. When the app is
 // gone the leftover review opens automatically; when the entry is
@@ -373,6 +417,11 @@ func (m *Model) launchUninstall(e *uninstall.Entry) {
 			for i := range items {
 				m.sweepSel[i] = true
 			}
+			if gone {
+				// The name keeps finding leftovers later — log-driven
+				// history is the orphan scan's name source.
+				uninstall.RecordUninstalled(entry.Name)
+			}
 			switch {
 			case len(items) == 0 && gone:
 				m.uninstMsg = entry.Name + " uninstalled — no leftovers found"
@@ -413,8 +462,11 @@ func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 	ui.Modal(c, &m.sweepOpen, func() {
 		ui.Column(c).Width(920).MaxHeight(680).Padding(6, 16, 14, 16).Gap(10).Children(func() {
 			ui.Text(c, "Leftovers — "+m.sweepName).Bold().FontSize(16)
-			ui.Text(c, "Everything listed belongs to "+m.sweepName+" — CONFIRMED items come from its registry record, LIKELY items match its exact name. Folders go to the Recycle Bin; registry items are exported to a .reg backup in the log folder first.").
-				FontSize(11).TextColor(t.TextMuted)
+			subtitle := "Everything listed belongs to " + m.sweepName + " — CONFIRMED items come from its registry record, LIKELY items match its exact name. Folders go to the Recycle Bin; registry items are exported to a .reg backup in the log folder first."
+			if m.sweepName == orphanScanName {
+				subtitle = "Every item is a verified leftover of something already removed — dead references, empty folders, name-matched traces. Folders go to the Recycle Bin; registry items get a .reg backup in the log folder first."
+			}
+			ui.Text(c, subtitle).FontSize(11).TextColor(t.TextMuted)
 			if len(m.sweepItems) == 0 {
 				ui.Text(c, "No leftovers found — the uninstaller left a clean machine.").FontSize(11).TextColor(t.TextMuted)
 			} else {
