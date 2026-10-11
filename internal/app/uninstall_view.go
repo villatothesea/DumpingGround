@@ -92,7 +92,6 @@ func (m *Model) uninstallView(c *ui.Context, t *ui.Theme) {
 			ui.Text(c, msg).TextColor(t.TextMuted)
 			return
 		}
-		rustSectionLabel(c, t, "Installed applications")
 		m.sweepModal(c, t)
 		if m.uninstList.Sort == nil {
 			m.uninstSort = ui.SortOrder{Column: "Size", Descending: true}
@@ -114,6 +113,11 @@ func (m *Model) uninstallView(c *ui.Context, t *ui.Theme) {
 		tbl := tableChrome(c, func() ui.Element {
 			return ui.Table(c, &m.uninstList, cols, len(rows), func(row, col int) {
 				e := rows[row]
+				sel := row == m.uninstSelected
+				text, muted := t.Text, t.TextMuted
+				if sel { // the row paints accent — light text or it is unreadable
+					text, muted = t.AccentText, t.AccentText
+				}
 				cell := ui.Row(c).Fill().Height(26).Gap(6).AlignItems(ui.Center)
 				if col == 0 {
 					if b := cell.Bounds(); b.H > 0 {
@@ -126,27 +130,27 @@ func (m *Model) uninstallView(c *ui.Context, t *ui.Theme) {
 						if bmp := m.processIcon(e.IconPath()); bmp != nil {
 							ui.Image(c, bmp).Size(16, 16).Shrink(0)
 						} else {
-							icon(c, "pkg", 13).TextColor(t.TextMuted)
+							icon(c, "pkg", 13).TextColor(muted)
 						}
-						ui.Text(c, e.Name).SingleLine().Tooltip(e.Name + "  " + e.Version)
+						ui.Text(c, e.Name).SingleLine().TextColor(text).Tooltip(e.Name + "  " + e.Version)
 					case 1:
-						ui.Text(c, e.Version).FontSize(11).SingleLine().Tooltip(e.Version)
+						ui.Text(c, e.Version).FontSize(11).SingleLine().TextColor(text).Tooltip(e.Version)
 					case 2:
-						ui.Text(c, e.Publisher).FontSize(11).TextColor(t.TextMuted).SingleLine().Tooltip(e.Publisher)
+						ui.Text(c, e.Publisher).FontSize(11).TextColor(muted).SingleLine().Tooltip(e.Publisher)
 					case 3:
 						sz := "—"
 						if e.EstimatedSize {
 							sz = format.Bytes(e.SizeBytes)
 						}
-						ui.Text(c, sz).FontSize(11)
+						ui.Text(c, sz).FontSize(11).TextColor(text)
 					case 4:
 						d := e.Date()
 						if d == "" {
 							d = "—"
 						}
-						ui.Text(c, d).FontSize(11).TextColor(t.TextMuted).Tooltip(e.InstallDate)
+						ui.Text(c, d).FontSize(11).TextColor(muted).Tooltip(e.InstallDate)
 					case 5:
-						ui.Text(c, e.Location).FontSize(10).TextColor(t.TextMuted).SingleLine().Tooltip(e.Location)
+						ui.Text(c, e.Location).FontSize(10).TextColor(muted).SingleLine().Tooltip(e.Location)
 					default:
 						m.uninstRowActions(c, t, e)
 					}
@@ -428,12 +432,13 @@ func (m *Model) launchUninstall(e *uninstall.Entry) {
 				applog.Logf("clean uninstall  %s", entry.Name)
 			case gone:
 				m.uninstMsg = entry.Name + " uninstalled — reviewing leftovers"
-				m.sweepOpen, m.sweepArmed = true, false
 			default:
 				m.uninstMsg = entry.Name + " — uninstaller exited but the entry is still listed; review before removing"
-				m.sweepOpen, m.sweepArmed = true, false
 			}
-			if m.sweepOpen {
+			// The review opens even when nothing was found — the user
+			// deserves to see the scan ran, not to wonder whether it did.
+			m.sweepOpen, m.sweepArmed = true, false
+			if len(items) > 0 {
 				uninstall.SavePending(entry.Name, items)
 			}
 		})
@@ -501,7 +506,11 @@ func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 				ui.Text(c, fmt.Sprintf("%d of %d selected · %s", sel, len(m.sweepItems), format.Bytes(bytes))).
 					FontSize(11).TextColor(t.TextMuted)
 				ui.Spacer(c)
-				if ui.Button(c, "Keep leftovers").Clicked() {
+				keep := "Keep leftovers"
+				if len(m.sweepItems) == 0 {
+					keep = "Close"
+				}
+				if ui.Button(c, keep).Clicked() {
 					uninstall.ClearPending(m.sweepName)
 					m.sweepOpen = false
 				}
