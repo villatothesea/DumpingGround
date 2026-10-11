@@ -90,7 +90,7 @@ func TestScreenshotStates(t *testing.T) {
 	tt4.Frame()
 	dump(t, tt4, dest, "proc-pill-tabs.png")
 
-	// The Rust report: presets, collapsed category picker, project rows.
+	// The Rust report: presets, filter strip, project + shared rows.
 	m3 := testModel(t)
 	m3.page = diskPage
 	m3.rustMode = true
@@ -99,15 +99,11 @@ func TestScreenshotStates(t *testing.T) {
 	tt5.SetDark(true)
 	tt5.Frame()
 	dump(t, tt5, dest, "rust-report.png")
-	m3.rustAdvanced = true
-	m3.rustChecked[disk.RustCatIncr] = true
-	m3.rustChecked[disk.RustCatOrphans] = true
-	m3.rustSel = 100 + disk.RustCatIncr
-	// Let the collapsible finish opening before capturing.
-	for i := 0; i < 40; i++ {
-		tt5.Frame()
-	}
-	dump(t, tt5, dest, "rust-advanced.png")
+	// Filtered by incremental, grouped by safety level.
+	m3.rustFilterCat = disk.RustCatIncr
+	m3.rustGroupSafe = true
+	tt5.Frame()
+	dump(t, tt5, dest, "rust-filtered.png")
 }
 
 // testRustReport fabricates a report resembling a real scan for shot tests.

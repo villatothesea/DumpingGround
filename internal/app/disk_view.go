@@ -297,8 +297,7 @@ func (m *Model) clearDisk() {
 	m.rustSel = -1
 	m.rustConfirm = -1
 	m.rustRowConfirm = ""
-	m.rustAdvConfirm = false
-	m.rustChecked = [disk.RustCatCount]bool{}
+	m.rustFilterCat = -1
 	m.rustPathsCat = -1
 	m.rustPathsOpen = false
 	m.diskStatus = "Index cleared"

@@ -156,6 +156,13 @@ func DedupRustDirs(dirs []RustDir) []RustDir {
 	return out
 }
 
+// Rust analysis progress stages passed to FindRustTargets' progress
+// callback: the index walk first, then the on-disk cache measurement.
+const (
+	RustStageIndex = iota
+	RustStageCaches
+)
+
 // FindRustTargets walks the snapshot for directories named "target",
 // sorts them into Cargo projects (a Cargo.toml sits next to them),
 // orphans (cargo-built but the project marker is gone) and decoys, then
@@ -163,8 +170,9 @@ func DedupRustDirs(dirs []RustDir) []RustDir {
 // — ~/.cargo registry and git checkouts, ~/.rustup toolchains — are
 // measured directly since they live under the user profile no matter
 // which drive was scanned. gone, when non-nil, reports paths already
-// deleted so a re-analysis skips them.
-func FindRustTargets(s *Snapshot, gone func(string) bool) *RustReport {
+// deleted so a re-analysis skips them. progress, when non-nil, reports
+// (stage, nodes visited, targets found) as the walk proceeds.
+func FindRustTargets(s *Snapshot, gone func(string) bool, progress func(stage, visited, found int)) *RustReport {
 	rep := &RustReport{Scanned: s.Allocated}
 	cats := [RustCatCount]struct {
 		name, note string
@@ -200,6 +208,9 @@ func FindRustTargets(s *Snapshot, gone func(string) bool) *RustReport {
 		return false
 	}
 	for i := range s.Nodes {
+		if progress != nil && i&(1<<16-1) == 0 {
+			progress(RustStageIndex, i, rep.Projects)
+		}
 		n := &s.Nodes[i]
 		if !n.Dir || !strings.EqualFold(n.Name, "target") || dead(i) || inside(i) {
 			continue
@@ -274,8 +285,15 @@ func FindRustTargets(s *Snapshot, gone func(string) bool) *RustReport {
 			}
 		}
 		rep.Items = append(rep.Items, item)
+		if progress != nil {
+			progress(RustStageIndex, i+1, rep.Projects)
+		}
 	}
 	sort.Slice(rep.Items, func(a, b int) bool { return rep.Items[a].Total > rep.Items[b].Total })
+	if progress != nil {
+		progress(RustStageIndex, len(s.Nodes), rep.Projects)
+		progress(RustStageCaches, 0, rep.Projects)
+	}
 	rep.rustSharedCaches(gone)
 	return rep
 }

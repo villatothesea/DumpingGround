@@ -45,7 +45,7 @@ func isolateCaches(t *testing.T) {
 
 func TestFindRustTargetsCats(t *testing.T) {
 	isolateCaches(t)
-	rep := FindRustTargets(rustSnapshot(), nil)
+	rep := FindRustTargets(rustSnapshot(), nil, nil)
 	if rep.Projects != 1 {
 		t.Fatalf("projects=%d, want 1 (decoy target must be skipped)", rep.Projects)
 	}
@@ -86,7 +86,7 @@ func TestFindRustTargetsSkipsDeleted(t *testing.T) {
 	isolateCaches(t)
 	rep := FindRustTargets(rustSnapshot(), func(p string) bool {
 		return p == `C:\ws\proj\target` || p == `C:\ws\gone-proj\target`
-	})
+	}, nil)
 	if rep.Projects != 0 || len(rep.Items) != 0 {
 		t.Fatalf("deleted target still reported: %+v", rep)
 	}
@@ -97,7 +97,7 @@ func TestFindRustTargetsSkipsDeleted(t *testing.T) {
 
 func TestApplyDeletedCascades(t *testing.T) {
 	isolateCaches(t)
-	rep := FindRustTargets(rustSnapshot(), nil)
+	rep := FindRustTargets(rustSnapshot(), nil, nil)
 	// Deleting target/debug also takes its incremental dir with it; the
 	// nested check62/debug stays.
 	rep.ApplyDeleted(map[string]uint64{`C:\ws\proj\target\debug`: 70})
@@ -142,7 +142,7 @@ func TestSharedCachesAndToolchains(t *testing.T) {
 		[]byte("default_toolchain = \"stable-x86_64-pc-windows-msvc\"\n"), 0o644)
 	t.Setenv("CARGO_HOME", cargoHome)
 	t.Setenv("RUSTUP_HOME", rustupHome)
-	rep := FindRustTargets(rustSnapshot(), nil)
+	rep := FindRustTargets(rustSnapshot(), nil, nil)
 	if rep.Cats[RustCatRegistry].Bytes != 10 || rep.Cats[RustCatGit].Bytes != 10 {
 		t.Fatalf("shared caches: %+v %+v", rep.Cats[RustCatRegistry], rep.Cats[RustCatGit])
 	}
@@ -161,7 +161,7 @@ func TestToolchainsHiddenWithoutDefault(t *testing.T) {
 	os.WriteFile(filepath.Join(p, "rustc.exe"), make([]byte, 20), 0o644)
 	t.Setenv("CARGO_HOME", t.TempDir())
 	t.Setenv("RUSTUP_HOME", rustupHome)
-	rep := FindRustTargets(rustSnapshot(), nil)
+	rep := FindRustTargets(rustSnapshot(), nil, nil)
 	if len(rep.Cats[RustCatToolchains].Dirs) != 0 {
 		t.Fatalf("toolchains offered without a known default: %v", rep.Cats[RustCatToolchains].Dirs)
 	}

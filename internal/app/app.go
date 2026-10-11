@@ -176,9 +176,11 @@ type Model struct {
 	rustRowConfirm                  string // target path whose row clean button is armed
 	rustSortIdle                    bool   // sort report rows by idle days instead of size
 	rustRecycle                     bool   // send deletions to the recycle bin where possible
-	rustAdvanced                    bool   // the nine-category advanced picker is open
-	rustAdvConfirm                  bool   // the advanced "clean selected" batch is armed
-	rustChecked                     [disk.RustCatCount]bool
+	rustFilterCat                   int    // category filtering the row list, -1 all
+	rustGroupSafe                   bool   // group rows under risk-level headers
+	rustAnStage                     int    // analysis progress stage (disk.RustStage*)
+	rustAnVis                       int    // index nodes visited so far
+	rustAnFound                     int    // project targets found so far
 	rustPathsCat                    int // category whose path list the modal shows, -1 none
 	rustPathsOpen                   bool
 	rustPathsList                   ui.ListState
@@ -201,7 +203,8 @@ func New() *Model {
 		iconCache:   make(map[string]*ui.Bitmap),
 		iconPending: make(map[string]bool), iconRequests: make(chan string, 32),
 		diskStatus: "Choose a drive or folder to scan", diskMode: "Tree", diskMetric: "Allocated", diskSelected: -1, diskNode: -1, extensionSelected: -1, mapRoot: -1, diskSplit: 300, animateMap: true, detailTab: "Properties", memRelease: "Automatic",
-		rustGone: map[string]bool{}, rustSel: -1, rustConfirm: -1, rustRecycle: true, rustPathsCat: -1}
+		rustGone: map[string]bool{}, rustSel: -1, rustConfirm: -1, rustRecycle: true, rustPathsCat: -1,
+		rustFilterCat: -1}
 }
 func (m *Model) Run() error {
 	if os.Getenv("DG_DEBUG_INSTANCE") != "" {
