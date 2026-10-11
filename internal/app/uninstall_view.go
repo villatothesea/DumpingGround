@@ -465,13 +465,13 @@ func sweepConfLabel(conf uninstall.Confidence) string {
 // explanation of reversibility, and the armed two-click Remove.
 func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 	ui.Modal(c, &m.sweepOpen, func() {
-		ui.Column(c).Width(560).MinHeight(560).MaxHeight(900).Padding(6, 16, 14, 16).Gap(10).Children(func() {
+		ui.Column(c).MaxHeight(900).Padding(6, 16, 14, 16).Gap(10).Children(func() {
 			ui.Text(c, "Leftovers — "+m.sweepName).Bold().FontSize(16)
 			subtitle := "Everything listed belongs to " + m.sweepName + " — CONFIRMED items come from its registry record, LIKELY items match its exact name. Folders go to the Recycle Bin; registry items are exported to a .reg backup in the log folder first."
 			if m.sweepName == orphanScanName {
 				subtitle = "Every item is a verified leftover of something already removed — dead references, empty folders, name-matched traces. Folders go to the Recycle Bin; registry items get a .reg backup in the log folder first."
 			}
-			ui.Text(c, subtitle).FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, subtitle).FontSize(11).TextColor(t.TextMuted).MaxWidth(760)
 			if len(m.sweepItems) == 0 {
 				ui.Text(c, "No leftovers found — the uninstaller left a clean machine.").FontSize(11).TextColor(t.TextMuted)
 			} else {
@@ -484,14 +484,14 @@ func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 					row.Children(func() {
 						ui.Checkbox(c, &m.sweepSel[i], "")
 						ui.Row(c).Width(88).Shrink(0).Children(func() {
-							ui.Text(c, sweepConfLabel(it.Confidence)).Bold().TextColor(sweepConfColor(t, it.Confidence))
+							ui.Text(c, sweepConfLabel(it.Confidence)).FontSize(13).Bold().TextColor(sweepConfColor(t, it.Confidence))
 						})
-						ui.Text(c, it.Path).SingleLine().Grow(1).MinWidth(0).
+						ui.Text(c, it.Path).FontSize(13).SingleLine().Grow(1).MinWidth(0).
 							Tooltip(it.Path + "\n" + it.Why)
 						if it.Kind == uninstall.KindDir && it.Bytes > 0 {
-							ui.Text(c, format.Bytes(it.Bytes)).Shrink(0)
+							ui.Text(c, format.Bytes(it.Bytes)).FontSize(13).Shrink(0)
 						}
-						ui.Text(c, it.Why).TextColor(t.TextMuted).SingleLine().Shrink(0)
+						ui.Text(c, it.Why).FontSize(13).TextColor(t.TextMuted).SingleLine().Shrink(0)
 					})
 				}).Grow(1).MinHeight(120).FillWidth()
 			}
