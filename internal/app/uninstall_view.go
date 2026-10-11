@@ -108,8 +108,8 @@ func (m *Model) uninstallView(c *ui.Context, t *ui.Theme) {
 					}
 					ui.Text(c, d).FontSize(11).TextColor(t.TextMuted).Tooltip(e.InstallDate)
 				})
-				ui.Row(c).Width(170).Shrink(0).Children(func() {
-					ui.Text(c, e.Location).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Tooltip(e.Location)
+				ui.Row(c).Grow(1).MinWidth(0).Children(func() {
+					ui.Text(c, e.Location).FontSize(10).TextColor(t.TextMuted).SingleLine().Tooltip(e.Location)
 				})
 				m.uninstRowActions(c, t, e)
 			})
@@ -176,7 +176,7 @@ func (m *Model) uninstHeader(c *ui.Context, t *ui.Theme) {
 		ui.Row(c).Width(86).Shrink(0).Justify(ui.End).Children(func() {
 			m.uninstColHead(c, t, 4, "Installed", 0)
 		})
-		ui.Row(c).Width(170).Shrink(0).Children(func() {
+		ui.Row(c).Grow(1).MinWidth(0).Children(func() {
 			m.uninstColHead(c, t, 5, "Install location", 0)
 		})
 		ui.Box(c).Width(120).Shrink(0)
