@@ -4,8 +4,10 @@ package uninstall
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -52,11 +54,23 @@ func List() []Entry {
 }
 
 // Date renders the registry's YYYYMMDD InstallDate as YYYY-MM-DD.
+// Installers also write free-form dates ("2023.10.05") — those pass
+// through untouched rather than being dropped.
 func (e *Entry) Date() string {
-	if len(e.InstallDate) != 8 {
-		return ""
+	s := e.InstallDate
+	if len(s) == 8 && isDigits(s) {
+		return s[0:4] + "-" + s[4:6] + "-" + s[6:8]
 	}
-	return e.InstallDate[0:4] + "-" + e.InstallDate[4:6] + "-" + e.InstallDate[6:8]
+	return s
+}
+
+func isDigits(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // Launch runs the entry's uninstall command line and returns the
@@ -69,10 +83,38 @@ func (e *Entry) Launch() (*exec.Cmd, error) {
 		return nil, fmt.Errorf("no uninstall command")
 	}
 	cmd := exec.Command(exe, args...)
+	hideWindow(cmd) // console-subsystem uninstallers would flash a cmd window
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
 	return cmd, nil
+}
+
+// regPath cleans a registry path value — strips the wrapping quotes
+// many installers include and expands %ENV% variables.
+func regPath(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.Trim(s, `"`)
+	return os.ExpandEnv(s)
+}
+
+// IconPath resolves DisplayIcon into a file the shell can raster an
+// icon from — unquotes it, drops a ",N" icon-index suffix and expands
+// environment variables. Empty when nothing usable remains.
+func (e *Entry) IconPath() string {
+	s := regPath(e.Icon)
+	if i := strings.LastIndex(s, ","); i > 0 {
+		if _, err := strconv.Atoi(strings.TrimSpace(s[i+1:])); err == nil {
+			s = s[:i]
+		}
+	}
+	if s == "" || strings.ContainsAny(s, "<>|?*") {
+		return ""
+	}
+	if _, err := os.Stat(s); err != nil {
+		return ""
+	}
+	return s
 }
 
 // SplitCmdline breaks a stored command line into exe and arguments.

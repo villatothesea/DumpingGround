@@ -194,6 +194,10 @@ func enumUninstall() []Entry {
 			if e.Location == "" {
 				e.Location = vals["InstallSource"].str()
 			}
+			// Installers store these quoted or with %VARS% — normalize
+			// once so open-folder, footprint and icon code stay simple.
+			e.Location = regPath(e.Location)
+			e.Icon = regPath(e.Icon)
 			if sz := vals["EstimatedSize"].dword(); sz > 0 {
 				e.SizeBytes = sz * 1024 // EstimatedSize is kilobytes
 				e.EstimatedSize = true

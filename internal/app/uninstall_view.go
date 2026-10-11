@@ -76,13 +76,17 @@ func (m *Model) uninstallView(c *ui.Context, t *ui.Theme) {
 				row.Background(t.SurfaceHover)
 			}
 			row.Children(func() {
-				icon(c, "pkg", 13).TextColor(t.TextMuted)
+				if bmp := m.processIcon(e.IconPath()); bmp != nil {
+					ui.Image(c, bmp).Size(16, 16).Shrink(0)
+				} else {
+					icon(c, "pkg", 13).TextColor(t.TextMuted)
+				}
 				name := ui.Text(c, e.Name).SingleLine().Grow(1).MinWidth(0)
 				name.Tooltip(e.Name + "  " + e.Version)
-				if e.Version != "" {
-					ui.Text(c, e.Version).FontSize(11).TextColor(t.TextMuted).Shrink(0).MaxWidth(90).SingleLine().Ellipsis("…")
-				}
-				ui.Row(c).Width(180).Shrink(0).Children(func() {
+				ui.Row(c).Width(86).Shrink(0).Children(func() {
+					ui.Text(c, e.Version).FontSize(11).SingleLine().Ellipsis("…").Tooltip(e.Version)
+				})
+				ui.Row(c).Width(150).Shrink(0).Children(func() {
 					ui.Text(c, e.Publisher).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Tooltip(e.Publisher)
 				})
 				ui.Row(c).Width(76).Shrink(0).Justify(ui.End).Children(func() {
@@ -93,7 +97,14 @@ func (m *Model) uninstallView(c *ui.Context, t *ui.Theme) {
 					ui.Text(c, sz).FontSize(11)
 				})
 				ui.Row(c).Width(86).Shrink(0).Justify(ui.End).Children(func() {
-					ui.Text(c, e.Date()).FontSize(11).TextColor(t.TextMuted)
+					d := e.Date()
+					if d == "" {
+						d = "—"
+					}
+					ui.Text(c, d).FontSize(11).TextColor(t.TextMuted).Tooltip(e.InstallDate)
+				})
+				ui.Row(c).Width(170).Shrink(0).Children(func() {
+					ui.Text(c, e.Location).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Tooltip(e.Location)
 				})
 				m.uninstRowActions(c, t, e)
 			})
@@ -122,11 +133,15 @@ func (m *Model) uninstRowsFiltered() []*uninstall.Entry {
 		case 0:
 			lt = strings.ToLower(ra.Name) < strings.ToLower(rb.Name)
 		case 1:
-			lt = strings.ToLower(ra.Publisher) < strings.ToLower(rb.Publisher)
+			lt = ra.Version < rb.Version
 		case 2:
+			lt = strings.ToLower(ra.Publisher) < strings.ToLower(rb.Publisher)
+		case 3:
 			lt = ra.SizeBytes < rb.SizeBytes
-		default:
+		case 4:
 			lt = ra.InstallDate < rb.InstallDate
+		default:
+			lt = strings.ToLower(ra.Location) < strings.ToLower(rb.Location)
 		}
 		if m.uninstSortDesc {
 			return !lt
@@ -140,18 +155,24 @@ func (m *Model) uninstRowsFiltered() []*uninstall.Entry {
 // uninstHeader draws the sortable column header row.
 func (m *Model) uninstHeader(c *ui.Context, t *ui.Theme) {
 	ui.Row(c).FillWidth().Height(24).Shrink(0).Padding(0, 10).Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Box(c).Width(13).Shrink(0)
+		ui.Box(c).Width(16).Shrink(0)
 		ui.Row(c).Grow(1).MinWidth(0).Children(func() {
 			m.uninstColHead(c, t, 0, "Name", 0)
 		})
-		ui.Row(c).Width(180).Shrink(0).Children(func() {
-			m.uninstColHead(c, t, 1, "Publisher", 0)
+		ui.Row(c).Width(86).Shrink(0).Children(func() {
+			m.uninstColHead(c, t, 1, "Version", 0)
+		})
+		ui.Row(c).Width(150).Shrink(0).Children(func() {
+			m.uninstColHead(c, t, 2, "Publisher", 0)
 		})
 		ui.Row(c).Width(76).Shrink(0).Justify(ui.End).Children(func() {
-			m.uninstColHead(c, t, 2, "Size", 0)
+			m.uninstColHead(c, t, 3, "Size", 0)
 		})
 		ui.Row(c).Width(86).Shrink(0).Justify(ui.End).Children(func() {
-			m.uninstColHead(c, t, 3, "Installed", 0)
+			m.uninstColHead(c, t, 4, "Installed", 0)
+		})
+		ui.Row(c).Width(170).Shrink(0).Children(func() {
+			m.uninstColHead(c, t, 5, "Install location", 0)
 		})
 		ui.Box(c).Width(120).Shrink(0)
 	})
