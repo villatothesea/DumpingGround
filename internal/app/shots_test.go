@@ -116,10 +116,15 @@ func TestScreenshotStates(t *testing.T) {
 	tt6.SetDark(true)
 	tt6.Frame()
 	dump(t, tt6, dest, "junk-report.png")
-	m4.junkGroupSafe = true
+	m4.junkGroupMode = junkGroupRisk
 	m4.junkSel = 0
 	tt6.Frame()
 	dump(t, tt6, dest, "junk-grouped.png")
+	// Category grouping with the SAFE categories collapsed away.
+	m4.junkGroupMode = junkGroupCat
+	m4.junkCollapsed[disk.JunkCatUserTemp] = true
+	tt6.Frame()
+	dump(t, tt6, dest, "junk-by-category.png")
 }
 
 // testJunkReport fabricates a cleanup report resembling a real measure.

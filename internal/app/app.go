@@ -178,6 +178,7 @@ type Model struct {
 	rustRecycle                     bool   // send deletions to the recycle bin where possible
 	rustFilterCat                   int    // category filtering the row list, -1 all
 	rustGroupSafe                   bool   // group rows under risk-level headers
+	rustCollapsed                   map[int]bool // collapsed risk groups
 	rustAnStage                     int    // analysis progress stage (disk.RustStage*)
 	rustAnVis                       int    // index nodes visited so far
 	rustAnFound                     int    // project targets found so far
@@ -194,7 +195,8 @@ type Model struct {
 	junkConfirm                     int  // preset armed for the second click, -1 none
 	junkRowConfirm                  string // path whose row clean button is armed
 	junkFilterCat                   int    // category filtering the row list, -1 all
-	junkGroupSafe                   bool   // group rows under risk-level headers
+	junkGroupMode                   int    // junkGroupNone / junkGroupRisk / junkGroupCat
+	junkCollapsed                   map[int]bool // collapsed groups, keyed by risk or category
 	junkAnCat                       int    // category currently being measured
 	junkPathsCat                    int    // category whose path list the modal shows, -1 none
 	junkPathsOpen                   bool
@@ -219,7 +221,8 @@ func New() *Model {
 		iconPending: make(map[string]bool), iconRequests: make(chan string, 32),
 		diskStatus: "Choose a drive or folder to scan", diskMode: "Tree", diskMetric: "Allocated", diskSelected: -1, diskNode: -1, extensionSelected: -1, mapRoot: -1, diskSplit: 300, animateMap: true, detailTab: "Properties", memRelease: "Automatic",
 		rustGone: map[string]bool{}, rustSel: -1, rustConfirm: -1, rustRecycle: true, rustPathsCat: -1,
-		rustFilterCat: -1, junkSel: -1, junkConfirm: -1, junkFilterCat: -1, junkPathsCat: -1}
+		rustFilterCat: -1, junkSel: -1, junkConfirm: -1, junkFilterCat: -1, junkPathsCat: -1,
+		rustCollapsed: map[int]bool{}, junkCollapsed: map[int]bool{}}
 }
 func (m *Model) Run() error {
 	if os.Getenv("DG_DEBUG_INSTANCE") != "" {

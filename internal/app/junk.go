@@ -15,18 +15,30 @@ var junkGreen = ui.RGB(0x1B, 0x8A, 0x5A)
 
 // junkPreset bundles categories by risk tier, like the Rust page's
 // plans. Light is every SAFE category; Deep adds the MODERATE ones.
-// Windows.old stays out of both — review-only.
+// Windows.old stays out of both — review-only. badgesFrom lets a plan
+// draw only its delta — Deep shows "Light + 8 9 10 11".
 type junkPreset struct {
-	name, tag, note string
-	from, to        int // inclusive category range
+	name, tag, note, cost string
+	from, to              int // inclusive category range the plan removes
+	badgesFrom            int // first badge drawn on the card
 }
 
 var junkPresets = []junkPreset{
-	{name: "Light", tag: "SAFE", note: "temp, caches and reports — everything regenerates or re-downloads",
-		from: 0, to: disk.JunkCatRecycleBin},
-	{name: "Deep", tag: "MODERATE", note: "Light plus update staging, crash dumps, logs and dev caches",
-		from: 0, to: disk.JunkCatDevCaches},
+	{name: "Light", tag: "SAFE", note: "all seven SAFE categories — temp, caches, reports",
+		cost: "Cost: nothing — everything regenerates or re-downloads on its own",
+		from: 0, to: disk.JunkCatRecycleBin, badgesFrom: 0},
+	{name: "Deep", tag: "+ MODERATE", note: "everything in Light, plus update staging, dumps, logs, dev caches",
+		cost: "Cost: re-downloads, one slower update, lost diagnostic logs",
+		from: 0, to: disk.JunkCatDevCaches, badgesFrom: disk.JunkCatUpdateDl},
 }
+
+// junkGroup* are the row-grouping modes — mutually exclusive, so the
+// table never nests two levels.
+const (
+	junkGroupNone = iota
+	junkGroupRisk
+	junkGroupCat
+)
 
 // junkScan measures every cleanup location off the UI goroutine. The
 // report is self-contained — junk lives in fixed locations, so no disk
@@ -96,17 +108,20 @@ func junkJobsBytes(jobs []*disk.JunkDir) uint64 {
 	return b
 }
 
-// junkRow is one row in the cleanup table — a group header (head set)
-// or one measured location (d set).
+// junkRow is one row in the cleanup table — a group header (head set;
+// catHead marks a category header, otherwise it is a risk header) or
+// one measured location (d set).
 type junkRow struct {
-	head string
-	cat  int
-	d    *disk.JunkDir
-	risk int
+	head    string
+	catHead bool
+	cat     int
+	d       *disk.JunkDir
+	risk    int
 }
 
 // junkRows builds the display list: category filter, then size sort,
-// then optional risk-level grouping with header rows.
+// then optional grouping — by risk level or by category, never both.
+// Collapsed groups keep their header but hide members.
 func (m *Model) junkRows() []junkRow {
 	rep := m.junkReport
 	var rows []junkRow
@@ -119,35 +134,57 @@ func (m *Model) junkRows() []junkRow {
 		}
 	}
 	sort.SliceStable(rows, func(a, b int) bool { return rows[a].d.Bytes > rows[b].d.Bytes })
-	if !m.junkGroupSafe {
+	if m.junkGroupMode == junkGroupNone {
 		return rows
 	}
 	grouped := make([]junkRow, 0, len(rows)+4)
+	emit := func(key int, head string, catHead bool, cat, risk int, members []junkRow) {
+		grouped = append(grouped, junkRow{head: head, catHead: catHead, cat: cat, risk: risk})
+		if !m.junkCollapsed[key] {
+			grouped = append(grouped, members...)
+		}
+	}
+	if m.junkGroupMode == junkGroupCat {
+		for cat := 0; cat < disk.JunkCatCount; cat++ {
+			var members []junkRow
+			var bytes uint64
+			for _, r := range rows {
+				if r.cat == cat {
+					members = append(members, r)
+					bytes += r.d.Bytes
+				}
+			}
+			if len(members) == 0 {
+				continue
+			}
+			emit(cat, fmt.Sprintf("%s — %s · %s", rep.Cats[cat].Name,
+				junkItemCount(len(members)), format.Bytes(bytes)), true, cat, rep.Cats[cat].Risk, members)
+		}
+		return grouped
+	}
 	for risk := disk.RustRiskSafe; risk <= disk.RustRiskReview; risk++ {
-		var n int
+		var members []junkRow
 		var bytes uint64
 		for _, r := range rows {
 			if r.risk == risk {
-				n++
+				members = append(members, r)
 				bytes += r.d.Bytes
 			}
 		}
-		if n == 0 {
+		if len(members) == 0 {
 			continue
 		}
-		label := "items"
-		if n == 1 {
-			label = "item"
-		}
-		grouped = append(grouped, junkRow{head: fmt.Sprintf("%s — %d %s · %s",
-			rustRiskLabel(risk), n, label, format.Bytes(bytes)), cat: -1, risk: risk})
-		for _, r := range rows {
-			if r.risk == risk {
-				grouped = append(grouped, r)
-			}
-		}
+		emit(risk, fmt.Sprintf("%s — %s · %s", rustRiskLabel(risk),
+			junkItemCount(len(members)), format.Bytes(bytes)), false, -1, risk, members)
 	}
 	return grouped
+}
+
+func junkItemCount(n int) string {
+	if n == 1 {
+		return "1 item"
+	}
+	return fmt.Sprintf("%d items", n)
 }
 
 // junkDelete removes the jobs off the UI goroutine, then re-measures so
@@ -299,10 +336,34 @@ func (m *Model) junkResultsView(c *ui.Context, t *ui.Theme) {
 			ui.List(c, &m.junkList, len(rows), func(i int) {
 				r := rows[i]
 				if r.head != "" {
-					ui.Row(c).FillWidth().Height(26).Padding(0, 10).Gap(6).AlignItems(ui.Center).Children(func() {
-						ui.Text(c, r.head).FontSize(11).Bold().TextColor(rustRiskColor(t, r.risk)).Shrink(0)
-						ui.Text(c, "· "+rustRiskNote(r.risk)).FontSize(11).TextColor(t.TextMuted).SingleLine().MinWidth(0)
+					key := r.risk
+					if r.catHead {
+						key = r.cat
+					}
+					collapsed := m.junkCollapsed[key]
+					g := "caret-d"
+					if collapsed {
+						g = "caret-r"
+					}
+					he := ui.Row(c).FillWidth().Height(26).Padding(0, 10).Gap(6).AlignItems(ui.Center).Radius(4).
+						Cursor(ui.CursorPointer).Label("Toggle group " + r.head)
+					if he.Hovered() {
+						he.Background(t.SurfaceHover)
+					}
+					he.Children(func() {
+						icon(c, g, 10).TextColor(t.TextMuted)
+						if r.catHead {
+							tierBadge(c, t, r.cat+1, false)
+							ui.Text(c, r.head).FontSize(11).Bold().TextColor(t.Text).Shrink(0)
+							ui.Text(c, "· "+rep.Cats[r.cat].Note).FontSize(11).TextColor(t.TextMuted).SingleLine().MinWidth(0)
+						} else {
+							ui.Text(c, r.head).FontSize(11).Bold().TextColor(rustRiskColor(t, r.risk)).Shrink(0)
+							ui.Text(c, "· "+rustRiskNote(r.risk)).FontSize(11).TextColor(t.TextMuted).SingleLine().MinWidth(0)
+						}
 					})
+					if he.Clicked() {
+						m.junkCollapsed[key] = !collapsed
+					}
 					return
 				}
 				hit := false
@@ -330,7 +391,8 @@ func (m *Model) junkResultsView(c *ui.Context, t *ui.Theme) {
 					ui.Row(c).Width(78).Shrink(0).Children(func() {
 						ui.Text(c, rustRiskLabel(r.risk)).FontSize(10).Bold().TextColor(rustRiskColor(t, r.risk))
 					})
-					ui.Text(c, rep.Cats[r.cat].Name).FontSize(11).TextColor(t.Accent).Shrink(0)
+					ui.Text(c, rep.Cats[r.cat].Name).FontSize(11).TextColor(t.Accent).Shrink(0).
+						Tooltip(rep.Cats[r.cat].Note)
 					ptxt := ui.Text(c, r.d.Path).SingleLine().Tooltip(r.d.Path).Grow(1).MinWidth(0)
 					if r.d.Skip != "" {
 						ptxt.TextColor(t.TextMuted)
@@ -374,7 +436,26 @@ func (m *Model) junkFilterStrip(c *ui.Context, t *ui.Theme) {
 				}
 			}
 		}
-		ui.Checkbox(c, &m.junkGroupSafe, "Group by safety")
+		ui.Text(c, "Group:").FontSize(11).TextColor(t.TextMuted).Shrink(0)
+		for mode, name := range []string{"None", "Risk", "Category"} {
+			mode := mode
+			seg := ui.Row(c).Height(20).PaddingX(7).Radius(4).AlignItems(ui.Center).Cursor(ui.CursorPointer)
+			if m.junkGroupMode == mode {
+				seg.Background(t.Accent.Alpha(0.18))
+			} else if seg.Hovered() {
+				seg.Background(t.SurfaceHover)
+			}
+			seg.Children(func() {
+				col := t.TextMuted
+				if m.junkGroupMode == mode {
+					col = t.Accent
+				}
+				ui.Text(c, name).FontSize(11).TextColor(col)
+			})
+			if seg.Clicked() {
+				m.junkGroupMode = mode
+			}
+		}
 		if m.junkFilterCat >= 0 {
 			cat := m.junkFilterCat
 			ui.Text(c, "· "+rep.Cats[cat].Name).FontSize(11).TextColor(t.TextMuted).Shrink(0)
@@ -411,11 +492,15 @@ func (m *Model) junkPresetCard(c *ui.Context, t *ui.Theme, p int) {
 		})
 		ui.Text(c, format.Bytes(bytes)).FontSize(18).Bold()
 		ui.Row(c).Gap(3).AlignItems(ui.Center).Children(func() {
-			for cat := pre.from; cat <= pre.to; cat++ {
+			if pre.badgesFrom > pre.from {
+				ui.Text(c, "Light +").FontSize(10).Bold().TextColor(t.Text).Shrink(0)
+			}
+			for cat := pre.badgesFrom; cat <= pre.to; cat++ {
 				tierBadge(c, t, cat+1, len(m.junkReport.Cats[cat].Dirs) == 0).Tooltip(m.junkReport.Cats[cat].Name)
 			}
 		})
 		ui.Text(c, pre.note).FontSize(10).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Tooltip(pre.note)
+		ui.Text(c, pre.cost).FontSize(10).TextColor(t.Warning).SingleLine().Ellipsis("…").Tooltip(pre.cost)
 		ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
 			if m.dangerButton(c, "broom", "Clean").Disabled(bytes == 0 || m.junkBusy).Clicked() {
 				m.junkConfirm = p

@@ -281,6 +281,9 @@ func (m *Model) rustRows() []rustRow {
 		}
 		grouped = append(grouped, rustRow{head: fmt.Sprintf("%s — %s %s · %s",
 			rustRiskLabel(risk), format.Int(uint64(n)), label, format.Bytes(bytes)), cat: -1, risk: risk})
+		if m.rustCollapsed[risk] {
+			continue
+		}
 		for _, r := range rows {
 			if r.risk == risk {
 				grouped = append(grouped, r)
@@ -538,10 +541,24 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 			ui.List(c, &m.rustList, len(rows), func(i int) {
 				r := rows[i]
 				if r.head != "" {
-					ui.Row(c).FillWidth().Height(26).Padding(0, 10).Gap(6).AlignItems(ui.Center).Children(func() {
+					collapsed := m.rustCollapsed[r.risk]
+					g := "caret-d"
+					if collapsed {
+						g = "caret-r"
+					}
+					he := ui.Row(c).FillWidth().Height(26).Padding(0, 10).Gap(6).AlignItems(ui.Center).Radius(4).
+						Cursor(ui.CursorPointer).Label("Toggle group " + r.head)
+					if he.Hovered() {
+						he.Background(t.SurfaceHover)
+					}
+					he.Children(func() {
+						icon(c, g, 10).TextColor(t.TextMuted)
 						ui.Text(c, r.head).FontSize(11).Bold().TextColor(rustRiskColor(t, r.risk)).Shrink(0)
 						ui.Text(c, "· "+rustRiskNote(r.risk)).FontSize(11).TextColor(t.TextMuted).SingleLine().MinWidth(0)
 					})
+					if he.Clicked() {
+						m.rustCollapsed[r.risk] = !collapsed
+					}
 					return
 				}
 				hit := m.rustRowHit(r)
