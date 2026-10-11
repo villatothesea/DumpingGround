@@ -448,6 +448,18 @@ func (m *Model) launchUninstall(e *uninstall.Entry) {
 // sweepModal is the leftover review list — per-item checkboxes, an
 // explanation of reversibility, and the armed two-click Remove.
 func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
+	if len(m.sweepItems) == 0 {
+		// Nothing to review — a one-button alert, not the full list UI.
+		msg := "No leftovers found — the uninstaller left a clean machine."
+		if m.sweepName == orphanScanName {
+			msg = "No leftovers found — no dead references or empty folders."
+		}
+		if ui.AlertDialog(c, &m.sweepOpen, "Leftovers — "+m.sweepName, msg, "OK") >= 0 {
+			uninstall.ClearPending(m.sweepName)
+			m.sweepArmed = false
+		}
+		return
+	}
 	ui.Modal(c, &m.sweepOpen, func() {
 		// Height follows the item count — every leftover is visible at
 		// once — until fifteen rows, then the list scrolls rather than
@@ -464,26 +476,22 @@ func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 				subtitle = "Every item is a verified leftover of something already removed — dead references, empty folders, name-matched traces. Folders go to the Recycle Bin; registry items get a .reg backup in the log folder first."
 			}
 			ui.Text(c, subtitle).FontSize(11).TextColor(t.TextMuted).MaxWidth(760)
-			if len(m.sweepItems) == 0 {
-				ui.Text(c, "No leftovers found — the uninstaller left a clean machine.").FontSize(11).TextColor(t.TextMuted)
-			} else {
-				ui.List(c, &m.sweepList, len(m.sweepItems), func(i int) {
-					it := m.sweepItems[i]
-					row := ui.Row(c).FillWidth().Height(30).Gap(8).AlignItems(ui.Center).Radius(4)
-					if row.Hovered() {
-						row.Background(t.SurfaceHover)
+			ui.List(c, &m.sweepList, len(m.sweepItems), func(i int) {
+				it := m.sweepItems[i]
+				row := ui.Row(c).FillWidth().Height(30).Gap(8).AlignItems(ui.Center).Radius(4)
+				if row.Hovered() {
+					row.Background(t.SurfaceHover)
+				}
+				row.Children(func() {
+					ui.Checkbox(c, &m.sweepSel[i], "")
+					ui.Text(c, it.Path).FontSize(13).SingleLine().Grow(1).MinWidth(0).
+						Tooltip(it.Path + "\n" + it.Why)
+					if it.Kind == uninstall.KindDir && it.Bytes > 0 {
+						ui.Text(c, format.Bytes(it.Bytes)).FontSize(13).Shrink(0)
 					}
-					row.Children(func() {
-						ui.Checkbox(c, &m.sweepSel[i], "")
-						ui.Text(c, it.Path).FontSize(13).SingleLine().Grow(1).MinWidth(0).
-							Tooltip(it.Path + "\n" + it.Why)
-						if it.Kind == uninstall.KindDir && it.Bytes > 0 {
-							ui.Text(c, format.Bytes(it.Bytes)).FontSize(13).Shrink(0)
-						}
-						ui.Text(c, it.Why).FontSize(13).TextColor(t.TextMuted).SingleLine().Shrink(0)
-					})
-				}).Grow(1).FillWidth()
-			}
+					ui.Text(c, it.Why).FontSize(13).TextColor(t.TextMuted).SingleLine().Shrink(0)
+				})
+			}).Grow(1).FillWidth()
 			sel, bytes := 0, uint64(0)
 			for i, it := range m.sweepItems {
 				if m.sweepSel[i] {
@@ -495,11 +503,7 @@ func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 				ui.Text(c, fmt.Sprintf("%d of %d selected · %s", sel, len(m.sweepItems), format.Bytes(bytes))).
 					FontSize(11).TextColor(t.TextMuted)
 				ui.Spacer(c)
-				keep := "Keep leftovers"
-				if len(m.sweepItems) == 0 {
-					keep = "Close"
-				}
-				if m.iconTextButton(c, "right", keep).Clicked() {
+				if m.iconTextButton(c, "right", "Keep leftovers").Clicked() {
 					uninstall.ClearPending(m.sweepName)
 					m.sweepOpen = false
 				}
