@@ -8,6 +8,7 @@ import (
 
 	"github.com/dumpingground/dumpingground/internal/disk"
 	"github.com/dumpingground/dumpingground/internal/process"
+	"github.com/dumpingground/dumpingground/internal/uninstall"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -129,6 +130,23 @@ func TestScreenshotStates(t *testing.T) {
 	m4.junkLegendOpen = true
 	tt6.Frame()
 	dump(t, tt6, dest, "junk-legend.png")
+
+	// The Uninstall page: a sorted table of registry entries with the
+	// armed two-click row action on one row.
+	m5 := testModel(t)
+	m5.page = uninstallPage
+	m5.uninstLoaded = true
+	m5.uninstSortCol, m5.uninstSortDesc = 2, true
+	m5.uninstRows = []uninstall.Entry{
+		{Name: "Docker Desktop", Version: "4.44.0", Publisher: "Docker Inc.", SizeBytes: 3500 << 20, EstimatedSize: true, InstallDate: "20260920", Location: `C:\Program Files\Docker`, Uninstall: `"C:\Program Files\Docker\uninstall.exe"`},
+		{Name: "Obsidian", Version: "1.9.12", Publisher: "Obsidian", SizeBytes: 1068 << 20, EstimatedSize: true, InstallDate: "20261001", Location: `C:\Users\me\AppData\Local\Obsidian`, Uninstall: `C:\Users\me\AppData\Local\Obsidian\Uninstall Obsidian.exe`},
+		{Name: "Zeron Helper", Version: "0.9.1", Publisher: "Cognition", SizeBytes: 480 << 20, EstimatedSize: true, Uninstall: `MsiExec.exe /I{GUID}`},
+		{Name: "Tiny App", Publisher: "Indie Dev", SizeBytes: 0, EstimatedSize: false, InstallDate: "20260101", Uninstall: `C:\Tiny\unins.exe`},
+	}
+	tt7 := ui.NewTester(m5.view, 1180, 760)
+	tt7.SetDark(true)
+	tt7.Frame()
+	dump(t, tt7, dest, "uninstall.png")
 }
 
 // testJunkReport fabricates a cleanup report resembling a real measure.

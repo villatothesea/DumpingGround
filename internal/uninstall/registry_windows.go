@@ -1,0 +1,206 @@
+//go:build windows
+
+package uninstall
+
+import (
+	"fmt"
+	"strings"
+	"syscall"
+	"unsafe"
+)
+
+var (
+	advapi            = syscall.NewLazyDLL("advapi32.dll")
+	procRegOpenKeyEx  = advapi.NewProc("RegOpenKeyExW")
+	procRegCloseKey   = advapi.NewProc("RegCloseKey")
+	procRegEnumKeyEx  = advapi.NewProc("RegEnumKeyExW")
+	procRegEnumValue  = advapi.NewProc("RegEnumValueW")
+	procRegQueryValue = advapi.NewProc("RegQueryValueExW")
+)
+
+const (
+	hkeyLocalMachine  = 0x80000002
+	hkeyCurrentUser   = 0x80000001
+	keyRead           = 0x20019 // KEY_READ
+	keyWow64          = 0x20019 | 0x0100 // KEY_READ | KEY_WOW64_32KEY
+	regSz             = 1
+	regExpandSz       = 2
+	regDword          = 4
+	regQword          = 11
+	errorMoreData     = 234
+	errorFileNotFound = 2
+)
+
+// hives are the three Uninstall keys Windows itself merges: 64-bit
+// machine, 32-bit machine (WOW6432Node) and per-user.
+var hives = []struct {
+	root  uintptr
+	access uintptr
+	sub   string
+	system bool
+}{
+	{hkeyLocalMachine, keyRead, `SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall`, true},
+	{hkeyLocalMachine, keyWow64, `SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall`, true},
+	{hkeyCurrentUser, keyRead, `SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall`, false},
+}
+
+type regKey uintptr
+
+func openKey(root, access uintptr, sub string) (regKey, error) {
+	p, err := syscall.UTF16PtrFromString(sub)
+	if err != nil {
+		return 0, err
+	}
+	var h uintptr
+	r, _, _ := procRegOpenKeyEx.Call(root, uintptr(unsafe.Pointer(p)), 0, access, uintptr(unsafe.Pointer(&h)))
+	if r != 0 {
+		return 0, syscall.Errno(r)
+	}
+	return regKey(h), nil
+}
+
+func (k regKey) close() {
+	procRegCloseKey.Call(uintptr(k))
+}
+
+// subKeys yields the immediate child key names.
+func (k regKey) subKeys() ([]string, error) {
+	var out []string
+	for i := uint32(0); ; i++ {
+		buf := make([]uint16, 256)
+		n := uint32(len(buf))
+		r, _, _ := procRegEnumKeyEx.Call(uintptr(k), uintptr(i),
+			uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&n)),
+			0, 0, 0, 0)
+		if r == errorFileNotFound || r == 259 /*ERROR_NO_MORE_ITEMS*/ {
+			return out, nil
+		}
+		if r != 0 {
+			return out, syscall.Errno(r)
+		}
+		out = append(out, syscall.UTF16ToString(buf[:n]))
+	}
+}
+
+// values reads a key's value set into a name→(data, kind) map.
+func (k regKey) values() (regValues, error) {
+	out := regValues{}
+	for i := uint32(0); ; i++ {
+		var name [256]uint16
+		nlen := uint32(len(name))
+		var kind, dlen uint32
+		// First call sizes the data buffer.
+		r, _, _ := procRegEnumValue.Call(uintptr(k), uintptr(i),
+			uintptr(unsafe.Pointer(&name[0])), uintptr(unsafe.Pointer(&nlen)),
+			0, uintptr(unsafe.Pointer(&kind)), 0, uintptr(unsafe.Pointer(&dlen)))
+		if r == 259 {
+			return out, nil
+		}
+		if r == errorMoreData || r == 0 {
+			data := make([]byte, max(dlen, 1))
+			nlen = uint32(len(name))
+			r, _, _ = procRegEnumValue.Call(uintptr(k), uintptr(i),
+				uintptr(unsafe.Pointer(&name[0])), uintptr(unsafe.Pointer(&nlen)),
+				0, uintptr(unsafe.Pointer(&kind)),
+				uintptr(unsafe.Pointer(&data[0])), uintptr(unsafe.Pointer(&dlen)))
+			if r == 259 {
+				return out, nil
+			}
+			if r != 0 {
+				return out, syscall.Errno(r)
+			}
+			out[syscall.UTF16ToString(name[:nlen])] = regValue{kind: kind, data: data[:dlen]}
+		} else if r != 0 {
+			return out, syscall.Errno(r)
+		}
+	}
+}
+
+type regValues map[string]regValue
+
+type regValue struct {
+	kind uint32
+	data []byte
+}
+
+func (v regValue) str() string {
+	if v.kind != regSz && v.kind != regExpandSz || len(v.data) < 2 {
+		return ""
+	}
+	n := len(v.data) / 2
+	u16 := unsafe.Slice((*uint16)(unsafe.Pointer(&v.data[0])), n)
+	if n > 0 && u16[n-1] == 0 {
+		u16 = u16[:n-1]
+	}
+	return strings.TrimSpace(syscall.UTF16ToString(u16))
+}
+
+func (v regValue) dword() uint64 {
+	if v.kind == regDword && len(v.data) >= 4 {
+		return uint64(*(*uint32)(unsafe.Pointer(&v.data[0])))
+	}
+	if v.kind == regQword && len(v.data) >= 8 {
+		return *(*uint64)(unsafe.Pointer(&v.data[0]))
+	}
+	return 0
+}
+
+func (vals regValues) str(name string) string {
+	return vals[name].str()
+}
+
+// enumUninstall reads every Uninstall subkey from all three hives.
+func enumUninstall() []Entry {
+	var out []Entry
+	for _, h := range hives {
+		root, err := openKey(h.root, h.access, h.sub)
+		if err != nil {
+			continue
+		}
+		names, err := root.subKeys()
+		if err != nil {
+			root.close()
+			continue
+		}
+		for _, name := range names {
+			k, err := openKey(h.root, h.access, h.sub+`\`+name)
+			if err != nil {
+				continue
+			}
+			vals, err := k.values()
+			k.close()
+			if err != nil {
+				continue
+			}
+			// SystemComponent entries are runtimes, patches and driver
+			// bits — the Apps page hides them too.
+			if vals["SystemComponent"].dword() == 1 {
+				continue
+			}
+			e := Entry{
+				Name:        vals["DisplayName"].str(),
+				Version:     vals["DisplayVersion"].str(),
+				Publisher:   vals["Publisher"].str(),
+				InstallDate: vals["InstallDate"].str(),
+				Location:    vals["InstallLocation"].str(),
+				Uninstall:   vals["UninstallString"].str(),
+				QuietUninst: vals["QuietUninstallString"].str(),
+				Icon:        vals["DisplayIcon"].str(),
+				SystemScope: h.system,
+				Key:         h.sub + `\` + name,
+			}
+			if e.Location == "" {
+				e.Location = vals["InstallSource"].str()
+			}
+			if sz := vals["EstimatedSize"].dword(); sz > 0 {
+				e.SizeBytes = sz * 1024 // EstimatedSize is kilobytes
+				e.EstimatedSize = true
+			}
+			out = append(out, e)
+		}
+		root.close()
+	}
+	return out
+}
+
+func (e Entry) String() string { return fmt.Sprintf("%s %s", e.Name, e.Version) }

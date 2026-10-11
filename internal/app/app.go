@@ -14,6 +14,7 @@ import (
 	"github.com/dumpingground/dumpingground/internal/format"
 	"github.com/dumpingground/dumpingground/internal/process"
 	"github.com/dumpingground/dumpingground/internal/treemap"
+	"github.com/dumpingground/dumpingground/internal/uninstall"
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
@@ -208,6 +209,15 @@ type Model struct {
 	junkMsg                         string
 	junkDoneMsg                     string // outcome of the last clean, shown once the re-measure lands
 	junkList                        ui.ListState
+	uninstRows                      []uninstall.Entry
+	uninstLoaded                    bool   // the registry list has been read at least once
+	uninstLoading                   bool
+	uninstQuery                     string
+	uninstSortCol                   int // 0 name · 1 publisher · 2 size · 3 date
+	uninstSortDesc                  bool
+	uninstArmed                     string // entry name armed for the second-click confirm
+	uninstMsg                       string
+	uninstList                      ui.ListState
 	events                          chan func()
 	// CaptureDir writes only this application's frames during explicit diagnostics.
 	CaptureDir  string
@@ -492,7 +502,7 @@ func (m *Model) view(c *ui.Context) {
 		case hardwarePage:
 			m.reservedView(c, "cpu", "Hardware", "Monitors CPU, memory, GPU, disk and network utilization with live charts. Tab position, shortcut and the shared search box are reserved.")
 		case uninstallPage:
-			m.reservedView(c, "pkg", "Uninstall", "Lists installed software with search, size sorting and removal. Tab position, shortcut and the shared search box are reserved.")
+			m.uninstallView(c, t)
 		case startupPage:
 			m.reservedView(c, "zap", "Startup items", "Manages programs that start with Windows, with enable and disable controls. Tab position, shortcut and the shared search box are reserved.")
 		}
@@ -565,6 +575,8 @@ func (m *Model) topBar(c *ui.Context, t *ui.Theme) {
 			}
 		case diskPage:
 			ui.SearchField(c, &m.diskQuery).Label("Filter files").Placeholder("Filter files").Width(190).Disabled(m.diskSnapshot == nil)
+		case uninstallPage:
+			ui.SearchField(c, &m.uninstQuery).Label("Filter apps").Placeholder("Filter apps").Width(190)
 		default:
 			ui.SearchField(c, &m.reservedQuery).Label("Search").Placeholder("Not available on this page").Width(190).Disabled(true)
 		}
