@@ -35,4 +35,7 @@ func isReparse(e os.DirEntry) bool {
 
 func regFootprint(e *Entry) []Item { return nil }
 
+// Gone has no registry to consult off-Windows.
+func (e *Entry) Gone() bool { return true }
+
 var _ = syscall.Errno(0)

@@ -153,7 +153,7 @@ func (m *Model) uninstHeader(c *ui.Context, t *ui.Theme) {
 		ui.Row(c).Width(86).Shrink(0).Justify(ui.End).Children(func() {
 			m.uninstColHead(c, t, 3, "Installed", 0)
 		})
-		ui.Box(c).Width(178).Shrink(0)
+		ui.Box(c).Width(120).Shrink(0)
 	})
 }
 
@@ -183,23 +183,7 @@ func (m *Model) uninstColHead(c *ui.Context, t *ui.Theme, col int, label string,
 // and an armed two-click Uninstall that launches the app's own
 // uninstaller (which brings its own confirmation UI).
 func (m *Model) uninstRowActions(c *ui.Context, t *ui.Theme, e *uninstall.Entry) {
-	ui.Row(c).Width(178).Shrink(0).Gap(6).Justify(ui.End).AlignItems(ui.Center).Children(func() {
-		swp := ui.Row(c).Height(22).PaddingX(7).Gap(4).AlignItems(ui.Center).Radius(t.Radius).
-			Cursor(ui.CursorPointer).Label("Find leftovers").Tooltip(
-			"Scan for files, registry keys and startup entries this app would leave behind")
-		swp.BorderWidth(1).BorderColor(t.Border).Background(t.Surface)
-		swp.Draw(func(p *ui.Painter, r ui.Rect) {
-			if swp.Hovered() {
-				p.Fill(r, t.SurfaceHover, t.Radius)
-			}
-		})
-		swp.Children(func() {
-			icon(c, "search", 11).TextColor(t.Accent)
-			ui.Text(c, "Sweep").FontSize(11)
-		})
-		if swp.Clicked() {
-			m.startSweep(e)
-		}
+	ui.Row(c).Width(120).Shrink(0).Gap(6).Justify(ui.End).AlignItems(ui.Center).Children(func() {
 		if e.Location != "" {
 			op := ui.Row(c).Height(22).PaddingX(7).Gap(4).AlignItems(ui.Center).Radius(t.Radius).
 				Cursor(ui.CursorPointer).Label("Open install folder").Tooltip(e.Location)
@@ -245,35 +229,59 @@ func (m *Model) uninstRowActions(c *ui.Context, t *ui.Theme, e *uninstall.Entry)
 				return
 			}
 			m.uninstArmed = ""
-			if err := e.Launch(); err != nil {
-				m.uninstMsg = "Failed: " + err.Error()
-				applog.Logf("uninstall launch FAILED  %s  — %v", e.Name, err)
-			} else {
-				m.uninstMsg = "Uninstaller launched for " + e.Name + " — refresh when it finishes"
-				applog.Logf("uninstall launched  %s  (%s)", e.Name, e.Uninstall)
-			}
+			m.launchUninstall(e)
 		}
 	})
 }
 
-// startSweep scans one entry's leftovers off the UI goroutine, then
-// opens the review modal. Confirmed and Likely items come pre-checked;
-// Review items need an explicit tick.
-func (m *Model) startSweep(e *uninstall.Entry) {
-	if m.sweepBusy {
+// launchUninstall starts the vendor uninstaller, waits for it to exit,
+// then checks whether the registry entry went away. When the app is
+// gone the leftover review opens automatically; when the entry is
+// still there the modal opens anyway (the user may have removed files
+// by hand, or the uninstaller was cancelled — the Review items say
+// which is which).
+func (m *Model) launchUninstall(e *uninstall.Entry) {
+	cmd, err := e.Launch()
+	if err != nil {
+		m.uninstMsg = "Failed: " + err.Error()
+		applog.Logf("uninstall launch FAILED  %s  — %v", e.Name, err)
 		return
 	}
-	m.sweepBusy, m.sweepName, m.sweepArmed = true, e.Name, false
+	m.uninstMsg = e.Name + " — uninstaller is running…"
+	applog.Section("Uninstall — " + e.Name)
+	applog.Logf("launched  %s", e.Uninstall)
+	entry := *e
+	all := append([]uninstall.Entry(nil), m.uninstRows...)
 	go func() {
-		items := uninstall.Footprint(e, m.uninstRows)
+		_ = cmd.Wait()
+		applog.Logf("uninstaller exited  %s", entry.Name)
+		// Some uninstallers spawn a child and exit early — poll until
+		// the registry entry disappears or a grace window elapses.
+		gone := entry.Gone()
+		for i := 0; i < 30 && !gone; i++ {
+			time.Sleep(2 * time.Second)
+			gone = entry.Gone()
+		}
+		items := uninstall.Footprint(&entry, all)
 		m.post(func() {
-			m.sweepBusy = false
+			m.uninstLoaded = false // the listing changed
+			m.sweepName = entry.Name
 			m.sweepItems = items
 			m.sweepSel = make([]bool, len(items))
 			for i := range items {
 				m.sweepSel[i] = items[i].Confidence != uninstall.Review
 			}
-			m.sweepOpen = true
+			switch {
+			case len(items) == 0 && gone:
+				m.uninstMsg = entry.Name + " uninstalled — no leftovers found"
+				applog.Logf("clean uninstall  %s", entry.Name)
+			case gone:
+				m.uninstMsg = entry.Name + " uninstalled — reviewing leftovers"
+				m.sweepOpen, m.sweepArmed = true, false
+			default:
+				m.uninstMsg = entry.Name + " — uninstaller exited but the entry is still listed; review before removing"
+				m.sweepOpen, m.sweepArmed = true, false
+			}
 		})
 	}()
 }

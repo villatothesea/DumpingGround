@@ -68,8 +68,9 @@ func regFootprint(e *Entry) []Item {
 	nPub := norm(e.Publisher)
 
 	// The Apps-list entry itself — the last thing a thorough removal
-	// cleans, and the only way to drop a broken/orphaned listing.
-	if e.Key != "" {
+	// cleans. Only listed while the key actually exists; when the vendor
+	// uninstaller already removed it, there is nothing to flag.
+	if e.Key != "" && keyExists(e.hiveRoot(), keyRead|e.wowBit(), e.Key) {
 		out = append(out, Item{
 			Path: e.Hive + `\` + e.Key, Kind: KindRegKey, Reg32: e.Wow32,
 			Confidence: Confirmed, Why: "the entry in the installed-apps list",
@@ -141,6 +142,28 @@ func regFootprint(e *Entry) []Item {
 		}
 	}
 	return out
+}
+
+// hiveRoot maps the entry's display hive back to its handle constant.
+func (e *Entry) hiveRoot() uintptr {
+	if e.Hive == "HKCU" {
+		return hkeyCurrentUser
+	}
+	return hkeyLocalMachine
+}
+
+// wowBit returns the 32-bit registry view flag for this entry.
+func (e *Entry) wowBit() uintptr {
+	if e.Wow32 {
+		return 0x100
+	}
+	return 0
+}
+
+// Gone reports whether the app's Uninstall entry has vanished — the
+// signal that its uninstaller actually ran to completion.
+func (e *Entry) Gone() bool {
+	return e.Key == "" || !keyExists(e.hiveRoot(), keyRead|e.wowBit(), e.Key)
 }
 
 // keyExists reports whether a registry path opens for reading.

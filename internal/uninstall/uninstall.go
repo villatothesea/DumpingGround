@@ -59,15 +59,20 @@ func (e *Entry) Date() string {
 	return e.InstallDate[0:4] + "-" + e.InstallDate[4:6] + "-" + e.InstallDate[6:8]
 }
 
-// Launch runs the entry's uninstall command line. Windows stores it as
-// a free-form string, so it is split back into exe and arguments here;
-// the uninstaller's own UI then takes over.
-func (e *Entry) Launch() error {
+// Launch runs the entry's uninstall command line and returns the
+// started process so the caller can wait for the uninstaller to exit.
+// Windows stores the string free-form, so it is split back into exe
+// and arguments here; the uninstaller's own UI then takes over.
+func (e *Entry) Launch() (*exec.Cmd, error) {
 	exe, args := SplitCmdline(e.Uninstall)
 	if exe == "" {
-		return fmt.Errorf("no uninstall command")
+		return nil, fmt.Errorf("no uninstall command")
 	}
-	return exec.Command(exe, args...).Start()
+	cmd := exec.Command(exe, args...)
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	return cmd, nil
 }
 
 // SplitCmdline breaks a stored command line into exe and arguments.

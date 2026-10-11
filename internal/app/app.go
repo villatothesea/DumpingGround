@@ -223,7 +223,6 @@ type Model struct {
 	sweepItems                      []uninstall.Item
 	sweepSel                        []bool
 	sweepOpen                       bool
-	sweepBusy                       bool
 	sweepArmed                      bool
 	sweepList                       ui.ListState
 	events                          chan func()
