@@ -279,7 +279,7 @@ func (m *Model) rustRows() []rustRow {
 			label = "item"
 		}
 		grouped = append(grouped, rustRow{head: fmt.Sprintf("%s — %s %s · %s",
-			rustRiskLabel(risk), format.Int(uint64(n)), label, format.Bytes(bytes))})
+			rustRiskLabel(risk), format.Int(uint64(n)), label, format.Bytes(bytes)), cat: -1, risk: risk})
 		for _, r := range rows {
 			if r.risk == risk {
 				grouped = append(grouped, r)
@@ -505,6 +505,9 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 			// Header matching the row layout below.
 			ui.Row(c).FillWidth().Height(24).Shrink(0).Padding(0, 10).Gap(6).AlignItems(ui.Center).Children(func() {
 				ui.Box(c).Width(176).Shrink(0)
+				ui.Row(c).Width(78).Shrink(0).Children(func() {
+					ui.Text(c, "Risk").FontSize(11).Bold().TextColor(t.TextMuted)
+				})
 				ui.Text(c, "Path").FontSize(11).Bold().TextColor(t.TextMuted).Grow(1).MinWidth(120).SingleLine()
 				for _, h := range []string{"Incr", "Debug", "Release", "Total"} {
 					ui.Row(c).Width(92).Shrink(0).Justify(ui.End).Children(func() {
@@ -517,9 +520,6 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 				ui.Row(c).Width(52).Shrink(0).Justify(ui.End).Children(func() {
 					ui.Text(c, "Idle").FontSize(11).Bold().TextColor(t.TextMuted)
 				})
-				ui.Row(c).Width(78).Shrink(0).Justify(ui.End).Children(func() {
-					ui.Text(c, "Risk").FontSize(11).Bold().TextColor(t.TextMuted)
-				})
 				ui.Box(c).Width(76).Shrink(0)
 			})
 			total := max(rep.Scanned, 1)
@@ -527,7 +527,7 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 				r := rows[i]
 				if r.head != "" {
 					ui.Row(c).FillWidth().Height(26).Padding(0, 10).AlignItems(ui.Center).Children(func() {
-						ui.Text(c, r.head).FontSize(11).Bold().TextColor(t.TextMuted)
+						ui.Text(c, r.head).FontSize(11).Bold().TextColor(rustRiskColor(t, r.risk))
 					})
 					return
 				}
@@ -556,6 +556,9 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 							tierBadge(c, t, cat+1, dim).Tooltip(rep.Cats[cat].Name)
 						}
 					})
+					ui.Row(c).Width(78).Shrink(0).Children(func() {
+						ui.Text(c, rustRiskLabel(r.risk)).FontSize(10).Bold().TextColor(rustRiskColor(t, r.risk))
+					})
 					if r.cat >= 0 {
 						ui.Text(c, rep.Cats[r.cat].Name).FontSize(11).TextColor(t.Accent).Shrink(0)
 						ui.Text(c, r.dir.Path).SingleLine().Tooltip(r.dir.Path).Grow(1).MinWidth(0).TextColor(t.TextMuted)
@@ -583,9 +586,6 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 					})
 					ui.Row(c).Width(52).Shrink(0).Justify(ui.End).Children(func() {
 						ui.Text(c, rustIdleText(r.idle)).SingleLine().TextColor(t.TextMuted)
-					})
-					ui.Row(c).Width(78).Shrink(0).Justify(ui.End).Children(func() {
-						ui.Text(c, rustRiskLabel(r.risk)).FontSize(10).Bold().TextColor(rustRiskColor(t, r.risk))
 					})
 					ui.Row(c).Width(76).Shrink(0).Justify(ui.End).Children(func() {
 						m.rustRowButton(c, t, r)
@@ -617,6 +617,7 @@ func (m *Model) rustFilterStrip(c *ui.Context, t *ui.Theme) {
 				}
 			}
 		}
+		ui.Checkbox(c, &m.rustGroupSafe, "Group by safety")
 		if m.rustFilterCat >= 0 {
 			cat := m.rustFilterCat
 			ui.Text(c, "· "+rep.Cats[cat].Name).FontSize(11).TextColor(t.TextMuted).Shrink(0)
@@ -628,7 +629,6 @@ func (m *Model) rustFilterStrip(c *ui.Context, t *ui.Theme) {
 			}
 		}
 		ui.Spacer(c)
-		ui.Checkbox(c, &m.rustGroupSafe, "Group by safety")
 	})
 }
 
