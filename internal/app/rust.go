@@ -448,7 +448,9 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 									dim = dim || !hit
 								}
 							}
-							tierBadge(c, t, cat+1, dim)
+							// The number is the category's index in the
+							// advanced picker — the tooltip names it.
+							tierBadge(c, t, cat+1, dim).Tooltip(rep.Cats[cat].Name)
 						}
 					})
 					path := filepath.Dir(it.Path)
