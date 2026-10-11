@@ -15,15 +15,24 @@ import (
 // name-matched traces of everything this tool has uninstalled before.
 // Every item is certain — a reference is dead only when its target is
 // verified missing, an empty folder carries nothing to lose.
-func Orphans(installed []Entry) []Item {
+func Orphans(installed []Entry, progress ...func(string, float64)) []Item {
+	rep := stageReporter(progress)
 	var out []Item
+	rep("Checking leftover installed-apps entries", 0)
 	out = append(out, deadEntryItems(installed)...)
+	rep("Checking shortcuts", 1.0/7)
 	out = append(out, deadShortcutItems(shortcutRoots())...)
+	rep("Checking startup entries", 2.0/7)
 	out = append(out, deadRunItems()...)
+	rep("Checking App Paths", 3.0/7)
 	out = append(out, deadAppPathsItems()...)
+	rep("Checking file associations", 4.0/7)
 	out = append(out, deadAssocItems()...)
+	rep("Checking Start Menu groups", 5.0/7)
 	out = append(out, emptyGroupItems(startMenuRoots())...)
+	rep("Checking uninstall history", 6.0/7)
 	out = append(out, historyItems(installed)...)
+	rep("Finishing up", 0.98)
 	seen := map[string]bool{}
 	items := out[:0]
 	for _, it := range out {

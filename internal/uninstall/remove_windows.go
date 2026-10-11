@@ -27,13 +27,21 @@ const (
 // RemoveItems deletes leftover candidates reversibly: directories go
 // to the Recycle Bin; registry items are first exported to backup in
 // .reg format so a double-click restores them. The returned slice
-// carries one error (or nil) per item, in order.
-func RemoveItems(items []Item, backup io.Writer) []error {
+// carries one error (or nil) per item, in order. progress, when given,
+// hears (done, total, currentPath) before each item and once at the
+// end — the review dialog's progress bar.
+func RemoveItems(items []Item, backup io.Writer, progress ...func(done, total int, path string)) []error {
+	rep := func(i int, path string) {
+		if len(progress) > 0 && progress[0] != nil {
+			progress[0](i, len(items), path)
+		}
+	}
 	errs := make([]error, len(items))
 	if backup != nil {
 		io.WriteString(backup, "Windows Registry Editor Version 5.00\r\n\r\n")
 	}
 	for i, it := range items {
+		rep(i, it.Path)
 		switch it.Kind {
 		case KindDir:
 			errs[i] = disk.RecycleFileOrDir(it.Path)
@@ -59,6 +67,7 @@ func RemoveItems(items []Item, backup io.Writer) []error {
 			errs[i] = deleteRegValue(root, sub, it.RegValue, access)
 		}
 	}
+	rep(len(items), "")
 	return errs
 }
 

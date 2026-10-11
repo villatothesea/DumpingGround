@@ -51,13 +51,27 @@ type Item struct {
 // rather than the filesystem.
 func (i Item) Registry() bool { return i.Kind != KindDir }
 
+// stageReporter lifts an optional progress callback into a plain
+// func — scans pass it stage labels and a 0→1 fraction so the review
+// dialog can show the work instead of appearing finished at once.
+func stageReporter(p []func(string, float64)) func(string, float64) {
+	if len(p) == 0 || p[0] == nil {
+		return func(string, float64) {}
+	}
+	return p[0]
+}
+
 // Footprint lists an installed app's traces — its install folder,
 // user-data directories, registry keys, startup entries and shortcuts.
 // all is the full installed-app list, used to suppress anything that
 // still belongs to another program. Read-only; nothing is removed.
-func Footprint(e *Entry, all []Entry) []Item {
-	items := fsFootprint(e, all, appRoots(), shortcutRoots())
+func Footprint(e *Entry, all []Entry, progress ...func(string, float64)) []Item {
+	rep := stageReporter(progress)
+	rep("Scanning app folders", 0)
+	items := fsFootprint(e, all, appRoots(), shortcutRoots(), progress...)
+	rep("Scanning the registry", 0.7)
 	items = append(items, regFootprint(e)...)
+	rep("Finishing up", 0.95)
 	// Dedupe: an install folder sitting inside a scanned root would be
 	// listed twice, and a registry key can be reached through two
 	// views. Path + value name is the identity.
@@ -76,7 +90,8 @@ func Footprint(e *Entry, all []Entry) []Item {
 
 // fsFootprint scans filesystem locations: the install folder,
 // well-known app-data roots and shortcut folders.
-func fsFootprint(e *Entry, all []Entry, roots, shortcuts []string) []Item {
+func fsFootprint(e *Entry, all []Entry, roots, shortcuts []string, progress ...func(string, float64)) []Item {
+	rep := stageReporter(progress)
 	var out []Item
 	names := e.matchTokens()
 	nPub := norm(e.Publisher)
@@ -96,7 +111,8 @@ func fsFootprint(e *Entry, all []Entry, roots, shortcuts []string) []Item {
 		})
 	}
 
-	for _, root := range roots {
+	for i, root := range roots {
+		rep("Scanning "+root, 0.05+0.5*float64(i)/float64(len(roots)))
 		kids, err := os.ReadDir(root)
 		if err != nil {
 			continue
@@ -132,7 +148,8 @@ func fsFootprint(e *Entry, all []Entry, roots, shortcuts []string) []Item {
 	}
 
 	// Shortcuts: Start Menu and Desktop .lnk files carrying the name.
-	for _, root := range shortcuts {
+	for i, root := range shortcuts {
+		rep("Scanning "+root, 0.55+0.1*float64(i)/float64(len(shortcuts)))
 		filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
 			if err != nil {
 				return nil
@@ -162,6 +179,7 @@ func fsFootprint(e *Entry, all []Entry, roots, shortcuts []string) []Item {
 			out[i].Bytes = DirSize(out[i].Path)
 		}
 	}
+	rep("Measuring folders", 0.65)
 	return out
 }
 

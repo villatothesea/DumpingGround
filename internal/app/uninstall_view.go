@@ -307,24 +307,58 @@ func (m *Model) uninstMenu(c *ui.Context, mm *ui.Menu, e *uninstall.Entry) {
 	}
 }
 
+// The review dialog's phases — the modal opens the moment a scan
+// starts and walks through them instead of appearing with results.
+const (
+	sweepReview   = iota // the checkbox list (also the zero value)
+	sweepScanning        // progress bar while a scan runs
+	sweepRemoving        // progress bar while items delete
+	sweepDone            // confirm-close alert with the result
+)
+
+// openSweepScan puts the leftover dialog up in its scanning phase.
+func (m *Model) openSweepScan(name string) {
+	m.sweepName, m.sweepPhase, m.sweepArmed = name, sweepScanning, false
+	m.sweepScanText, m.sweepScanFrac = "Starting the scan…", 0
+	m.sweepItems = nil
+	m.sweepOpen = true
+}
+
+// scanProgress is the Footprint/Orphans callback: each stage posts its
+// label and 0→1 fraction to the dialog.
+func (m *Model) scanProgress(base float64) func(string, float64) {
+	return func(stage string, f float64) {
+		m.post(func() {
+			m.sweepScanText = stage
+			m.sweepScanFrac = base + (1-base)*f
+		})
+	}
+}
+
+// finishSweepScan presents what a scan produced — the checkbox list,
+// or the "clean machine" alert when empty.
+func (m *Model) finishSweepScan(name string, items []uninstall.Item) {
+	m.sweepItems = items
+	m.sweepSel = make([]bool, len(items))
+	for i := range items {
+		m.sweepSel[i] = true
+	}
+	if len(items) > 0 {
+		uninstall.SavePending(name, items)
+	}
+	m.sweepPhase = sweepReview
+}
+
 // startSweep scans an entry's leftovers without uninstalling it — the
 // "Find leftovers" menu action. Same review modal as the post-uninstall
 // flow.
 func (m *Model) startSweep(e *uninstall.Entry) {
-	m.sweepName, m.sweepArmed = e.Name, false
+	m.openSweepScan(e.Name)
 	all := append([]uninstall.Entry(nil), m.uninstRows...)
 	entry := *e
 	go func() {
-		items := uninstall.Footprint(&entry, all)
-		m.post(func() {
-			m.sweepItems = items
-			m.sweepSel = make([]bool, len(items))
-			for i := range items {
-				m.sweepSel[i] = true
-			}
-			uninstall.SavePending(entry.Name, items)
-			m.sweepOpen = true
-		})
+		items := uninstall.Footprint(&entry, all, m.scanProgress(0))
+		m.post(func() { m.finishSweepScan(entry.Name, items) })
 	}()
 }
 
@@ -343,24 +377,17 @@ func (m *Model) startOrphanScan() {
 	}
 	m.orphanScanning = true
 	m.uninstMsg = "Scanning for leftovers of removed apps…"
+	m.openSweepScan(orphanScanName)
 	all := append([]uninstall.Entry(nil), m.uninstRows...)
 	go func() {
-		items := uninstall.Orphans(all)
+		items := uninstall.Orphans(all, m.scanProgress(0))
 		applog.Logf("orphan scan: %d items", len(items))
 		m.post(func() {
 			m.orphanScanning = false
 			if len(items) == 0 {
 				m.uninstMsg = "No leftovers of removed apps found"
-				return
 			}
-			m.sweepName = orphanScanName
-			m.sweepItems = items
-			m.sweepSel = make([]bool, len(items))
-			for i := range items {
-				m.sweepSel[i] = true
-			}
-			uninstall.SavePending(orphanScanName, items)
-			m.sweepOpen, m.sweepArmed = true, false
+			m.finishSweepScan(orphanScanName, items)
 		})
 	}()
 }
@@ -390,20 +417,32 @@ func (m *Model) launchUninstall(e *uninstall.Entry) {
 	go func() {
 		_ = cmd.Wait()
 		applog.Logf("uninstaller exited  %s", entry.Name)
+		// The review dialog opens the moment the uninstaller exits —
+		// the scan's progress is part of the show, not a hidden wait.
+		m.post(func() {
+			m.openSweepScan(entry.Name)
+			m.sweepScanText = "Waiting for the uninstaller to finish…"
+			m.sweepScanFrac = 0.05
+		})
 		// Some uninstallers spawn a child and exit early — poll until
 		// the registry entry disappears or a grace window elapses.
 		gone := entry.Gone()
 		for i := 0; i < 30 && !gone; i++ {
 			time.Sleep(2 * time.Second)
 			gone = entry.Gone()
+			frac := 0.05 + 0.25*float64(i)/30
+			m.post(func() { m.sweepScanFrac = frac })
 		}
 		// The entry vanishing does not mean file deletion finished —
 		// spawned children keep working. Wait until the install
 		// folder's size holds still across two samples.
 		if gone && uninstall.SaneLocation(entry.Location) {
+			m.post(func() { m.sweepScanText = "Waiting for file cleanup to settle…" })
 			last := uninstall.DirSize(entry.Location)
 			for i := 0; i < 8; i++ {
 				time.Sleep(2 * time.Second)
+				frac := 0.3 + 0.2*float64(i)/8
+				m.post(func() { m.sweepScanFrac = frac })
 				cur := uninstall.DirSize(entry.Location)
 				if cur == last {
 					break
@@ -411,16 +450,11 @@ func (m *Model) launchUninstall(e *uninstall.Entry) {
 				last = cur
 			}
 		}
-		items := uninstall.Footprint(&entry, all)
+		items := uninstall.Footprint(&entry, all, m.scanProgress(0.5))
 		m.post(func() {
 			m.uninstBusy = ""
 			m.uninstLoaded = false // the listing changed
 			m.sweepName = entry.Name
-			m.sweepItems = items
-			m.sweepSel = make([]bool, len(items))
-			for i := range items {
-				m.sweepSel[i] = true
-			}
 			if gone {
 				// The name keeps finding leftovers later — log-driven
 				// history is the orphan scan's name source.
@@ -435,12 +469,7 @@ func (m *Model) launchUninstall(e *uninstall.Entry) {
 			default:
 				m.uninstMsg = entry.Name + " — uninstaller exited but the entry is still listed; review before removing"
 			}
-			// The review opens even when nothing was found — the user
-			// deserves to see the scan ran, not to wonder whether it did.
-			m.sweepOpen, m.sweepArmed = true, false
-			if len(items) > 0 {
-				uninstall.SavePending(entry.Name, items)
-			}
+			m.finishSweepScan(entry.Name, items)
 		})
 	}()
 }
@@ -448,6 +477,32 @@ func (m *Model) launchUninstall(e *uninstall.Entry) {
 // sweepModal is the leftover review list — per-item checkboxes, an
 // explanation of reversibility, and the armed two-click Remove.
 func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
+	switch m.sweepPhase {
+	case sweepScanning:
+		ui.Modal(c, &m.sweepOpen, func() {
+			ui.Column(c).Width(440).Padding(6, 16, 14, 16).Gap(10).Children(func() {
+				ui.Text(c, "Leftovers — "+m.sweepName).Bold().FontSize(16)
+				ui.Text(c, m.sweepScanText).FontSize(11).TextColor(t.TextMuted).SingleLine().MinWidth(0)
+				ui.Progress(c, m.sweepScanFrac).FillWidth()
+			})
+		})
+		return
+	case sweepRemoving:
+		ui.Modal(c, &m.sweepOpen, func() {
+			ui.Column(c).Width(440).Padding(6, 16, 14, 16).Gap(10).Children(func() {
+				ui.Text(c, "Removing leftovers — "+m.sweepName).Bold().FontSize(16)
+				ui.Text(c, fmt.Sprintf("%d of %d · %s", m.sweepRmDone, m.sweepRmTotal, m.sweepRmPath)).
+					FontSize(11).TextColor(t.TextMuted).SingleLine().MinWidth(0)
+				ui.Progress(c, float64(m.sweepRmDone)/float64(max(m.sweepRmTotal, 1))).FillWidth()
+			})
+		})
+		return
+	case sweepDone:
+		if ui.AlertDialog(c, &m.sweepOpen, "Leftovers — "+m.sweepName, m.sweepDoneMsg, "OK") >= 0 {
+			m.sweepPhase = sweepReview
+		}
+		return
+	}
 	if len(m.sweepItems) == 0 {
 		// Nothing to review — a one-button alert, not the full list UI.
 		msg := "No leftovers found — the uninstaller left a clean machine."
@@ -540,6 +595,8 @@ func (m *Model) runSweepRemoval() {
 	if len(chosen) == 0 {
 		return
 	}
+	m.sweepPhase = sweepRemoving
+	m.sweepRmDone, m.sweepRmTotal, m.sweepRmPath = 0, len(chosen), ""
 	backup := ""
 	hasReg := false
 	for _, it := range chosen {
@@ -559,7 +616,11 @@ func (m *Model) runSweepRemoval() {
 				f, reg = fh, fh
 			}
 		}
-		errs := uninstall.RemoveItems(chosen, reg)
+		errs := uninstall.RemoveItems(chosen, reg, func(done, total int, path string) {
+			m.post(func() {
+				m.sweepRmDone, m.sweepRmTotal, m.sweepRmPath = done, total, path
+			})
+		})
 		removed := 0
 		var failedItems []uninstall.Item
 		for i, err := range errs {
@@ -588,11 +649,13 @@ func (m *Model) runSweepRemoval() {
 				// Locked files and the like stay pending — the next
 				// launch offers them again instead of losing them.
 				uninstall.SavePending(name, failedItems)
+				msg += "\nFailed items will be offered again next launch."
 			} else {
 				uninstall.ClearPending(name)
 			}
-			m.sweepOpen = false
-			m.uninstMsg = msg
+			m.sweepDoneMsg = msg
+			m.sweepPhase = sweepDone
+			m.uninstMsg = strings.SplitN(msg, "\n", 2)[0]
 			m.uninstLoaded = false // registry listing may be gone now
 		})
 	}()

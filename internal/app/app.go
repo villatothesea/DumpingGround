@@ -228,7 +228,14 @@ type Model struct {
 	sweepArmed                      bool
 	sweepRestored                   bool // pending review was offered once this launch
 	sweepList                       ui.ListState
-	orphanScanning                  bool // leftover scan for already-removed apps in flight
+	sweepPhase                      int    // review / scanning / removing / done
+	sweepScanText                   string // stage label under the scan progress bar
+	sweepScanFrac                   float64
+	sweepRmDone                     int // removal progress: items finished…
+	sweepRmTotal                    int // …out of this many
+	sweepRmPath                     string
+	sweepDoneMsg                    string // result text of the confirm-close alert
+	orphanScanning                  bool   // leftover scan for already-removed apps in flight
 	events                          chan func()
 	// CaptureDir writes only this application's frames during explicit diagnostics.
 	CaptureDir  string

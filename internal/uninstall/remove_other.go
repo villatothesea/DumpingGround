@@ -11,7 +11,7 @@ import (
 // RemoveItems on non-Windows builds only handles filesystem items —
 // there is no registry. Dirs are deleted outright (no platform trash
 // here); callers on Windows get the reversible path instead.
-func RemoveItems(items []Item, backup io.Writer) []error {
+func RemoveItems(items []Item, backup io.Writer, progress ...func(done, total int, path string)) []error {
 	errs := make([]error, len(items))
 	for i, it := range items {
 		switch it.Kind {
