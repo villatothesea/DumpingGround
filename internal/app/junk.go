@@ -420,12 +420,15 @@ func (m *Model) junkResultsView(c *ui.Context, t *ui.Theme) {
 					if r.d.Warn != "" {
 						note = r.d.Warn
 					}
-					if r.d.Warn != "" || r.risk == disk.RustRiskReview {
-						warnCol := t.TextMuted
-						if r.risk != disk.RustRiskSafe {
-							warnCol = t.Warning
-						}
-						icon(c, "warn", 12).TextColor(warnCol).Tooltip(note)
+					// Every row carries a consequence hint — the marker's
+					// shape and color encode how much it matters.
+					switch {
+					case r.risk == disk.RustRiskSafe:
+						icon(c, "info", 12).TextColor(t.TextMuted).Tooltip(note)
+					case r.risk == disk.RustRiskReview:
+						icon(c, "warn", 12).TextColor(t.Danger).Tooltip(note)
+					default:
+						icon(c, "warn", 12).TextColor(t.Warning).Tooltip(note)
 					}
 					ui.Text(c, rep.Cats[r.cat].Name).FontSize(11).TextColor(t.Accent).Shrink(0).
 						Tooltip(note)
