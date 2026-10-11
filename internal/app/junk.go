@@ -333,7 +333,7 @@ func (m *Model) junkResultsView(c *ui.Context, t *ui.Theme) {
 			if len(rep.Cats[disk.JunkCatWindowsOld].Dirs) > 0 {
 				ui.Column(c).Grow(1).Padding(10, 12).Gap(4).Background(t.Surface).Radius(8).Children(func() {
 					ui.Text(c, "Not in any plan").FontSize(10).Bold().TextColor(t.TextMuted)
-					ui.Text(c, "Windows.old is listed below — deleting it removes the rollback option.").
+					ui.Text(c, "Windows.old and upgrade leftovers — deleting removes the rollback option.").
 						FontSize(11).TextColor(t.TextMuted)
 				}).BorderWidth(1).BorderColor(t.Border)
 			}

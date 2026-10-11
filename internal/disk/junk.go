@@ -97,8 +97,8 @@ var junkCatDefs = [JunkCatCount]struct {
 	{"Update downloads", "Staging files from installed updates — Windows re-downloads if needed", RustRiskModerate},
 	{"Crash dumps", "Crash evidence is gone — keep it if you are diagnosing a crash right now", RustRiskModerate},
 	{"Windows logs", "Setup and servicing history lost — only matters for troubleshooting", RustRiskModerate},
-	{"Dev caches", "The next go/npm/pip/gradle run re-downloads — slower once", RustRiskModerate},
-	{"Windows.old", "Cannot roll back to the previous Windows — this is permanent", RustRiskReview},
+	{"Dev caches", "The next build re-downloads or recompiles — slower once", RustRiskModerate},
+	{"Windows upgrades", "Rollback data from past installs — deleting is permanent", RustRiskReview},
 }
 
 // JunkCatName reports a category's display name, for progress text.
@@ -128,13 +128,29 @@ func FindJunk(opts JunkOpts) *JunkReport {
 	}
 	run(JunkCatUserTemp, func() { rep.junkKids(JunkCatUserTemp, os.TempDir(), junkTempAge) })
 	run(JunkCatWinTemp, func() { rep.junkKids(JunkCatWinTemp, filepath.Join(windir, "Temp"), junkTempAge) })
-	run(JunkCatBrowser, func() { rep.junkBrowsers(local, roaming, opts.Running) })
+	run(JunkCatBrowser, func() {
+		rep.junkBrowsers(local, roaming, opts.Running)
+		// WinINet's cache — used by WebView2, Office and legacy IE apps.
+		// Cookies live in the separate INetCookies dir, untouched.
+		rep.junkKids(JunkCatBrowser, filepath.Join(local, `Microsoft\Windows\INetCache`), 0)
+	})
 	run(JunkCatThumbs, func() {
 		for _, pat := range []string{"thumbcache_*.db", "iconcache*.db"} {
 			rep.junkGlob(JunkCatThumbs, filepath.Join(local, `Microsoft\Windows\Explorer`, pat))
 		}
 	})
-	run(JunkCatShader, func() { rep.junkKids(JunkCatShader, filepath.Join(local, "D3DSCache"), 0) })
+	run(JunkCatShader, func() {
+		rep.junkKids(JunkCatShader, filepath.Join(local, "D3DSCache"), 0)
+		// GPU vendors keep their own shader caches — much larger than
+		// D3DSCache on a gaming machine.
+		for _, sub := range []string{
+			`NVIDIA\DXCache`, `NVIDIA\GLCache`,
+			`AMD\DxCache`, `AMD\GLCache`, `Intel\ShaderCache`,
+		} {
+			rep.junkKids(JunkCatShader, filepath.Join(local, sub), 0)
+		}
+		rep.junkKids(JunkCatShader, `C:\Program Files (x86)\Steam\steamapps\shadercache`, 0)
+	})
 	run(JunkCatWER, func() {
 		for _, root := range []string{local, `C:\ProgramData`} {
 			for _, sub := range []string{"ReportArchive", "ReportQueue", "ReportStore"} {
@@ -154,19 +170,29 @@ func FindJunk(opts JunkOpts) *JunkReport {
 	run(JunkCatUpdateDl, func() {
 		rep.junkKidsW(JunkCatUpdateDl, filepath.Join(windir, `SoftwareDistribution\Download`), 0,
 			"Re-downloaded if a pending update install resumes — bandwidth, not breakage")
+		rep.junkKidsW(JunkCatUpdateDl, filepath.Join(windir, `SoftwareDistribution\DeliveryOptimization`), 0,
+			"Delivery Optimization's shared download cache — rebuilt as updates flow")
 	})
 	run(JunkCatDumps, func() {
 		rep.junkGlob(JunkCatDumps, filepath.Join(windir, `Minidump\*.dmp`))
 		rep.junkGlob(JunkCatDumps, filepath.Join(windir, "memory.dmp"))
 		rep.junkGlob(JunkCatDumps, filepath.Join(windir, `LiveKernelReports\*.dmp`))
 		rep.junkGlob(JunkCatDumps, filepath.Join(local, "CrashDumps", "*"))
+		// Chromium-family crash reporters keep pending reports per browser.
+		for _, b := range junkBrowserCatalog {
+			rep.junkKidsW(JunkCatDumps, filepath.Join(local, b.base, `Crashpad\reports`), 0,
+				"Crash reports queued by "+b.name+" — evidence of past crashes")
+		}
 		for i := range rep.Cats[JunkCatDumps].Dirs {
-			rep.Cats[JunkCatDumps].Dirs[i].Warn = junkDumpWarn(rep.Cats[JunkCatDumps].Dirs[i].Base)
+			if rep.Cats[JunkCatDumps].Dirs[i].Warn == "" {
+				rep.Cats[JunkCatDumps].Dirs[i].Warn = junkDumpWarn(rep.Cats[JunkCatDumps].Dirs[i].Base)
+			}
 		}
 	})
 	run(JunkCatWinLogs, func() {
 		for _, pat := range []string{
-			`Logs\CBS\*.log`, `Panther\*.log`, `inf\setupapi.*.log`,
+			`Logs\CBS\*.log`, `Logs\CBS\CbsPersist_*.cab`, `Logs\DISM\*.log`,
+			`Panther\*.log`, `inf\setupapi.*.log`,
 			`Logs\WindowsUpdate\*.etl`,
 			// Only rolled-over update DB segments — edb.log, edb.chk,
 			// tmp.edb and the .jrs reserves are live wuauserv files.
@@ -183,6 +209,12 @@ func FindJunk(opts JunkOpts) *JunkReport {
 			{filepath.Join(local, `pip\cache`), "the next pip install re-downloads wheels"},
 			{filepath.Join(home, `.gradle\caches`), "the next Gradle build re-downloads dependencies"},
 			{filepath.Join(home, `.m2\repository`), "the next Maven build re-downloads dependencies"},
+			{filepath.Join(home, `.nuget\packages`), "the next dotnet restore re-downloads every package"},
+			{filepath.Join(local, `NuGet\v3-cache`), "the next dotnet restore re-resolves versions"},
+			{filepath.Join(local, `Yarn\Cache`), "the next yarn install re-downloads every package"},
+			{filepath.Join(local, `pnpm\store`), "the next pnpm install re-downloads every package"},
+			{filepath.Join(local, `uv\cache`), "the next uv run re-downloads packages"},
+			{filepath.Join(local, `Mozilla\sccache`), "the next build recompiles — sccache loses its cache"},
 		} {
 			rep.junkKidsW(JunkCatDevCaches, dc.p, 0, "Re-downloads on demand — "+dc.warn)
 		}
@@ -191,6 +223,14 @@ func FindJunk(opts JunkOpts) *JunkReport {
 		if d, ok := junkWholeDir(`C:\Windows.old`); ok {
 			d.Warn = "Deleting is permanent — the option to roll back Windows is gone"
 			rep.junkAdd(JunkCatWindowsOld, d)
+		}
+		// Leftovers from past or failed upgrades — same permanence as
+		// Windows.old. ESD is deliberately absent (needed for a reset).
+		for _, p := range []string{`C:\$Windows.~BT`, `C:\$Windows.~WS`, `C:\Windows10Upgrade`} {
+			if d, ok := junkWholeDir(p); ok {
+				d.Warn = "Upgrade leftovers — deleting is permanent"
+				rep.junkAdd(JunkCatWindowsOld, d)
+			}
 		}
 	})
 	for _, cat := range rep.Cats {
