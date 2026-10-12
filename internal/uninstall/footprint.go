@@ -101,7 +101,7 @@ func fsFootprint(e *Entry, all []Entry, roots, shortcuts []string, progress ...f
 	// that app put there, but not proven to be the whole install.
 	// saneLocation is belt-and-braces: entries sanitize at
 	// enumeration, but a restored pending item could predate it.
-	if e.Location != "" && SaneLocation(e.Location) && isDir(e.Location) {
+	if e.Location != "" && SaneLocation(e.Location) && isDir(e.Location) && !claimed(e.Location, e, all) {
 		conf, why := Confirmed, "the app's install folder, left behind"
 		if e.LocationGuessed {
 			conf, why = Likely, "install folder inferred from a shortcut"

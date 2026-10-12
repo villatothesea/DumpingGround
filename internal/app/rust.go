@@ -30,7 +30,7 @@ type rustPreset struct {
 var rustPresets = []rustPreset{
 	{name: "Light", tag: "SAFE", rebuild: "Rebuild: nothing — Cargo re-downloads", cats: []int{disk.RustCatIncr, disk.RustCatDoc, disk.RustCatRegistry, disk.RustCatGit}},
 	{name: "Deep", tag: "MODERATE", rebuild: "Rebuild: next cargo build", cats: []int{disk.RustCatIncr, disk.RustCatDoc, disk.RustCatDebug, disk.RustCatRegistry, disk.RustCatGit}},
-	{name: "Nuke", tag: "AGGRESSIVE", rebuild: "Rebuild: everything incl. release", allTargets: true, cats: []int{disk.RustCatRegistry, disk.RustCatGit}},
+	{name: "Nuke", tag: "AGGRESSIVE", rebuild: "Rebuild: everything incl. release", allTargets: true, cats: []int{disk.RustCatIncr, disk.RustCatDoc, disk.RustCatDebug, disk.RustCatRelease, disk.RustCatRegistry, disk.RustCatGit}},
 }
 
 // rustScan analyzes the current snapshot for Rust build artifacts. When
@@ -119,6 +119,12 @@ func (m *Model) rustPresetJobs(p int) []disk.RustDir {
 	var jobs []disk.RustDir
 	if pre.allTargets {
 		for _, it := range rep.Items {
+			if it.Stray > 0 {
+				// Stray files inside target/ are REVIEW-level — a whole-
+				// dir delete would take them with it. The preset's cats
+				// still clear this target's artifact dirs below.
+				continue
+			}
 			jobs = append(jobs, disk.RustDir{Path: it.Path, Bytes: it.Total, Base: "target"})
 		}
 	}
@@ -170,7 +176,7 @@ func (m *Model) rustRowHit(r rustRow) bool {
 		}
 		return false
 	}
-	if pre.allTargets {
+	if pre.allTargets && (r.item == nil || r.item.Stray == 0) {
 		return true
 	}
 	for _, cc := range pre.cats {
@@ -322,10 +328,15 @@ func (m *Model) rustDelete(jobs []disk.RustDir) {
 			if recycle {
 				err = disk.RecycleFileOrDir(j.Path)
 				if err != nil {
-					// Some paths cannot be binned — too big, or the
-					// shell refused. Remove them directly and say so.
+					// The bin refused — the path stays put. Falling
+					// back to a permanent delete would betray the
+					// checkbox the user ticked.
 					unbinned++
-					err = os.RemoveAll(j.Path)
+					failed++
+					if firstErr == nil {
+						firstErr = err
+					}
+					continue
 				}
 			} else {
 				err = os.RemoveAll(j.Path)
@@ -347,7 +358,7 @@ func (m *Model) rustDelete(jobs []disk.RustDir) {
 			m.rustRowConfirm = ""
 			m.rustMsg = fmt.Sprintf("Deleted %s items, freed about %s", format.Int(uint64(len(deleted))), format.Bytes(freed))
 			if unbinned > 0 {
-				m.rustMsg += fmt.Sprintf(" · %s could not be recycled and were removed", format.Int(uint64(unbinned)))
+				m.rustMsg += fmt.Sprintf(" · %s could not be recycled and were left in place", format.Int(uint64(unbinned)))
 			}
 			if failed > 0 && firstErr != nil {
 				m.rustMsg += fmt.Sprintf(" · %s failed: %s", format.Int(uint64(failed)), firstErr)

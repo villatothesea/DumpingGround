@@ -226,6 +226,7 @@ type Model struct {
 	sweepSel                        []bool
 	sweepOpen                       bool
 	sweepArmed                      bool
+	sweepLiveApp                    bool // "Find leftovers" ran on an app that is still installed
 	sweepRestored                   bool // pending review was offered once this launch
 	sweepList                       ui.ListState
 	sweepPhase                      int    // review / scanning / removing / done
@@ -253,7 +254,7 @@ func New() *Model {
 		iconCache:   make(map[string]*ui.Bitmap),
 		iconPending: make(map[string]bool), iconRequests: make(chan string, 32),
 		diskStatus: "Choose a drive or folder to scan", diskMode: "Tree", diskMetric: "Allocated", diskSelected: -1, diskNode: -1, extensionSelected: -1, mapRoot: -1, diskSplit: 300, animateMap: true, detailTab: "Properties", memRelease: "Automatic", tabStyle: "Pill",
-		rustGone: map[string]bool{}, rustSel: -1, rustConfirm: -1, rustPathsCat: -1,
+		rustGone: map[string]bool{}, rustSel: -1, rustConfirm: -1, rustPathsCat: -1, rustRecycle: true,
 		rustFilterCat: -1, junkSel: -1, junkConfirm: -1, junkFilterCat: -1, junkPathsCat: -1,
 		rustCollapsed: map[int]bool{}, junkCollapsed: map[string]bool{}}
 }

@@ -124,8 +124,10 @@ func (r *linkResolver) resolve(path string) (target string, resolved, inconclusi
 // An inconclusive check flags nothing — flagging on a failed resolve
 // would condemn working links.
 func (r *linkResolver) linkDead(path string) bool {
-	// The cheap check first: the stored target exists — alive.
-	if t := parseLinkTargetFile(path); t != "" && fileExists(os.ExpandEnv(t)) {
+	// The cheap check first: the stored target exists, or cannot be
+	// proven gone (offline drive, unreachable share) — either way the
+	// link is not condemned on doubt.
+	if t := parseLinkTargetFile(path); t != "" && missingPath(t) == "" {
 		return false
 	}
 	_, resolved, inconclusive := r.resolve(path)

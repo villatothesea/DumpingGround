@@ -4,15 +4,24 @@ package disk
 
 import (
 	"errors"
+	"fmt"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"unsafe"
 )
 
 var (
-	shFileOpDLL   = syscall.NewLazyDLL("shell32.dll")
-	procSHFileOp  = shFileOpDLL.NewProc("SHFileOperationW")
-	coInitDLL     = syscall.NewLazyDLL("ole32.dll")
-	procCoInitEx  = coInitDLL.NewProc("CoInitializeEx")
+	shFileOpDLL      = syscall.NewLazyDLL("shell32.dll")
+	procSHFileOp     = shFileOpDLL.NewProc("SHFileOperationW")
+	coInitDLL        = syscall.NewLazyDLL("ole32.dll")
+	procCoInitEx     = coInitDLL.NewProc("CoInitializeEx")
+	rcyKernel32      = syscall.NewLazyDLL("kernel32.dll")
+	procGetDriveType = rcyKernel32.NewProc("GetDriveTypeW")
+	rcyAdvapi        = syscall.NewLazyDLL("advapi32.dll")
+	procRcyOpenKey   = rcyAdvapi.NewProc("RegOpenKeyExW")
+	procRcyCloseKey  = rcyAdvapi.NewProc("RegCloseKey")
+	procRcyQueryVal  = rcyAdvapi.NewProc("RegQueryValueExW")
 )
 
 // shFileOpStruct mirrors SHFILEOPSTRUCTW for FO_DELETE calls.
@@ -36,10 +45,14 @@ const (
 )
 
 // RecycleFileOrDir moves a file or directory to the recycle bin through
-// the shell. It returns an error when the shell refuses — the caller
-// decides whether to fall back to a plain RemoveAll — so the recycle
-// path never silently becomes a permanent delete.
+// the shell. Any condition under which the shell would nuke instead —
+// an over-long path, a drive without a bin, a bin turned off in
+// Explorer policy — is checked here first and returned as an error, so
+// the recycle path never silently becomes a permanent delete.
 func RecycleFileOrDir(path string) error {
+	if err := recyclable(path); err != nil {
+		return err
+	}
 	// SHFileOperationW is a shell call that may create COM objects on the
 	// calling thread; make sure the apartment exists.
 	procCoInitEx.Call(0, 0x2) // COINIT_APARTMENTTHREADED — S_FALSE is fine
@@ -62,4 +75,65 @@ func RecycleFileOrDir(path string) error {
 		return errors.New("recycle bin move aborted")
 	}
 	return nil
+}
+
+// recyclable pre-checks a path so the recycle promise holds: only an
+// absolute, wildcard-free, reasonably short path on a drive whose
+// recycle bin exists and is enabled can actually be recycled —
+// anything else SHFileOperation would delete permanently while still
+// reporting success.
+func recyclable(path string) error {
+	if !filepath.IsAbs(path) {
+		return fmt.Errorf("refusing relative path %q", path)
+	}
+	if strings.ContainsAny(path, "*?") {
+		return fmt.Errorf("refusing wildcard path %q", path)
+	}
+	if len(path) >= 240 {
+		return fmt.Errorf("path too long for the recycle bin (%d chars)", len(path))
+	}
+	vol := filepath.VolumeName(path)
+	if len(vol) != 2 || vol[1] != ':' {
+		return fmt.Errorf("no drive letter in %q — UNC paths have no recycle bin", path)
+	}
+	rp, err := syscall.UTF16PtrFromString(vol + `\`)
+	if err != nil {
+		return err
+	}
+	t, _, _ := procGetDriveType.Call(uintptr(unsafe.Pointer(rp)))
+	if t != 3 && t != 2 { // DRIVE_FIXED, DRIVE_REMOVABLE only
+		return fmt.Errorf("drive %s cannot hold a recycle bin", vol)
+	}
+	if nukeOnDelete(vol[0]) {
+		return fmt.Errorf("the recycle bin is disabled on drive %s — refusing to delete %q", vol, path)
+	}
+	return nil
+}
+
+// nukeOnDelete reports whether Explorer's BitBucket policy turns the
+// bin off for this drive — deletions there bypass the bin entirely
+// even with FOF_ALLOWUNDO.
+func nukeOnDelete(drive byte) bool {
+	sub := `SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\BitBucket\` + string(drive)
+	subP, err := syscall.UTF16PtrFromString(sub)
+	if err != nil {
+		return false
+	}
+	var h uintptr
+	r, _, _ := procRcyOpenKey.Call(0x80000001 /*HKEY_CURRENT_USER*/,
+		uintptr(unsafe.Pointer(subP)), 0, 0x20019 /*KEY_READ*/,
+		uintptr(unsafe.Pointer(&h)))
+	if r != 0 {
+		return false
+	}
+	defer procRcyCloseKey.Call(h)
+	nameP, err := syscall.UTF16PtrFromString("NukeOnDelete")
+	if err != nil {
+		return false
+	}
+	var kind, val, sz uint32 = 0, 0, 4
+	r, _, _ = procRcyQueryVal.Call(h, uintptr(unsafe.Pointer(nameP)), 0,
+		uintptr(unsafe.Pointer(&kind)), uintptr(unsafe.Pointer(&val)),
+		uintptr(unsafe.Pointer(&sz)))
+	return r == 0 && kind == 4 && val == 1 // REG_DWORD == 1
 }

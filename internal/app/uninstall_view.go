@@ -71,13 +71,34 @@ func (m *Model) uninstallView(c *ui.Context, t *ui.Theme) {
 		if m.uninstLoaded && !m.sweepRestored {
 			m.sweepRestored = true
 			if name, items := uninstall.LoadPending(); name != "" {
-				m.sweepName, m.sweepItems = name, items
-				m.sweepSel = make([]bool, len(items))
-				for i := range items {
-					m.sweepSel[i] = true
+				// Re-validate: the app may have been reinstalled in the
+				// meantime, and saved paths may have been cleaned by
+				// hand. Stale pending data must never preselect live
+				// files.
+				if name != orphanScanName && uninstall.StillInstalled(name, m.uninstRows) {
+					uninstall.ClearPending(name)
+					m.uninstMsg = name + " is installed again — its saved leftover review was dropped"
+				} else {
+					var kept []uninstall.Item
+					for _, it := range items {
+						if it.Registry() || it.Kind != uninstall.KindDir || dirExists(it.Path) {
+							kept = append(kept, it)
+						}
+					}
+					if len(kept) == 0 {
+						uninstall.ClearPending(name)
+						m.uninstMsg = name + " — saved leftovers are already gone"
+					} else {
+						items = kept
+						m.sweepName, m.sweepItems = name, items
+						m.sweepSel = make([]bool, len(items))
+						for i := range items {
+							m.sweepSel[i] = items[i].Confidence == uninstall.Confirmed
+						}
+						m.sweepOpen, m.sweepArmed = true, false
+						m.uninstMsg = name + " — leftover review resumed from before the app was closed"
+					}
 				}
-				m.sweepOpen, m.sweepArmed = true, false
-				m.uninstMsg = name + " — leftover review resumed from before the app was closed"
 			}
 		}
 		rows := m.uninstRowsFiltered()
@@ -321,6 +342,7 @@ func (m *Model) openSweepScan(name string) {
 	m.sweepName, m.sweepPhase, m.sweepArmed = name, sweepScanning, false
 	m.sweepScanText, m.sweepScanFrac = "Starting the scan…", 0
 	m.sweepItems = nil
+	m.sweepLiveApp = false
 	m.sweepOpen = true
 }
 
@@ -336,12 +358,14 @@ func (m *Model) scanProgress(base float64) func(string, float64) {
 }
 
 // finishSweepScan presents what a scan produced — the checkbox list,
-// or the "clean machine" alert when empty.
+// or the "clean machine" alert when empty. Only Confirmed items start
+// checked: a Likely row is a name-matched guess and must be opted into
+// by hand.
 func (m *Model) finishSweepScan(name string, items []uninstall.Item) {
 	m.sweepItems = items
 	m.sweepSel = make([]bool, len(items))
 	for i := range items {
-		m.sweepSel[i] = true
+		m.sweepSel[i] = items[i].Confidence == uninstall.Confirmed
 	}
 	if len(items) > 0 {
 		uninstall.SavePending(name, items)
@@ -351,14 +375,28 @@ func (m *Model) finishSweepScan(name string, items []uninstall.Item) {
 
 // startSweep scans an entry's leftovers without uninstalling it — the
 // "Find leftovers" menu action. Same review modal as the post-uninstall
-// flow.
+// flow. When the app is still installed nothing Confirmed can be shown:
+// its install folder, its uninstall key and its startup entries are
+// live, so the listing degrades to unchecked Likely matches only.
 func (m *Model) startSweep(e *uninstall.Entry) {
 	m.openSweepScan(e.Name)
 	all := append([]uninstall.Entry(nil), m.uninstRows...)
 	entry := *e
 	go func() {
 		items := uninstall.Footprint(&entry, all, m.scanProgress(0))
-		m.post(func() { m.finishSweepScan(entry.Name, items) })
+		m.post(func() {
+			if !entry.Gone() {
+				m.sweepLiveApp = true
+				var kept []uninstall.Item
+				for _, it := range items {
+					if it.Confidence != uninstall.Confirmed {
+						kept = append(kept, it)
+					}
+				}
+				items = kept
+			}
+			m.finishSweepScan(entry.Name, items)
+		})
 	}()
 }
 
@@ -531,6 +569,9 @@ func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 			if m.sweepName == orphanScanName {
 				subtitle = "Every item is a verified leftover of something already removed — dead references, empty folders, name-matched traces. Folders go to the Recycle Bin; registry items get a .reg backup in the log folder first."
 			}
+			if m.sweepLiveApp {
+				subtitle = m.sweepName + " is still installed — its install folder, app entry and startup items are live and never listed here. What remains are name-matched folders only; none is preselected."
+			}
 			ui.Text(c, subtitle).FontSize(11).TextColor(t.TextMuted).MaxWidth(760)
 			ui.List(c, &m.sweepList, len(m.sweepItems), func(i int) {
 				it := m.sweepItems[i]
@@ -615,6 +656,8 @@ func (m *Model) runSweepRemoval() {
 		if backup != "" {
 			if fh, err := os.Create(backup); err == nil {
 				f, reg = fh, fh
+			} else {
+				applog.Logf("registry backup FAILED to create  %s  — %v", backup, err)
 			}
 		}
 		errs := uninstall.RemoveItems(chosen, reg, func(done, total int, path string) {
@@ -633,15 +676,20 @@ func (m *Model) runSweepRemoval() {
 				applog.Logf("FAILED   %s  — %v", chosen[i].Path, err)
 			}
 		}
+		regBackedUp := false
 		if f != nil {
-			f.Close()
-			applog.Logf("registry backup: %s", backup)
+			regBackedUp = f.Close() == nil
+			if regBackedUp {
+				applog.Logf("registry backup: %s", backup)
+			} else {
+				applog.Logf("registry backup FAILED to write  %s", backup)
+			}
 		}
 		msg := fmt.Sprintf("Removed %d leftover items", removed)
 		if len(failedItems) > 0 {
 			msg += fmt.Sprintf(", %d failed — see log", len(failedItems))
 		}
-		if backup != "" {
+		if regBackedUp {
 			msg += " · registry backed up"
 		}
 		applog.Logf("%s", msg)
@@ -660,6 +708,13 @@ func (m *Model) runSweepRemoval() {
 			m.uninstLoaded = false // registry listing may be gone now
 		})
 	}()
+}
+
+// dirExists reports whether a saved leftover path still exists — used
+// when a pending review is restored days later.
+func dirExists(p string) bool {
+	fi, err := os.Stat(p)
+	return err == nil && fi.IsDir()
 }
 
 // sanitizeFileName keeps a backup filename filesystem-safe.

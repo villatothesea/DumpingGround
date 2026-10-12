@@ -10,19 +10,19 @@ import (
 // Junk category indices in JunkReport.Cats, fixed order. Safe categories
 // first, then moderate, then review — matching the preset tiers.
 const (
-	JunkCatUserTemp = iota // %TEMP% files older than a week — SAFE
-	JunkCatWinTemp         // C:\Windows\Temp files older than a week — SAFE
-	JunkCatBrowser         // per-profile browser cache dirs — SAFE
-	JunkCatThumbs          // Explorer thumbnail/icon caches — SAFE
-	JunkCatShader          // DirectX shader cache — SAFE
-	JunkCatWER             // Windows Error Reporting archives — SAFE
-	JunkCatRecycleBin      // emptied through the shell — SAFE
-	JunkCatAppCaches       // Electron app cache dirs — SAFE
-	JunkCatUpdateDl        // installed updates' download staging — MODERATE
-	JunkCatDumps           // crash dumps — MODERATE
-	JunkCatWinLogs         // whitelisted Windows log files — MODERATE
-	JunkCatDevCaches       // go-build, npm, pip, gradle — MODERATE
-	JunkCatWindowsOld      // previous Windows installation — REVIEW
+	JunkCatUserTemp   = iota // %TEMP% files older than a week — SAFE
+	JunkCatWinTemp           // C:\Windows\Temp files older than a week — SAFE
+	JunkCatBrowser           // per-profile browser cache dirs — SAFE
+	JunkCatThumbs            // Explorer thumbnail/icon caches — SAFE
+	JunkCatShader            // DirectX shader cache — SAFE
+	JunkCatWER               // Windows Error Reporting archives — SAFE
+	JunkCatRecycleBin        // emptied through the shell — SAFE
+	JunkCatAppCaches         // Electron app cache dirs — SAFE
+	JunkCatUpdateDl          // installed updates' download staging — MODERATE
+	JunkCatDumps             // crash dumps — MODERATE
+	JunkCatWinLogs           // whitelisted Windows log files — MODERATE
+	JunkCatDevCaches         // go-build, npm, pip, gradle — MODERATE
+	JunkCatWindowsOld        // previous Windows installation — REVIEW
 	JunkCatCount
 )
 
@@ -55,6 +55,12 @@ type JunkDir struct {
 	Age   int64
 	Skip  string
 	Warn  string
+	// Guard names an exe that must not be running at delete time —
+	// re-checked in JunkClean, since the scan-time Skip may be stale.
+	Guard string
+	// Recycle routes per-file deletion through the Recycle Bin —
+	// user content gets undo, caches do not need it.
+	Recycle bool
 }
 
 // JunkCat is one junk category: a name, what deleting costs, a risk
@@ -97,7 +103,7 @@ var junkCatDefs = [JunkCatCount]struct {
 	{"Thumbnail cache", "Folder thumbnails redraw slowly until Explorer rebuilds them", RustRiskSafe},
 	{"Shader cache", "Games recompile shaders once — the first launch stutters a bit", RustRiskSafe},
 	{"Error reports", "Old crash reports gone — only matters when diagnosing past crashes", RustRiskSafe},
-	{"Recycle Bin", "Deleted files become unrecoverable — the bin is the last undo", RustRiskSafe},
+	{"Recycle Bin", "Deleted files become unrecoverable — the bin is the last undo", RustRiskModerate},
 	{"App caches", "The app re-caches on next launch — sign-ins and settings stay", RustRiskSafe},
 	{"Update downloads", "Staging files from installed updates — Windows re-downloads if needed", RustRiskModerate},
 	{"Crash dumps", "Crash evidence is gone — keep it if you are diagnosing a crash right now", RustRiskModerate},
@@ -131,35 +137,35 @@ func FindJunk(opts JunkOpts) *JunkReport {
 		}
 		fn()
 	}
-	run(JunkCatUserTemp, func() { rep.junkKids(JunkCatUserTemp, os.TempDir(), junkTempAge) })
-	run(JunkCatWinTemp, func() { rep.junkKids(JunkCatWinTemp, filepath.Join(windir, "Temp"), junkTempAge) })
+	run(JunkCatUserTemp, func() { rep.junkKids(JunkCatUserTemp, saneTempDir(os.TempDir()), junkTempAge) })
+	run(JunkCatWinTemp, func() { rep.junkKids(JunkCatWinTemp, absJoin(windir, "Temp"), junkTempAge) })
 	run(JunkCatBrowser, func() {
 		rep.junkBrowsers(local, roaming, opts.Running)
 		// WinINet's cache — used by WebView2, Office and legacy IE apps.
 		// Cookies live in the separate INetCookies dir, untouched.
-		rep.junkKids(JunkCatBrowser, filepath.Join(local, `Microsoft\Windows\INetCache`), 0)
+		rep.junkKids(JunkCatBrowser, absJoin(local, `Microsoft\Windows\INetCache`), 0)
 	})
 	run(JunkCatThumbs, func() {
 		for _, pat := range []string{"thumbcache_*.db", "iconcache*.db"} {
-			rep.junkGlob(JunkCatThumbs, filepath.Join(local, `Microsoft\Windows\Explorer`, pat))
+			rep.junkGlob(JunkCatThumbs, absJoin(local, `Microsoft\Windows\Explorer`, pat))
 		}
 	})
 	run(JunkCatShader, func() {
-		rep.junkKids(JunkCatShader, filepath.Join(local, "D3DSCache"), 0)
+		rep.junkKids(JunkCatShader, absJoin(local, "D3DSCache"), 0)
 		// GPU vendors keep their own shader caches — much larger than
 		// D3DSCache on a gaming machine.
 		for _, sub := range []string{
 			`NVIDIA\DXCache`, `NVIDIA\GLCache`,
 			`AMD\DxCache`, `AMD\GLCache`, `Intel\ShaderCache`,
 		} {
-			rep.junkKids(JunkCatShader, filepath.Join(local, sub), 0)
+			rep.junkKids(JunkCatShader, absJoin(local, sub), 0)
 		}
 		rep.junkKids(JunkCatShader, `C:\Program Files (x86)\Steam\steamapps\shadercache`, 0)
 	})
 	run(JunkCatWER, func() {
 		for _, root := range []string{local, `C:\ProgramData`} {
 			for _, sub := range []string{"ReportArchive", "ReportQueue", "ReportStore"} {
-				rep.junkKids(JunkCatWER, filepath.Join(root, `Microsoft\Windows\WER`, sub), 0)
+				rep.junkKids(JunkCatWER, absJoin(root, `Microsoft\Windows\WER`, sub), 0)
 			}
 		}
 	})
@@ -174,19 +180,22 @@ func FindJunk(opts JunkOpts) *JunkReport {
 	})
 	run(JunkCatAppCaches, func() { rep.junkApps(roaming, opts.Running) })
 	run(JunkCatUpdateDl, func() {
-		rep.junkKidsW(JunkCatUpdateDl, filepath.Join(windir, `SoftwareDistribution\Download`), 0,
+		rep.junkKidsW(JunkCatUpdateDl, absJoin(windir, `SoftwareDistribution\Download`), 0,
 			"Re-downloaded if a pending update install resumes — bandwidth, not breakage")
-		rep.junkKidsW(JunkCatUpdateDl, filepath.Join(windir, `SoftwareDistribution\DeliveryOptimization`), 0,
+		rep.junkKidsW(JunkCatUpdateDl, absJoin(windir, `SoftwareDistribution\DeliveryOptimization`), 0,
 			"Delivery Optimization's shared download cache — rebuilt as updates flow")
+		// TiWorker runs while Windows is servicing — cleaning the
+		// staging dir mid-transaction would break the update.
+		rep.guardCat(JunkCatUpdateDl, "tiworker.exe")
 	})
 	run(JunkCatDumps, func() {
-		rep.junkGlob(JunkCatDumps, filepath.Join(windir, `Minidump\*.dmp`))
-		rep.junkGlob(JunkCatDumps, filepath.Join(windir, "memory.dmp"))
-		rep.junkGlob(JunkCatDumps, filepath.Join(windir, `LiveKernelReports\*.dmp`))
-		rep.junkGlob(JunkCatDumps, filepath.Join(local, "CrashDumps", "*"))
+		rep.junkGlob(JunkCatDumps, absJoin(windir, `Minidump\*.dmp`))
+		rep.junkGlob(JunkCatDumps, absJoin(windir, "memory.dmp"))
+		rep.junkGlob(JunkCatDumps, absJoin(windir, `LiveKernelReports\*.dmp`))
+		rep.junkGlob(JunkCatDumps, absJoin(local, "CrashDumps", "*"))
 		// Chromium-family crash reporters keep pending reports per browser.
 		for _, b := range junkBrowserCatalog {
-			rep.junkKidsW(JunkCatDumps, filepath.Join(local, b.base, `Crashpad\reports`), 0,
+			rep.junkKidsW(JunkCatDumps, absJoin(local, b.base, `Crashpad\reports`), 0,
 				"Crash reports queued by "+b.name+" — evidence of past crashes")
 		}
 		for i := range rep.Cats[JunkCatDumps].Dirs {
@@ -204,23 +213,24 @@ func FindJunk(opts JunkOpts) *JunkReport {
 			// tmp.edb and the .jrs reserves are live wuauserv files.
 			`SoftwareDistribution\DataStore\Logs\edb0*.log`,
 		} {
-			rep.junkGlob(JunkCatWinLogs, filepath.Join(windir, pat))
+			rep.junkGlob(JunkCatWinLogs, absJoin(windir, pat))
 		}
 	})
 	run(JunkCatDevCaches, func() {
+		// .m2\repository is deliberately absent — locally installed
+		// artifacts and private-feed jars cannot be re-downloaded.
 		for _, dc := range []struct{ p, warn string }{
-			{filepath.Join(local, "go-build"), "the next go build recompiles everything — slower once"},
-			{filepath.Join(local, "npm-cache"), "the next npm install re-downloads every package"},
-			{filepath.Join(roaming, "npm-cache"), "the next npm install re-downloads every package"},
-			{filepath.Join(local, `pip\cache`), "the next pip install re-downloads wheels"},
-			{filepath.Join(home, `.gradle\caches`), "the next Gradle build re-downloads dependencies"},
-			{filepath.Join(home, `.m2\repository`), "the next Maven build re-downloads dependencies"},
-			{filepath.Join(home, `.nuget\packages`), "the next dotnet restore re-downloads every package"},
-			{filepath.Join(local, `NuGet\v3-cache`), "the next dotnet restore re-resolves versions"},
-			{filepath.Join(local, `Yarn\Cache`), "the next yarn install re-downloads every package"},
-			{filepath.Join(local, `pnpm\store`), "the next pnpm install re-downloads every package"},
-			{filepath.Join(local, `uv\cache`), "the next uv run re-downloads packages"},
-			{filepath.Join(local, `Mozilla\sccache`), "the next build recompiles — sccache loses its cache"},
+			{absJoin(local, "go-build"), "the next go build recompiles everything — slower once"},
+			{absJoin(local, "npm-cache"), "the next npm install re-downloads every package"},
+			{absJoin(roaming, "npm-cache"), "the next npm install re-downloads every package"},
+			{absJoin(local, `pip\cache`), "the next pip install re-downloads wheels"},
+			{absJoin(home, `.gradle\caches`), "the next Gradle build re-downloads dependencies"},
+			{absJoin(home, `.nuget\packages`), "the next dotnet restore re-downloads every package"},
+			{absJoin(local, `NuGet\v3-cache`), "the next dotnet restore re-resolves versions"},
+			{absJoin(local, `Yarn\Cache`), "the next yarn install re-downloads every package"},
+			{absJoin(local, `pnpm\store`), "the next pnpm install re-downloads every package"},
+			{absJoin(local, `uv\cache`), "the next uv run re-downloads packages"},
+			{absJoin(local, `Mozilla\sccache`), "the next build recompiles — sccache loses its cache"},
 		} {
 			rep.junkKidsW(JunkCatDevCaches, dc.p, 0, "Re-downloads on demand — "+dc.warn)
 		}
@@ -238,11 +248,13 @@ func FindJunk(opts JunkOpts) *JunkReport {
 				rep.junkAdd(JunkCatWindowsOld, d)
 			}
 		}
+		// A running servicing transaction must not lose its staging.
+		rep.guardCat(JunkCatWindowsOld, "tiworker.exe")
 	})
-	if dl := DownloadsDir(); dl != "" {
+	if dl := DownloadsDir(); dl != "" && saneUserDir(dl) {
 		if bytes, files := junkDirStats(dl); files > 0 {
 			rep.Downloads = &JunkDir{Path: dl, Bytes: bytes, Files: files,
-				Base: filepath.Base(dl), Mode: JunkKids}
+				Base: filepath.Base(dl), Mode: JunkKids, Recycle: true}
 		}
 	}
 	for _, cat := range rep.Cats {
@@ -264,12 +276,12 @@ func (rep *JunkReport) junkKids(cat int, root string, age time.Duration) {
 
 // junkKidsW is junkKids plus a path-specific consequence note on the row.
 func (rep *JunkReport) junkKidsW(cat int, root string, age time.Duration, warn string) {
-	if root == "" {
+	if root == "" || !filepath.IsAbs(root) {
 		return
 	}
 	root = filepath.Clean(root)
 	fi, err := os.Lstat(root)
-	if err != nil || !fi.IsDir() || fi.Mode()&os.ModeSymlink != 0 {
+	if err != nil || !fi.IsDir() || junkPathReparse(root) {
 		return
 	}
 	var bytes uint64
@@ -286,15 +298,13 @@ func (rep *JunkReport) junkKidsW(cat int, root string, age time.Duration, warn s
 			return nil
 		}
 		if d.IsDir() {
-			// %TEMP%\Low is the low-integrity sandbox dir apps rely
-			// on existing — BleachBit whitelists it too.
-			if p != root && strings.EqualFold(d.Name(), "Low") {
+			if p != root && junkProtected[strings.ToLower(d.Name())] {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 		info, err := d.Info()
-		if err != nil || (age > 0 && info.ModTime().After(cutoff)) {
+		if err != nil || (age > 0 && junkNewestTime(info).After(cutoff)) {
 			return nil
 		}
 		bytes += uint64(info.Size())
@@ -337,10 +347,92 @@ func (rep *JunkReport) junkGlob(cat int, pattern string) {
 	}
 }
 
+// junkProtected are directory names cleanup never enters or removes.
+// %TEMP%\Low is the low-integrity sandbox apps rely on existing;
+// Content.Outlook inside INetCache holds live copies of attachments
+// the user may still be editing.
+var junkProtected = map[string]bool{
+	"low":             true,
+	"content.outlook": true,
+}
+
+// absJoin returns "" unless base is absolute — an empty or mangled
+// environment variable must never produce a relative cleanup path
+// that silently lands inside the working directory.
+func absJoin(base string, parts ...string) string {
+	if !filepath.IsAbs(base) {
+		return ""
+	}
+	return filepath.Join(append([]string{base}, parts...)...)
+}
+
+// within reports whether p sits inside root (or equals it).
+func within(p, root string) bool {
+	root = strings.TrimSuffix(filepath.Clean(root), `\`)
+	if strings.EqualFold(p, root) {
+		return true
+	}
+	return strings.HasPrefix(strings.ToLower(p), strings.ToLower(root)+`\`)
+}
+
+// saneTempDir refuses a TEMP/TMP value that points somewhere the
+// "delete week-old files" rule must never reach — a drive root, the
+// Windows dir. A custom temp dir keeps working only when its name
+// looks like one or it lives inside the profile.
+func saneTempDir(p string) string {
+	if p == "" || !filepath.IsAbs(p) {
+		return ""
+	}
+	c := filepath.Clean(p)
+	if filepath.Dir(c) == c {
+		return "" // TEMP=D:\ would aim the rule at a whole drive
+	}
+	if w := os.Getenv("SystemRoot"); w != "" && within(c, filepath.Clean(w)) {
+		return ""
+	}
+	base := strings.ToLower(filepath.Base(c))
+	if strings.Contains(base, "temp") || strings.Contains(base, "tmp") {
+		return p
+	}
+	if u := os.Getenv("USERPROFILE"); u != "" && within(c, filepath.Clean(u)) {
+		return p
+	}
+	return ""
+}
+
+// saneUserDir refuses a shell-known-folder path that degenerated into
+// something far broader than a user folder — a drive root, the
+// profile itself, Windows. Downloads redirected to D:\ must never be
+// offered for cleaning.
+func saneUserDir(p string) bool {
+	if p == "" || !filepath.IsAbs(p) {
+		return false
+	}
+	c := filepath.Clean(p)
+	if filepath.Dir(c) == c {
+		return false
+	}
+	for _, env := range []string{"USERPROFILE", "SystemRoot", "PUBLIC", "PROGRAMDATA"} {
+		if v := os.Getenv(env); v != "" && strings.EqualFold(filepath.Clean(v), c) {
+			return false
+		}
+	}
+	return true
+}
+
+// guardCat stamps a delete-time process guard on every row in a
+// category — scanned while Windows is servicing, cleaned only when it
+// is not.
+func (rep *JunkReport) guardCat(cat int, exe string) {
+	for i := range rep.Cats[cat].Dirs {
+		rep.Cats[cat].Dirs[i].Guard = exe
+	}
+}
+
 // junkWholeDir measures a whole directory as a removable entry.
 func junkWholeDir(root string) (JunkDir, bool) {
 	fi, err := os.Lstat(root)
-	if err != nil || !fi.IsDir() || fi.Mode()&os.ModeSymlink != 0 {
+	if err != nil || !fi.IsDir() || junkPathReparse(root) {
 		return JunkDir{}, false
 	}
 	bytes, _ := duDir(root)
@@ -392,7 +484,7 @@ func (rep *JunkReport) junkBrowsers(local, roaming string, running func(string) 
 				}
 				rep.junkAdd(JunkCatBrowser, JunkDir{
 					Path: p, Bytes: bytes, Files: files,
-					Base: filepath.Base(p), Mode: JunkKids, Skip: skip,
+					Base: filepath.Base(p), Mode: JunkKids, Skip: skip, Guard: b.exe,
 				})
 			}
 		}
@@ -413,7 +505,7 @@ func (rep *JunkReport) junkBrowsers(local, roaming string, running func(string) 
 		}
 		rep.junkAdd(JunkCatBrowser, JunkDir{
 			Path: c2, Bytes: bytes, Files: files,
-			Base: "cache2", Mode: JunkKids, Skip: skip,
+			Base: "cache2", Mode: JunkKids, Skip: skip, Guard: "firefox.exe",
 		})
 	}
 }
@@ -463,7 +555,7 @@ func (rep *JunkReport) junkApps(roaming string, running func(string) bool) {
 			}
 			rep.junkAdd(JunkCatAppCaches, JunkDir{
 				Path: p, Bytes: bytes, Files: files,
-				Base: filepath.Base(p), Mode: JunkKids, Skip: skip,
+				Base: filepath.Base(p), Mode: JunkKids, Skip: skip, Guard: a.exe,
 				Warn: a.name + " re-caches on next launch — sign-ins and settings stay",
 			})
 		}
@@ -501,13 +593,13 @@ func globNoErr(pattern string) []string {
 
 // SafeJunkEntry revalidates a junk path before deletion — the entry
 // must still exist and still match the recorded kind, and it must not
-// be a reparse point.
+// be a reparse point. ModeSymlink alone misses junctions, so the check
+// goes through the file attributes.
 func SafeJunkEntry(d JunkDir) error {
-	info, err := os.Lstat(d.Path)
-	if err != nil {
+	if _, err := os.Lstat(d.Path); err != nil {
 		return err
 	}
-	if info.Mode()&os.ModeSymlink != 0 {
+	if junkPathReparse(d.Path) {
 		return errReparse
 	}
 	return SafeRustEntry(d.Path, d.Base, d.File)
@@ -518,15 +610,19 @@ var errReparse = os.ErrInvalid
 // JunkClean removes one report row: a shell action, a whole path, or
 // the matching children of a directory. Returns freed bytes, removed
 // file count and how many entries were skipped because they were in
-// use — locked files are routine, not failures.
-func JunkClean(d JunkDir) (freed uint64, removed, skipped int, err error) {
-	if d.Skip != "" {
+// use — locked files are routine, not failures. running, when given,
+// re-verifies the row's process guard: an app launched since the scan
+// must still protect its cache.
+func JunkClean(d JunkDir, running func(string) bool) (freed uint64, removed, skipped int, err error) {
+	if d.Skip != "" || (d.Guard != "" && running != nil && running(d.Guard)) {
 		return 0, 0, 1, nil
 	}
 	switch d.Mode {
 	case JunkShell:
-		err = EmptyRecycleBin()
-		return d.Bytes, d.Files, 0, err
+		if err = EmptyRecycleBin(); err != nil {
+			return 0, 0, 0, err // failure frees nothing — do not claim it
+		}
+		return d.Bytes, d.Files, 0, nil
 	case JunkWhole:
 		if err = SafeJunkEntry(d); err != nil {
 			return 0, 0, 0, err
@@ -545,7 +641,9 @@ func JunkClean(d JunkDir) (freed uint64, removed, skipped int, err error) {
 }
 
 // junkCleanKids deletes matching files inside a kids-mode dir, then any
-// directories left empty. Reparse points are never touched.
+// directories left empty. Reparse points are never touched; a dir only
+// goes when it emptied by itself and is old enough under the row's
+// rule — a directory created a minute ago is never collateral.
 func junkCleanKids(d JunkDir) (freed uint64, removed, skipped int) {
 	cutoff := time.Now().Add(-time.Duration(d.Age) * time.Second)
 	var dirs []string
@@ -560,17 +658,23 @@ func junkCleanKids(d JunkDir) (freed uint64, removed, skipped int) {
 			return nil
 		}
 		if e.IsDir() {
-			if strings.EqualFold(e.Name(), "Low") {
+			if junkProtected[strings.ToLower(e.Name())] {
 				return filepath.SkipDir
 			}
 			dirs = append(dirs, p)
 			return nil
 		}
 		info, err := e.Info()
-		if err != nil || (d.Age > 0 && info.ModTime().After(cutoff)) {
+		if err != nil || (d.Age > 0 && junkNewestTime(info).After(cutoff)) {
 			return nil
 		}
-		if err := os.Remove(p); err != nil {
+		// Recycle rows route through the bin — a refusal means the
+		// file stays, never a silent permanent delete.
+		rm := os.Remove
+		if d.Recycle {
+			rm = RecycleFileOrDir
+		}
+		if err := rm(p); err != nil {
 			skipped++
 			return nil
 		}
@@ -580,7 +684,13 @@ func junkCleanKids(d JunkDir) (freed uint64, removed, skipped int) {
 	})
 	// Deepest first so parents go once their children did.
 	for i := len(dirs) - 1; i >= 0; i-- {
-		os.Remove(dirs[i]) // fails on non-empty, which is fine
+		p := dirs[i]
+		if d.Age > 0 {
+			if info, err := os.Lstat(p); err == nil && junkDirNewestTime(info).After(cutoff) {
+				continue
+			}
+		}
+		os.Remove(p) // fails on non-empty, which is fine
 	}
 	return
 }

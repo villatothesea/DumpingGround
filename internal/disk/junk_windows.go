@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -21,19 +22,68 @@ func junkReparse(e os.DirEntry) bool {
 	if err != nil {
 		return true // cannot inspect — do not touch
 	}
+	return fileReparse(info)
+}
+
+// junkPathReparse is junkReparse for a path rather than a walk entry —
+// deletion-gate checks for whole directories and rust artifacts. A
+// path that cannot be inspected is not a reparse point, it is just
+// failed — the caller's own stat error handles that case.
+func junkPathReparse(path string) bool {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return false
+	}
+	return fileReparse(info)
+}
+
+// fileReparse reads the attribute word a stat already fetched.
+func fileReparse(info os.FileInfo) bool {
+	if info.Mode()&os.ModeSymlink != 0 {
+		return true
+	}
 	if w, ok := info.Sys().(*syscall.Win32FileAttributeData); ok {
 		return w.FileAttributes&0x400 != 0 // FILE_ATTRIBUTE_REPARSE_POINT
 	}
 	return false
 }
 
+// junkNewestTime is the age rule's clock for FILES: the newest of
+// modified, created and accessed — a file still being read every day
+// is not stale, whatever its mtime says.
+func junkNewestTime(info os.FileInfo) time.Time {
+	t := info.ModTime()
+	if w, ok := info.Sys().(*syscall.Win32FileAttributeData); ok {
+		if ct := time.Unix(0, w.CreationTime.Nanoseconds()); ct.After(t) {
+			t = ct
+		}
+		if at := time.Unix(0, w.LastAccessTime.Nanoseconds()); at.After(t) {
+			t = at
+		}
+	}
+	return t
+}
+
+// junkDirNewestTime ages directories by mtime/ctime only — enumerating
+// a dir bumps its access time, so atime would always read "now" for a
+// dir the cleaner itself just walked.
+func junkDirNewestTime(info os.FileInfo) time.Time {
+	t := info.ModTime()
+	if w, ok := info.Sys().(*syscall.Win32FileAttributeData); ok {
+		if ct := time.Unix(0, w.CreationTime.Nanoseconds()); ct.After(t) {
+			t = ct
+		}
+	}
+	return t
+}
+
 var (
-	junkShell32             = syscall.NewLazyDLL("shell32.dll")
-	junkOle32               = syscall.NewLazyDLL("ole32.dll")
-	procSHQueryRecycle      = junkShell32.NewProc("SHQueryRecycleBinW")
-	procSHEmptyRecycle      = junkShell32.NewProc("SHEmptyRecycleBinW")
-	procSHGetKnownFolder    = junkShell32.NewProc("SHGetKnownFolderPath")
-	procCoTaskMemFree       = junkOle32.NewProc("CoTaskMemFree")
+	junkShell32          = syscall.NewLazyDLL("shell32.dll")
+	junkOle32            = syscall.NewLazyDLL("ole32.dll")
+	procSHQueryRecycle   = junkShell32.NewProc("SHQueryRecycleBinW")
+	procSHEmptyRecycle   = junkShell32.NewProc("SHEmptyRecycleBinW")
+	procSHGetKnownFolder = junkShell32.NewProc("SHGetKnownFolderPath")
+	procCoTaskMemFree    = junkOle32.NewProc("CoTaskMemFree")
 )
 
 // folderIDDownloads is FOLDERID_Downloads — resolves the real folder

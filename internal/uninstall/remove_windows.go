@@ -3,15 +3,19 @@
 package uninstall
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"sort"
 	"strings"
 	"syscall"
+	"unicode/utf16"
 	"unsafe"
 
 	"github.com/dumpingground/dumpingground/internal/disk"
 )
+
+var errNoRegBackup = errors.New("no .reg backup — registry item kept for safety")
 
 var (
 	procRegDeleteTree  = advapi.NewProc("RegDeleteTreeW")
@@ -37,8 +41,10 @@ func RemoveItems(items []Item, backup io.Writer, progress ...func(done, total in
 		}
 	}
 	errs := make([]error, len(items))
+	var bw *regBackupWriter
 	if backup != nil {
-		io.WriteString(backup, "Windows Registry Editor Version 5.00\r\n\r\n")
+		bw = newRegBackupWriter(backup)
+		bw.WriteString("Windows Registry Editor Version 5.00\r\n\r\n")
 	}
 	for i, it := range items {
 		rep(i, it.Path)
@@ -46,23 +52,33 @@ func RemoveItems(items []Item, backup io.Writer, progress ...func(done, total in
 		case KindDir:
 			errs[i] = disk.RecycleFileOrDir(it.Path)
 		case KindRegKey:
+			if bw == nil {
+				errs[i] = errNoRegBackup
+				continue
+			}
 			root, sub, access, err := splitRegPath(it.Path, it.Reg32)
 			if err != nil {
 				errs[i] = err
 				continue
 			}
-			if backup != nil {
-				_ = exportRegKey(backup, root, keyRead|access&keyWow64_32, sub, regDisplayRoot(it.Path))
+			if err := exportRegKey(bw, root, keyRead|access&keyWow64_32, sub, regDisplayRoot(it.Path)); err != nil {
+				errs[i] = fmt.Errorf("backup failed, key kept: %w", err)
+				continue
 			}
 			errs[i] = deleteRegTree(root, sub, access)
 		case KindRegValue:
+			if bw == nil {
+				errs[i] = errNoRegBackup
+				continue
+			}
 			root, sub, access, err := splitRegPath(it.Path, it.Reg32)
 			if err != nil {
 				errs[i] = err
 				continue
 			}
-			if backup != nil {
-				_ = exportRegValue(backup, root, keyRead|access&keyWow64_32, sub, it.RegValue, regDisplayRoot(it.Path))
+			if err := exportRegValue(bw, root, keyRead|access&keyWow64_32, sub, it.RegValue, regDisplayRoot(it.Path)); err != nil {
+				errs[i] = fmt.Errorf("backup failed, value kept: %w", err)
+				continue
 			}
 			errs[i] = deleteRegValue(root, sub, it.RegValue, access)
 		}
@@ -144,15 +160,42 @@ func splitSub(sub string) (string, string) {
 	return "", sub
 }
 
-// exportRegKey writes a key, its values and every descendant to a .reg
-// stream — the backup taken before removal.
-func exportRegKey(w io.Writer, root, access uintptr, sub, display string) error {
+// regBackupWriter encodes the backup as UTF-16LE — regedit refuses a
+// "Version 5.00" file that isn't, so UTF-8 output would be a backup in
+// name only. The BOM goes first; write errors are latched so the
+// exporter can fail the deletion instead of claiming a backup.
+type regBackupWriter struct {
+	w   io.Writer
+	err error
+}
+
+func newRegBackupWriter(w io.Writer) *regBackupWriter {
+	bw := &regBackupWriter{w: w}
+	bw.WriteString("\ufeff")
+	return bw
+}
+
+func (rw *regBackupWriter) WriteString(s string) {
+	if rw.err != nil {
+		return
+	}
+	u := utf16.Encode([]rune(s))
+	b := make([]byte, 2*len(u))
+	for i, c := range u {
+		b[2*i], b[2*i+1] = byte(c), byte(c>>8)
+	}
+	_, rw.err = rw.w.Write(b)
+}
+
+// exportRegKey writes a key, its values and every descendant to the
+// .reg backup — the copy taken before removal.
+func exportRegKey(w *regBackupWriter, root, access uintptr, sub, display string) error {
 	k, err := openKey(root, access, sub)
 	if err != nil {
 		return err
 	}
 	defer k.close()
-	io.WriteString(w, "["+display+"]\r\n")
+	w.WriteString("[" + display + "]\r\n")
 	vals, _ := k.values()
 	names := make([]string, 0, len(vals))
 	for n := range vals {
@@ -160,33 +203,37 @@ func exportRegKey(w io.Writer, root, access uintptr, sub, display string) error 
 	}
 	sort.Strings(names)
 	for _, n := range names {
-		io.WriteString(w, regLine(n, vals[n]))
+		w.WriteString(regLine(n, vals[n]))
 	}
-	io.WriteString(w, "\r\n")
+	w.WriteString("\r\n")
 	for _, child := range mustSubKeys(k) {
-		_ = exportRegKey(w, root, access, sub+`\`+child, display+`\`+child)
+		if err := exportRegKey(w, root, access, sub+`\`+child, display+`\`+child); err != nil {
+			return err
+		}
 	}
-	return nil
+	return w.err
 }
 
 // exportRegValue writes a single value's key section to the backup.
-func exportRegValue(w io.Writer, root, access uintptr, sub, value, display string) error {
+func exportRegValue(w *regBackupWriter, root, access uintptr, sub, value, display string) error {
 	k, err := openKey(root, access, sub)
 	if err != nil {
 		return err
 	}
 	defer k.close()
-	io.WriteString(w, "["+display+"]\r\n")
+	w.WriteString("[" + display + "]\r\n")
 	if vals, err := k.values(); err == nil {
 		if v, ok := vals[value]; ok {
-			io.WriteString(w, regLine(value, v))
+			w.WriteString(regLine(value, v))
 		}
 	}
-	io.WriteString(w, "\r\n")
-	return nil
+	w.WriteString("\r\n")
+	return w.err
 }
 
-// regLine formats one value as a .reg line.
+// regLine formats one value as a .reg line, preserving its type —
+// an EXPAND_SZ written as plain "..." restores as REG_SZ, silently
+// breaking paths holding %VAR%.
 func regLine(name string, v regValue) string {
 	field := `"`
 	if name == "" {
@@ -195,16 +242,29 @@ func regLine(name string, v regValue) string {
 		field += strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(name) + `"`
 	}
 	switch v.kind {
-	case regSz, regExpandSz:
+	case regSz:
 		s := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(v.str())
 		return field + `="` + s + `"` + "\r\n"
+	case regExpandSz:
+		return field + "=hex(2):" + hexBytes(v.data) + "\r\n"
 	case regDword:
 		return fmt.Sprintf("%s=dword:%08x\r\n", field, uint32(v.dword()))
+	case regMultiSz:
+		return field + "=hex(7):" + hexBytes(v.data) + "\r\n"
+	case regQword:
+		return field + "=hex(b):" + hexBytes(v.data) + "\r\n"
 	default:
-		var hexs []string
-		for _, b := range v.data {
-			hexs = append(hexs, fmt.Sprintf("%02x", b))
-		}
-		return field + "=hex:" + strings.Join(hexs, ",") + "\r\n"
+		return field + "=hex:" + hexBytes(v.data) + "\r\n"
 	}
+}
+
+func hexBytes(b []byte) string {
+	var sb strings.Builder
+	for i, x := range b {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		fmt.Fprintf(&sb, "%02x", x)
+	}
+	return sb.String()
 }

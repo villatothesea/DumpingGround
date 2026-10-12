@@ -3,10 +3,16 @@
 package uninstall
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
+	"unsafe"
 )
+
+var procExpandEnvStr = syscall.NewLazyDLL("kernel32.dll").NewProc("ExpandEnvironmentStringsW")
 
 // Orphans finds leftovers of software that is already gone: dead
 // references (shortcuts, startup entries, App Paths and file
@@ -277,7 +283,7 @@ var systemGroups = map[string]bool{
 func historyItems(installed []Entry) []Item {
 	var out []Item
 	for _, name := range HistoryNames() {
-		if stillInstalled(name, installed) {
+		if StillInstalled(name, installed) {
 			continue
 		}
 		e := Entry{Name: name}
@@ -289,9 +295,9 @@ func historyItems(installed []Entry) []Item {
 	return out
 }
 
-// stillInstalled reports whether a name from the uninstall history
-// still matches an installed app — nothing to sweep while it is.
-func stillInstalled(name string, installed []Entry) bool {
+// StillInstalled reports whether a name matches an app still listed
+// as installed — nothing to sweep while it is.
+func StillInstalled(name string, installed []Entry) bool {
 	names := nameTokens(name)
 	for i := range installed {
 		for t := range installed[i].matchTokens() {
@@ -304,42 +310,79 @@ func stillInstalled(name string, installed []Entry) bool {
 }
 
 // missingTarget extracts the first absolute path from a stored command
-// or value and returns it only when the file no longer exists. Quoted
-// paths win over the command's own exe — `rundll32 "C:\a\b.dll",Entry`
-// is about the DLL, not about rundll32. "" means "alive or no path".
+// or value and returns it only when the file no longer exists. For a
+// launcher the subject is its argument, not the runner itself —
+// `rundll32 "C:\a\b.dll",Entry` is about the DLL. For a plain exe the
+// exe itself is the subject: `app.exe "arg.txt"` stays alive even when
+// the argument file is gone. "" means "alive or cannot be judged".
 func missingTarget(s string) string {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return ""
 	}
-	if i := strings.IndexByte(s, '"'); i >= 0 {
-		if j := strings.IndexByte(s[i+1:], '"'); j > 0 {
-			if p := missingPath(s[i+1 : i+1+j]); p != "" {
-				return p
+	exe, _ := SplitCmdline(s)
+	if launcherNames[strings.ToLower(filepath.Base(exe))] {
+		if i := strings.IndexByte(s, '"'); i >= 0 {
+			if j := strings.IndexByte(s[i+1:], '"'); j > 0 {
+				if p := missingPath(s[i+1 : i+1+j]); p != "" {
+					return p
+				}
 			}
 		}
 	}
-	exe, _ := SplitCmdline(s)
 	return missingPath(exe)
 }
 
+// launcherNames are command runners whose real payload sits in an
+// argument, not in the exe — for these the quoted argument is what
+// must exist for the entry to be alive.
+var launcherNames = map[string]bool{
+	"rundll32.exe": true, "rundll32": true, "regsvr32.exe": true,
+	"msiexec.exe": true, "cmd.exe": true, "powershell.exe": true,
+	"wscript.exe": true, "cscript.exe": true, "explorer.exe": true,
+}
+
+// missingPath returns p only when it is provably gone: a drive-letter
+// path on a drive that answers, and a stat that reports ErrNotExist.
+// An offline share, an unmounted encrypted volume or a permission
+// error all fail here — unknown is not dead.
 func missingPath(p string) string {
-	p = os.ExpandEnv(strings.TrimSpace(strings.Trim(p, `"`)))
+	p = expandEnvWin(strings.TrimSpace(strings.Trim(p, `"`)))
 	if len(p) < 4 || p[1] != ':' || p[2] != '\\' {
 		return ""
 	}
 	if c := p[0]; !(c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z') {
 		return ""
 	}
-	if fileExists(p) {
-		return ""
+	if _, err := os.Stat(p[:3]); err != nil {
+		return "" // drive offline, unmapped or unreachable — cannot judge
 	}
-	return p
+	_, err := os.Stat(p)
+	if errors.Is(err, fs.ErrNotExist) {
+		return p
+	}
+	return "" // exists — or we cannot prove otherwise
 }
 
-func fileExists(p string) bool {
-	_, err := os.Stat(p)
-	return err == nil
+// expandEnvWin expands %VAR% via the Windows API — unlike os.ExpandEnv
+// it leaves $ characters alone, so "C:\$Recycle.Bin\x" survives.
+func expandEnvWin(s string) string {
+	if !strings.Contains(s, "%") {
+		return s
+	}
+	src, err := syscall.UTF16FromString(s)
+	if err != nil {
+		return s
+	}
+	buf := make([]uint16, 4096)
+	n, _, _ := procExpandEnvStr.Call(
+		uintptr(unsafe.Pointer(&src[0])),
+		uintptr(unsafe.Pointer(&buf[0])),
+		uintptr(len(buf)))
+	if n == 0 || n > uintptr(len(buf)) {
+		return s
+	}
+	return syscall.UTF16ToString(buf[:n])
 }
 
 // mustValuesOrNil opens a key's values, nil when it cannot be opened.

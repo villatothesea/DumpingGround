@@ -214,25 +214,27 @@ func (e *Entry) locationFromUninstall() string {
 
 // locationFallback tries the uninstall string first, then the icon's
 // own directory — DisplayIcon usually points at the app exe itself.
-func (e *Entry) locationFallback() string {
+// The uninstall string's directory is solid evidence; an icon's is an
+// inference, so it comes back marked guessed.
+func (e *Entry) locationFallback() (dir string, guessed bool) {
 	if d := e.locationFromUninstall(); d != "" {
-		return d
+		return d, false
 	}
 	if s := e.displayIconPath(); s != "" {
 		dir := filepath.Dir(s)
 		if windir := os.Getenv("WINDIR"); windir == "" || !pathWithin(dir, windir) {
 			if isUninstallerName(s) == false {
-				return dir
+				return dir, true
 			}
 		}
 	}
-	return ""
+	return "", false
 }
 
 // saneLocation rejects registry locations that name a well-known root
-// rather than the app's own folder — some installers write
-// "C:\Program Files\" itself, and flagging that as a leftover would
-// be catastrophic.
+// or shared space rather than the app's own folder — some installers
+// write "C:\Program Files\" itself, and flagging that as a leftover
+// would be catastrophic.
 func SaneLocation(p string) bool {
 	if p == "" {
 		return false
@@ -250,7 +252,31 @@ func SaneLocation(p string) bool {
 			return false
 		}
 	}
+	// Nothing under %WINDIR% is an install folder — an icon path or
+	// uninstall string pointing into Windows would flag System32.
+	if w := os.Getenv("WINDIR"); w != "" && pathWithin(c, filepath.Clean(w)) {
+		return false
+	}
+	if u := os.Getenv("USERPROFILE"); u != "" {
+		cu := filepath.Clean(u)
+		// The profile itself, the Users container above it, and the
+		// standard shell folders directly inside are shared space.
+		if strings.EqualFold(c, cu) || strings.EqualFold(c, filepath.Dir(cu)) ||
+			(strings.EqualFold(filepath.Dir(c), cu) && profileDirs[strings.ToLower(filepath.Base(c))]) {
+			return false
+		}
+	}
 	return true
+}
+
+// profileDirs are the standard user folders directly under the
+// profile — never an install folder, always shared space.
+var profileDirs = map[string]bool{
+	"desktop": true, "documents": true, "downloads": true, "pictures": true,
+	"music": true, "videos": true, "appdata": true, "links": true,
+	"contacts": true, "favorites": true, "savedgames": true,
+	"searches": true, "startmenu": true, "templates": true,
+	"onedrive": true, "3dobjects": true,
 }
 
 // programFilesLocation is the last resort for entries whose registry

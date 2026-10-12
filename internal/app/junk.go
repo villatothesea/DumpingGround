@@ -16,19 +16,36 @@ var junkGreen = ui.RGB(0x1B, 0x8A, 0x5A)
 
 // junkPreset bundles categories by risk tier, like the Rust page's
 // plans. Light is every SAFE category; Deep adds the MODERATE ones.
-// Windows.old stays out of both — review-only.
+// Windows.old stays out of both — review-only — and so does the
+// Recycle Bin: emptying it is permanent and can erase the undo for
+// deletions this very app just made.
 type junkPreset struct {
 	name, tag, note, cost string
-	from, to              int // inclusive category range the plan removes
+	from, to              int   // inclusive category range the plan removes
+	except                []int // categories inside the range a plan must not touch
 }
 
 var junkPresets = []junkPreset{
-	{name: "Light", tag: "SAFE", note: "all eight SAFE categories — temp, caches, reports",
+	{name: "Light", tag: "SAFE", note: "seven SAFE categories — temp, caches, reports",
 		cost: "Cost: nothing — everything regenerates or re-downloads on its own",
-		from: 0, to: disk.JunkCatAppCaches},
+		from: 0, to: disk.JunkCatAppCaches, except: []int{disk.JunkCatRecycleBin}},
 	{name: "Deep", tag: "+ MODERATE", note: "everything in Light, plus update staging, dumps, logs, dev caches",
 		cost: "Cost: re-downloads, one slower update, lost diagnostic logs",
-		from: 0, to: disk.JunkCatDevCaches},
+		from: 0, to: disk.JunkCatDevCaches, except: []int{disk.JunkCatRecycleBin}},
+}
+
+// covers reports whether a category is inside the preset's range and
+// not excepted — the Recycle Bin is excepted everywhere.
+func (p junkPreset) covers(cat int) bool {
+	if cat < p.from || cat > p.to {
+		return false
+	}
+	for _, x := range p.except {
+		if x == cat {
+			return false
+		}
+	}
+	return true
 }
 
 // Grouping dimensions for the junk table. Both can be on at once —
@@ -87,7 +104,10 @@ func (m *Model) junkPresetJobs(p int) []*disk.JunkDir {
 		return nil
 	}
 	var jobs []*disk.JunkDir
-	for cat := junkPresets[p].from; cat <= junkPresets[p].to; cat++ {
+	for cat := 0; cat < disk.JunkCatCount; cat++ {
+		if !junkPresets[p].covers(cat) {
+			continue
+		}
 		for i := range rep.Cats[cat].Dirs {
 			d := &rep.Cats[cat].Dirs[i]
 			if d.Skip == "" {
@@ -226,11 +246,22 @@ func (m *Model) junkDelete(jobs []*disk.JunkDir) {
 	m.junkBusy = true
 	m.junkMsg = "Cleaning…"
 	go func() {
+		// The process check is minutes stale by now — a browser
+		// launched since the scan must still guard its cache.
+		var running map[string]bool
+		if infos, err := m.processSvc.Snapshot(); err == nil {
+			running = make(map[string]bool, len(infos))
+			for _, in := range infos {
+				running[strings.ToLower(in.Name)] = true
+			}
+		}
 		var freed uint64
 		var removed, skipped, failed int
 		var firstErr error
 		for _, d := range jobs {
-			f, rm, sk, err := disk.JunkClean(*d)
+			f, rm, sk, err := disk.JunkClean(*d, func(name string) bool {
+				return running != nil && running[name]
+			})
 			freed += f
 			removed += rm
 			skipped += sk
@@ -399,7 +430,7 @@ func (m *Model) junkResultsView(c *ui.Context, t *ui.Theme) {
 				}
 				hit := false
 				if m.junkSel >= 0 && m.junkSel < len(junkPresets) && r.d.Skip == "" {
-					hit = r.cat >= junkPresets[m.junkSel].from && r.cat <= junkPresets[m.junkSel].to
+					hit = junkPresets[m.junkSel].covers(r.cat)
 				}
 				row := ui.Row(c).FillWidth().Height(28).Padding(0, float32(10+r.depth*24)).Gap(6).AlignItems(ui.Center).Radius(4)
 				hovered := row.Hovered()
@@ -565,8 +596,10 @@ func (m *Model) junkPresetCard(c *ui.Context, t *ui.Theme, p int) {
 		})
 		ui.Text(c, format.Bytes(bytes)).FontSize(18).Bold()
 		ui.Row(c).Gap(3).AlignItems(ui.Center).Children(func() {
-			for cat := pre.from; cat <= pre.to; cat++ {
-				tierBadge(c, t, cat+1, len(m.junkReport.Cats[cat].Dirs) == 0).Tooltip(m.junkReport.Cats[cat].Name)
+			for cat := 0; cat < disk.JunkCatCount; cat++ {
+				if pre.covers(cat) {
+					tierBadge(c, t, cat+1, len(m.junkReport.Cats[cat].Dirs) == 0).Tooltip(m.junkReport.Cats[cat].Name)
+				}
 			}
 		})
 		ui.Text(c, pre.note).FontSize(10).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Tooltip(pre.note)

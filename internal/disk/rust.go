@@ -61,10 +61,10 @@ type RustCat struct {
 // is the days since the project was last touched — a source edit or a
 // build — or -1 when nothing could be dated.
 type RustItem struct {
-	Path                          string
-	Incr, Doc, Debug, Rel, Stray  uint64
-	Total                         uint64
-	Idle                          int
+	Path                         string
+	Incr, Doc, Debug, Rel, Stray uint64
+	Total                        uint64
+	Idle                         int
 }
 
 // RustReport summarizes Rust build artifacts: per-category path lists
@@ -313,8 +313,8 @@ func (rep *RustReport) rustSharedCaches(gone func(string) bool) {
 		cargoHome = filepath.Join(home, ".cargo")
 	}
 	for _, c := range []struct {
-		cat  int
-		dir  string
+		cat int
+		dir string
 	}{
 		{RustCatRegistry, filepath.Join(cargoHome, "registry")},
 		{RustCatGit, filepath.Join(cargoHome, "git")},
@@ -335,8 +335,8 @@ func (rep *RustReport) rustSharedCaches(gone func(string) bool) {
 	if rustupHome == "" {
 		rustupHome = filepath.Join(home, ".rustup")
 	}
-	def := rustDefaultToolchain(rustupHome)
-	if def == "" {
+	protected := rustProtectedToolchains(rustupHome)
+	if len(protected) == 0 {
 		return
 	}
 	tcDir := filepath.Join(rustupHome, "toolchains")
@@ -345,7 +345,7 @@ func (rep *RustReport) rustSharedCaches(gone func(string) bool) {
 		return
 	}
 	for _, e := range entries {
-		if !e.IsDir() || strings.EqualFold(e.Name(), def) {
+		if !e.IsDir() || toolchainProtected(e.Name(), protected) {
 			continue
 		}
 		p := filepath.Join(tcDir, e.Name())
@@ -359,23 +359,57 @@ func (rep *RustReport) rustSharedCaches(gone func(string) bool) {
 	}
 }
 
-// rustDefaultToolchain reads the default_toolchain key out of
-// ~/.rustup/settings.toml without pulling in a TOML parser.
-func rustDefaultToolchain(rustupHome string) string {
+// rustProtectedToolchains collects every name a toolchain deletion
+// must never touch: the settings.toml default, the RUSTUP_TOOLCHAIN
+// environment override and every [overrides] mapping. Channel short
+// names ("stable") also protect their installed long form
+// ("stable-x86_64-pc-windows-msvc") — see toolchainProtected.
+func rustProtectedToolchains(rustupHome string) map[string]bool {
+	out := map[string]bool{}
+	if v := os.Getenv("RUSTUP_TOOLCHAIN"); v != "" {
+		out[strings.ToLower(v)] = true
+	}
 	data, err := os.ReadFile(filepath.Join(rustupHome, "settings.toml"))
 	if err != nil {
-		return ""
+		return out
 	}
+	overrides := false
 	for _, ln := range strings.Split(string(data), "\n") {
 		ln = strings.TrimSpace(ln)
-		if !strings.HasPrefix(ln, "default_toolchain") {
+		if strings.HasPrefix(ln, "[") {
+			overrides = strings.HasPrefix(ln, "[overrides")
 			continue
 		}
-		if i := strings.Index(ln, "="); i >= 0 {
-			return strings.Trim(strings.TrimSpace(ln[i+1:]), `"'`)
+		i := strings.Index(ln, "=")
+		if i < 0 {
+			continue
+		}
+		key := strings.TrimSpace(ln[:i])
+		val := strings.Trim(strings.TrimSpace(ln[i+1:]), `"'`)
+		if key == "default_toolchain" && val != "" {
+			out[strings.ToLower(val)] = true
+		} else if overrides && val != "" {
+			out[strings.ToLower(val)] = true
 		}
 	}
-	return ""
+	return out
+}
+
+// toolchainProtected reports whether an installed toolchain dir is in
+// use. An exact match covers full names ("nightly-2024-01-01-...");
+// a channel name covers its installed long form by prefix — "stable"
+// protects "stable-x86_64-pc-windows-msvc".
+func toolchainProtected(dir string, protected map[string]bool) bool {
+	d := strings.ToLower(dir)
+	if protected[d] {
+		return true
+	}
+	for p := range protected {
+		if strings.HasPrefix(d, p+"-") {
+			return true
+		}
+	}
+	return false
 }
 
 // duDir walks a directory tree and sums file sizes — logical bytes, close
@@ -494,6 +528,9 @@ func hasCargoToml(s *Snapshot, dir int) bool {
 func SafeRustEntry(path, base string, file bool) error {
 	if base != "" && !strings.EqualFold(filepath.Base(path), base) {
 		return errors.New("path no longer looks like the expected artifact")
+	}
+	if junkPathReparse(path) {
+		return errors.New("refusing a reparse point")
 	}
 	info, err := os.Stat(path)
 	if err != nil {

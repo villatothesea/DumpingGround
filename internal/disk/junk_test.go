@@ -23,13 +23,17 @@ func junkFixture(t *testing.T) string {
 		t.Fatal(err)
 	}
 	old := time.Now().Add(-10 * 24 * time.Hour)
-	if err := os.Chtimes(stale, old, old); err != nil {
-		t.Fatal(err)
-	}
+	setAllFileTimes(t, stale, old)
 	if err := os.MkdirAll(filepath.Join(root, "Low", "x"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Mkdir(filepath.Join(root, "emptydir"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	setAllFileTimes(t, filepath.Join(root, "emptydir"), old)
+	// A freshly-made empty dir must NOT be swept — the age gate now
+	// covers directories too.
+	if err := os.Mkdir(filepath.Join(root, "newdir"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	return root
@@ -62,7 +66,7 @@ func TestJunkCleanKidsKeepsFreshAndRoot(t *testing.T) {
 	rep := &JunkReport{}
 	rep.junkKids(JunkCatUserTemp, root, junkTempAge)
 	d := junkKidsDir(t, rep, JunkCatUserTemp)
-	freed, removed, skipped, err := JunkClean(d)
+	freed, removed, skipped, err := JunkClean(d, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,9 +81,13 @@ func TestJunkCleanKidsKeepsFreshAndRoot(t *testing.T) {
 	if _, err := os.Lstat(filepath.Join(root, "stale.tmp")); err == nil {
 		t.Fatal("stale file should be gone")
 	}
-	// The emptied plain dir is swept; the whitelisted Low tree is not.
+	// The old emptied plain dir is swept; the whitelisted Low tree is
+	// not — and neither is an empty dir created a moment ago.
 	if _, err := os.Lstat(filepath.Join(root, "emptydir")); err == nil {
 		t.Fatal("empty dir should have been swept")
+	}
+	if _, err := os.Lstat(filepath.Join(root, "newdir")); err != nil {
+		t.Fatal("a brand-new empty dir must survive the age gate")
 	}
 }
 
@@ -98,7 +106,7 @@ func TestJunkCleanKidsSkipsReparse(t *testing.T) {
 		t.Skipf("cannot create reparse point: %v", err)
 	}
 	d := JunkDir{Path: root, Base: filepath.Base(root), Mode: JunkKids}
-	if _, _, _, err := JunkClean(d); err != nil {
+	if _, _, _, err := JunkClean(d, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Lstat(marker); err != nil {
@@ -121,7 +129,7 @@ func TestJunkCleanKidsRejectsReplacedPath(t *testing.T) {
 	if err := os.Mkdir(root, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, err := JunkClean(d); err != nil {
+	if _, _, _, err := JunkClean(d, nil); err != nil {
 		t.Fatal(err) // same name + same kind — a legit re-clean
 	}
 	// A file where the dir was expected is refused.
@@ -131,7 +139,7 @@ func TestJunkCleanKidsRejectsReplacedPath(t *testing.T) {
 	if err := os.WriteFile(root, []byte("decoy"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, err := JunkClean(d); err == nil {
+	if _, _, _, err := JunkClean(d, nil); err == nil {
 		t.Fatal("a file replacing the dir must fail the entry check")
 	}
 }
@@ -162,7 +170,7 @@ func TestJunkCleanWholeRemovesDir(t *testing.T) {
 		t.Fatal(err)
 	}
 	d := JunkDir{Path: dir, Bytes: 2, Base: "Windows.old", Mode: JunkWhole}
-	freed, removed, _, err := JunkClean(d)
+	freed, removed, _, err := JunkClean(d, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +186,7 @@ func TestJunkCleanShellGuardsSkip(t *testing.T) {
 	// A row marked skipped — e.g. its browser is running — must not be
 	// touched even when asked directly.
 	d := JunkDir{Path: "all drives", Base: "", Mode: JunkShell, Skip: "Chrome is running"}
-	_, _, sk, err := JunkClean(d)
+	_, _, sk, err := JunkClean(d, nil)
 	if err != nil || sk != 1 {
 		t.Fatalf("skipped row: err %v skipped %d", err, sk)
 	}

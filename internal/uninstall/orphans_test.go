@@ -162,14 +162,14 @@ func TestStillInstalled(t *testing.T) {
 	installed := []Entry{
 		{Name: "Obsidian", Location: `D:\Programs\Obsidian`},
 	}
-	if !stillInstalled("Obsidian", installed) {
+	if !StillInstalled("Obsidian", installed) {
 		t.Fatal("Obsidian is installed")
 	}
 	// A decorated display name still resolves to the same app.
-	if !stillInstalled("Obsidian (User)", installed) {
+	if !StillInstalled("Obsidian (User)", installed) {
 		t.Fatal("name variant should match the installed entry")
 	}
-	if stillInstalled("千问办公", installed) {
+	if StillInstalled("千问办公", installed) {
 		t.Fatal("uninstalled CJK app must not match")
 	}
 }

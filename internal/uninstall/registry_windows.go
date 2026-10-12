@@ -33,6 +33,7 @@ const (
 	regSz             = 1
 	regExpandSz       = 2
 	regDword          = 4
+	regMultiSz        = 7
 	regQword          = 11
 	errorMoreData     = 234
 	errorFileNotFound = 2
@@ -217,8 +218,11 @@ func enumUninstall() []Entry {
 			if e.Location == "" {
 				// InstallSource is the installer *media* dir, not the
 				// install dir — the uninstall string's own folder is a
-				// better guess for per-user Inno/NSIS installs.
-				e.Location = e.locationFallback()
+				// better guess for per-user Inno/NSIS installs. An
+				// icon-derived dir is a guess, not evidence.
+				if d, guessed := e.locationFallback(); d != "" {
+					e.Location, e.LocationGuessed = d, guessed
+				}
 			}
 			if e.Location == "" {
 				e.Location = msiInstallLocation(e.Uninstall)

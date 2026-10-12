@@ -90,9 +90,15 @@ func regFootprint(e *Entry) []Item {
 	}
 	for _, h := range hives {
 		// Direct name matches: SOFTWARE\<App>, for every stripped
-		// variant of the display name.
+		// variant of the display name. Stripped variants can collide
+		// with vendor keys other installs share — "Python 3.11.5"
+		// reduces to "python", which would flag SOFTWARE\Python that
+		// every other Python still uses. Only the exact full display
+		// name may match those shared names.
+		dExact := norm(e.Name)
 		for _, sub := range mustSubKeysOrNil(h.root, h.access, h.base) {
-			if names[norm(sub)] && norm(sub) != nPub {
+			dn := norm(sub)
+			if names[dn] && dn != nPub && (dn == dExact || !sharedSoftwareKeys[dn]) {
 				out = append(out, Item{
 					Path: h.name + `\` + h.base + `\` + sub,
 					Kind: KindRegKey, Reg32: h.access&0x100 != 0,
@@ -145,6 +151,21 @@ func regFootprint(e *Entry) []Item {
 		}
 	}
 	return out
+}
+
+// sharedSoftwareKeys are vendor-tree names so many products install
+// under that a name match would flag keys belonging to other installs.
+// An app whose own display name IS one of these (e.g. "Git") still
+// matches its key — the exact-name check covers that.
+var sharedSoftwareKeys = map[string]bool{
+	"python": true, "pythoncore": true, "java": true, "oracle": true,
+	"node": true, "nodejs": true, "microsoft": true, "windows": true,
+	"adobe": true, "apache": true, "nginx": true, "perl": true,
+	"ruby": true, "php": true, "google": true, "mozilla": true,
+	"docker": true, "kubernetes": true, "vmware": true, "virtualbox": true,
+	"intel": true, "nvidia": true, "amd": true, "realtek": true,
+	"amazon": true, "jetbrains": true,
+	"packages": true, "virtualstore": true, "classes": true,
 }
 
 // hiveRoot maps the entry's display hive back to its handle constant.
