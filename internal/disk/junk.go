@@ -377,8 +377,9 @@ func within(p, root string) bool {
 
 // saneTempDir refuses a TEMP/TMP value that points somewhere the
 // "delete week-old files" rule must never reach — a drive root, the
-// Windows dir. A custom temp dir keeps working only when its name
-// looks like one or it lives inside the profile.
+// Windows dir, the profile itself or one of its document folders.
+// GetTempPath falls back to USERPROFILE when TMP/TEMP are unset, so
+// "inside the profile" alone must never be enough.
 func saneTempDir(p string) string {
 	if p == "" || !filepath.IsAbs(p) {
 		return ""
@@ -390,11 +391,28 @@ func saneTempDir(p string) string {
 	if w := os.Getenv("SystemRoot"); w != "" && within(c, filepath.Clean(w)) {
 		return ""
 	}
-	base := strings.ToLower(filepath.Base(c))
-	if strings.Contains(base, "temp") || strings.Contains(base, "tmp") {
-		return p
+	for _, env := range []string{"USERPROFILE", "PUBLIC", "PROGRAMDATA"} {
+		if v := os.Getenv(env); v != "" && strings.EqualFold(filepath.Clean(v), c) {
+			return "" // the profile itself is not a temp dir
+		}
+	}
+	// Some path component says temp — C:\Temp, %LOCALAPPDATA%\Temp,
+	// a custom D:\work\tmp\scratch.
+	for q := c; ; q = filepath.Dir(q) {
+		b := strings.ToLower(filepath.Base(q))
+		if strings.Contains(b, "temp") || strings.Contains(b, "tmp") {
+			return p
+		}
+		if filepath.Dir(q) == q {
+			break
+		}
 	}
 	if u := os.Getenv("USERPROFILE"); u != "" && within(c, filepath.Clean(u)) {
+		for _, std := range []string{"Documents", "Desktop", "Downloads", "Pictures", "Videos", "Music"} {
+			if strings.EqualFold(c, filepath.Join(u, std)) {
+				return ""
+			}
+		}
 		return p
 	}
 	return ""
@@ -647,6 +665,44 @@ func JunkClean(d JunkDir, running func(string) bool) (freed uint64, removed, ski
 func junkCleanKids(d JunkDir) (freed uint64, removed, skipped int) {
 	cutoff := time.Now().Add(-time.Duration(d.Age) * time.Second)
 	var dirs []string
+	var bin []string                // files queued for one batched shell recycle call
+	binSizes := map[string]uint64{} // sizes captured before the delete
+	flushRecycle := func() {
+		// One SHFileOperation for the batch; a refusal falls back to
+		// per-file calls so a single bad path loses nobody.
+		if err := RecyclePaths(bin); err == nil {
+			for _, p := range bin {
+				freed += binSizes[p]
+			}
+			removed += len(bin)
+		} else {
+			for _, p := range bin {
+				if RecycleFileOrDirSized(p, binSizes[p]) == nil {
+					freed += binSizes[p]
+					removed++
+				} else {
+					skipped++
+				}
+			}
+		}
+		bin, binSizes = bin[:0], map[string]uint64{}
+	}
+	removeFile := func(p string, size int64) {
+		if !d.Recycle {
+			if os.Remove(p) == nil {
+				freed += uint64(size)
+				removed++
+			} else {
+				skipped++
+			}
+			return
+		}
+		bin = append(bin, p)
+		binSizes[p] = uint64(size)
+		if len(bin) >= 200 {
+			flushRecycle()
+		}
+	}
 	filepath.WalkDir(d.Path, func(p string, e os.DirEntry, err error) error {
 		if err != nil || p == d.Path {
 			return nil
@@ -668,22 +724,12 @@ func junkCleanKids(d JunkDir) (freed uint64, removed, skipped int) {
 		if err != nil || (d.Age > 0 && junkNewestTime(info).After(cutoff)) {
 			return nil
 		}
-		// Recycle rows route through the bin — a refusal means the
-		// file stays, never a silent permanent delete.
-		rm := os.Remove
-		if d.Recycle {
-			rm = func(path string) error {
-				return RecycleFileOrDirSized(path, uint64(info.Size()))
-			}
-		}
-		if rmErr := rm(p); rmErr != nil {
-			skipped++
-			return nil
-		}
-		freed += uint64(info.Size())
-		removed++
+		removeFile(p, info.Size())
 		return nil
 	})
+	if len(bin) > 0 {
+		flushRecycle()
+	}
 	// Deepest first so parents go once their children did.
 	for i := len(dirs) - 1; i >= 0; i-- {
 		p := dirs[i]

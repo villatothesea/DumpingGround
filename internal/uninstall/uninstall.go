@@ -3,9 +3,7 @@
 package uninstall
 
 import (
-	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -35,6 +33,9 @@ type Entry struct {
 	// target rather than the registry — footprint downgrades it to
 	// Likely so it is never treated as proven.
 	LocationGuessed bool
+	// DateEstimated marks an InstallDate synthesized from the key's
+	// last-write time — it is the last change, not the install day.
+	DateEstimated bool
 }
 
 // List returns every installed program with a name and an uninstall
@@ -80,19 +81,10 @@ func isDigits(s string) bool {
 
 // Launch runs the entry's uninstall command line and returns the
 // started process so the caller can wait for the uninstaller to exit.
-// Windows stores the string free-form, so it is split back into exe
-// and arguments here; the uninstaller's own UI then takes over.
-func (e *Entry) Launch() (*exec.Cmd, error) {
-	exe, args := SplitCmdline(e.Uninstall)
-	if exe == "" {
-		return nil, fmt.Errorf("no uninstall command")
-	}
-	cmd := exec.Command(exe, args...)
-	hideWindow(cmd) // console-subsystem uninstallers would flash a cmd window
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-	return cmd, nil
+// The platform launcher — ShellExecute on Windows — handles quoting
+// and elevation; the uninstaller's own UI then takes over.
+func (e *Entry) Launch() (*Process, error) {
+	return launch(e)
 }
 
 // regPath cleans a registry path value — strips the wrapping quotes

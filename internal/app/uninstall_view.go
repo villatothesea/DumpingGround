@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -169,7 +170,11 @@ func (m *Model) uninstallView(c *ui.Context, t *ui.Theme) {
 						if d == "" {
 							d = "—"
 						}
-						ui.Text(c, d).TextColor(muted).Tooltip(e.InstallDate)
+						tip := e.InstallDate
+						if e.DateEstimated {
+							tip += " (estimated — the key's last write, not the install day)"
+						}
+						ui.Text(c, d).TextColor(muted).Tooltip(tip)
 					case 5:
 						ui.Text(c, e.Location).TextColor(muted).SingleLine().Tooltip(e.Location)
 					default:
@@ -439,6 +444,13 @@ func (m *Model) launchUninstall(e *uninstall.Entry) {
 	if (m.uninstBusy != "" && m.uninstBusy != e.Name) || m.sweepOpen {
 		return // serialized — but a cancelled uninstall may be retried at once
 	}
+	if m.uninstCancel != nil {
+		// A retry for the same app retires the watch that is still
+		// polling for the last attempt — two watchers would both fire
+		// the sweep dialog and trample each other's results.
+		m.uninstCancel()
+		m.uninstCancel = nil
+	}
 	cmd, err := e.Launch()
 	if err != nil {
 		m.uninstMsg = "Failed: " + err.Error()
@@ -449,8 +461,14 @@ func (m *Model) launchUninstall(e *uninstall.Entry) {
 	m.uninstBusy = e.Name // one uninstaller at a time — MSI serializes anyway
 	applog.Section("Uninstall — " + e.Name)
 	applog.Logf("launched  %s", e.Uninstall)
+	// The record lands now, not when the entry vanishes: an uninstall
+	// that finishes after our watch (or after this app closed) still
+	// leaves a name the next orphan scan looks for.
+	uninstall.RecordLaunch(e)
 	entry := *e
 	all := append([]uninstall.Entry(nil), m.uninstRows...)
+	ctx, cancel := context.WithCancel(m.ctx)
+	m.uninstCancel = cancel
 	go func() {
 		_ = cmd.Wait()
 		applog.Logf("uninstaller exited  %s", entry.Name)
@@ -461,9 +479,12 @@ func (m *Model) launchUninstall(e *uninstall.Entry) {
 		// nothing pops up while the user thinks, and a surviving entry
 		// means cancelled / never ran — treated as if nothing happened.
 		gone := entry.Gone()
-		for i := 0; i < 150 && !gone; i++ {
+		for i := 0; i < 150 && !gone && ctx.Err() == nil; i++ {
 			time.Sleep(2 * time.Second)
 			gone = entry.Gone()
+		}
+		if ctx.Err() != nil {
+			return // a retry retired this watch — stay quiet
 		}
 		if !gone {
 			applog.Logf("uninstaller exited with entry still listed  %s — treated as cancelled", entry.Name)
@@ -501,7 +522,7 @@ func (m *Model) launchUninstall(e *uninstall.Entry) {
 			m.sweepName = entry.Name
 			// The name keeps finding leftovers later — log-driven
 			// history is the orphan scan's name source.
-			uninstall.RecordUninstalled(entry.Name)
+			uninstall.RecordUninstalled(&entry)
 			if len(items) == 0 {
 				m.uninstMsg = entry.Name + " uninstalled — no leftovers found"
 				applog.Logf("clean uninstall  %s", entry.Name)
@@ -544,7 +565,7 @@ func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 	}
 	if len(m.sweepItems) == 0 {
 		// Nothing to review — a one-button alert, not the full list UI.
-		msg := "No leftovers found — the uninstaller left a clean machine."
+		msg := "No leftovers found."
 		if m.sweepName == orphanScanName {
 			msg = "No leftovers found — no dead references or empty folders."
 		}
@@ -580,7 +601,11 @@ func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 					row.Background(t.SurfaceHover)
 				}
 				row.Children(func() {
-					ui.Checkbox(c, &m.sweepSel[i], "")
+					if ui.Checkbox(c, &m.sweepSel[i], "").Changed() {
+						// A changed selection voids the armed confirm —
+						// the second click must cover what is ticked.
+						m.sweepArmed = false
+					}
 					ui.Text(c, it.Path).FontSize(13).SingleLine().Grow(1).MinWidth(0).
 						Tooltip(it.Path + "\n" + it.Why)
 					if it.Kind == uninstall.KindDir && it.Bytes > 0 {
@@ -606,7 +631,7 @@ func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 				}
 				label := "Remove leftovers"
 				if m.sweepArmed {
-					label = "Sure? Files go to the Recycle Bin"
+					label = fmt.Sprintf("Sure? Remove %d to the Recycle Bin", sel)
 				}
 				if sel == 0 {
 					label = "Remove leftovers"
@@ -678,10 +703,13 @@ func (m *Model) runSweepRemoval() {
 		}
 		regBackedUp := false
 		if f != nil {
-			regBackedUp = f.Close() == nil
+			// Sync before Close — a crash between now and the flush
+			// must not leave an empty .reg standing for deleted keys.
+			regBackedUp = f.Sync() == nil && f.Close() == nil
 			if regBackedUp {
 				applog.Logf("registry backup: %s", backup)
 			} else {
+				_ = f.Close()
 				applog.Logf("registry backup FAILED to write  %s", backup)
 			}
 		}

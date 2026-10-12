@@ -34,7 +34,7 @@ func isReparse(e os.DirEntry) bool {
 	return e.Type()&os.ModeSymlink != 0
 }
 
-func regFootprint(e *Entry) []Item { return nil }
+func regFootprint(e *Entry, all []Entry) []Item { return nil }
 
 // Gone has no registry to consult off-Windows.
 func (e *Entry) Gone() bool { return true }

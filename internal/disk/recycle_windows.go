@@ -68,6 +68,28 @@ func RecycleFileOrDirSized(path string, bytes uint64) error {
 			return fmt.Errorf("too large for the recycle bin on %s — refusing to delete %q", filepath.VolumeName(path), path)
 		}
 	}
+	return RecyclePaths([]string{path})
+}
+
+// RecyclePaths moves a list of paths to the bin in a single shell
+// call — pFrom takes a double-null-separated list, so a Downloads
+// sweep of hundreds of files costs one SHFileOperation, not hundreds.
+func RecyclePaths(paths []string) error {
+	if len(paths) == 0 {
+		return nil
+	}
+	var from []uint16
+	for _, p := range paths {
+		if err := recyclable(p); err != nil {
+			return err
+		}
+		u16, err := syscall.UTF16FromString(p)
+		if err != nil {
+			return err
+		}
+		from = append(from, u16[:len(u16)-1]...) // strip each terminator
+	}
+	from = append(from, 0, 0) // the list's own double null
 	// SHFileOperationW is a shell call that may create COM objects —
 	// hidden progress windows included — on the calling thread. The
 	// apartment and any window it makes belong to this OS thread, so the
@@ -75,15 +97,9 @@ func RecycleFileOrDirSized(path string, bytes uint64) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	procCoInitEx.Call(0, 0x2) // COINIT_APARTMENTTHREADED — S_FALSE is fine
-	p, err := syscall.UTF16FromString(path)
-	if err != nil {
-		return err
-	}
-	// pFrom expects a double-null-terminated list of paths.
-	p = append(p, 0)
 	op := shFileOpStruct{
 		wFunc:  foDelete,
-		pFrom:  &p[0],
+		pFrom:  &from[0],
 		fFlags: fofAllowUndo | fofSilent | fofNoConfirmation | fofNoErrorUI,
 	}
 	r, _, _ := procSHFileOp.Call(uintptr(unsafe.Pointer(&op)))

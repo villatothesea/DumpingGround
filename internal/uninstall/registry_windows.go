@@ -250,6 +250,7 @@ func enumUninstall() []Entry {
 			}
 			if e.InstallDate == "" && stampOK {
 				e.InstallDate = time.Unix(0, stamp.Nanoseconds()).Format("20060102")
+				e.DateEstimated = true
 			}
 			if e.Location == "" {
 				// Custom-path installs (Bitwig) record nothing — a

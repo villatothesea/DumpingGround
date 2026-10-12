@@ -273,3 +273,29 @@ func TestJunkKidsEmptyRoot(t *testing.T) {
 		t.Fatal("a missing dir produces no row")
 	}
 }
+
+// saneTempDir must never accept the profile itself or a standard
+// user folder — GetTempPath falls back to USERPROFILE when TMP/TEMP
+// are unset, and a week-old-files rule inside Documents is vandalism.
+func TestSaneTempDirRejectsProfileAndDocs(t *testing.T) {
+	// A synthetic profile keeps the test hermetic — t.TempDir() itself
+	// lives inside a dir named Temp and would satisfy the name rule.
+	home := `D:\dg-test-profile`
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("SystemRoot", `C:\Windows`)
+	if got := saneTempDir(home); got != "" {
+		t.Fatalf("profile accepted as temp: %q", got)
+	}
+	if got := saneTempDir(filepath.Join(home, "Documents")); got != "" {
+		t.Fatalf("Documents accepted as temp: %q", got)
+	}
+	if got := saneTempDir(`D:\`); got != "" {
+		t.Fatalf("drive root accepted as temp: %q", got)
+	}
+	if got := saneTempDir(filepath.Join(home, "AppData", "Local", "Temp")); got == "" {
+		t.Fatal("a real temp dir was refused")
+	}
+	if got := saneTempDir(filepath.Join(home, "scratch")); got == "" {
+		t.Fatal("a non-standard folder inside the profile was refused")
+	}
+}

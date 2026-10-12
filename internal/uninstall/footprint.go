@@ -70,7 +70,7 @@ func Footprint(e *Entry, all []Entry, progress ...func(string, float64)) []Item 
 	rep("Scanning app folders", 0)
 	items := fsFootprint(e, all, appRoots(), shortcutRoots(), progress...)
 	rep("Scanning the registry", 0.7)
-	items = append(items, regFootprint(e)...)
+	items = append(items, regFootprint(e, all)...)
 	rep("Finishing up", 0.95)
 	// Dedupe: an install folder sitting inside a scanned root would be
 	// listed twice, and a registry key can be reached through two
@@ -93,7 +93,7 @@ func Footprint(e *Entry, all []Entry, progress ...func(string, float64)) []Item 
 func fsFootprint(e *Entry, all []Entry, roots, shortcuts []string, progress ...func(string, float64)) []Item {
 	rep := stageReporter(progress)
 	var out []Item
-	names := e.matchTokens()
+	names := e.tokens(all)
 	nPub := norm(e.Publisher)
 
 	// The install folder itself — the registry said so. A
@@ -283,6 +283,43 @@ func (e *Entry) matchTokens() map[string]bool {
 }
 
 // generic names never produce Likely/Review matches on their own.
+
+// sharedTokens unions the match tokens of every installed app other
+// than e. A name variant of ours that another install still claims —
+// "Python 3.11.5" stripped to "python" while Python 3.12 remains —
+// names shared territory, not a leftover.
+func sharedTokens(e *Entry, all []Entry) map[string]bool {
+	shared := map[string]bool{}
+	for i := range all {
+		if all[i].Key == e.Key && all[i].Name == e.Name {
+			continue
+		}
+		for t := range all[i].matchTokens() {
+			shared[t] = true
+		}
+	}
+	return shared
+}
+
+// tokens is matchTokens with shared variants dropped. The exact full
+// display name and the install folder's basename are always kept —
+// they are specific to this entry. The check replaces a fixed list of
+// common names: whatever collides is excluded, no roster to maintain.
+func (e *Entry) tokens(all []Entry) map[string]bool {
+	names := e.matchTokens()
+	shared := sharedTokens(e, all)
+	exact, loc := norm(e.Name), ""
+	if e.Location != "" {
+		loc = norm(filepath.Base(e.Location))
+	}
+	for t := range names {
+		if shared[t] && t != exact && t != loc {
+			delete(names, t)
+		}
+	}
+	return names
+}
+
 var generic = map[string]bool{
 	"": true, "microsoft": true, "windows": true, "commonfiles": true,
 	"tools": true, "tool": true, "system": true, "utilities": true,

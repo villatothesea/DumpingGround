@@ -62,9 +62,9 @@ func isReparse(e os.DirEntry) bool {
 // regFootprint scans the registry for the app's own entries: the
 // Uninstall subkey itself, vendor trees under Software, and Run /
 // RunOnce values that point into the install folder.
-func regFootprint(e *Entry) []Item {
+func regFootprint(e *Entry, all []Entry) []Item {
 	var out []Item
-	names := e.matchTokens()
+	names := e.tokens(all)
 	nPub := norm(e.Publisher)
 
 	// The Apps-list entry itself — the last thing a thorough removal

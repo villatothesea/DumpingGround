@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -277,22 +278,49 @@ var systemGroups = map[string]bool{
 	"windowsaccessories": true, "windowspowershell": true,
 }
 
-// historyItems re-scans, by name, every app recorded as uninstalled —
-// or recovered from past run logs. The registry entry is gone, so this
-// is nameTokens-only matching against data roots and shortcuts.
+// historyItems re-scans every app recorded as uninstalled — or
+// recovered from past run logs. The record carries the entry's
+// location and publisher when it has them, so the match is stronger
+// than name-only. A folder a live app is still writing to — newest
+// content newer than the removal — is not a leftover: portable
+// same-name apps would lose their data otherwise.
 func historyItems(installed []Entry) []Item {
 	var out []Item
-	for _, name := range HistoryNames() {
-		if StillInstalled(name, installed) {
+	for _, rec := range History() {
+		if StillInstalled(rec.Name, installed) {
 			continue
 		}
-		e := Entry{Name: name}
+		e := Entry{Name: rec.Name, Location: rec.Location, Publisher: rec.Publisher, Key: rec.Key}
 		for _, it := range Footprint(&e, installed) {
-			it.Why = name + ": " + it.Why
+			if rec.Gone && it.Kind == KindDir && it.Confidence != Confirmed &&
+				dirNewestWrite(it.Path).After(rec.When.Add(2*time.Minute)) {
+				continue // written after the app vanished — still in use
+			}
+			it.Why = rec.Name + ": " + it.Why
 			out = append(out, it)
 		}
 	}
 	return out
+}
+
+// dirNewestWrite is a shallow freshness probe — the dir's own mtime
+// and its immediate children's, deep enough to catch an app that is
+// still dropping files into its data root.
+func dirNewestWrite(dir string) time.Time {
+	var t time.Time
+	if info, err := os.Stat(dir); err == nil {
+		t = info.ModTime()
+	}
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return t
+	}
+	for _, e := range ents {
+		if info, err := e.Info(); err == nil && info.ModTime().After(t) {
+			t = info.ModTime()
+		}
+	}
+	return t
 }
 
 // StillInstalled reports whether a name matches an app still listed

@@ -15,3 +15,13 @@ func RecycleFileOrDir(path string) error {
 func RecycleFileOrDirSized(path string, _ uint64) error {
 	return os.RemoveAll(path)
 }
+
+// RecyclePaths removes each path — no shell list call off Windows.
+func RecyclePaths(paths []string) error {
+	for _, p := range paths {
+		if err := os.RemoveAll(p); err != nil {
+			return err
+		}
+	}
+	return nil
+}

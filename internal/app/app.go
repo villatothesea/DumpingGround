@@ -214,9 +214,10 @@ type Model struct {
 	uninstLoaded                    bool // the registry list has been read at least once
 	uninstLoading                   bool
 	uninstQuery                     string
-	uninstSort                      ui.SortOrder // the Table header drives this directly
-	uninstArmed                     string       // entry name armed for the second-click confirm
-	uninstBusy                      string       // entry whose uninstaller is still running — one at a time
+	uninstSort                      ui.SortOrder       // the Table header drives this directly
+	uninstArmed                     string             // entry name armed for the second-click confirm
+	uninstBusy                      string             // entry whose uninstaller is still running — one at a time
+	uninstCancel                    context.CancelFunc // retires a stale entry watch on retry
 	uninstMsg                       string
 	uninstList                      ui.ListState
 	uninstSelected                  int // keeps a row lit while its context menu is open
