@@ -88,6 +88,11 @@ The page the app opens on (Ctrl+1; Ctrl+2–5 are the other tabs).
   table (GPT/MBR), a network adapter's error and dropped-packet counters,
   and the battery's design vs full-charge capacity, cycle count and
   chemistry — the pack's wear, read from its own firmware.
+- Static cards for the rest of the machine: one per attached monitor,
+  decoded from its EDID (manufacturer, model, serial, panel size, native
+  and current resolution); the audio adapters and endpoints; and every
+  present Plug-and-Play device, by class and vendor. EDID left behind by
+  unplugged monitors is filtered out.
 
 ### Processes
 

@@ -26,6 +26,40 @@ type Info struct {
 	NICs                      []NICInfo
 	Battery                   bool
 	Batt                      *BatteryInfo
+	Displays                  []DisplayInfo
+	DisplayMode               DisplayMode
+	Audio                     []AudioInfo
+	Devices                   []DeviceInfo
+}
+
+// DisplayInfo describes one monitor, decoded from its EDID — the block
+// the monitor itself reports, cached by Windows under
+// HKLM\SYSTEM\CurrentControlSet\Enum\DISPLAY.
+type DisplayInfo struct {
+	Manufacturer string // three-letter PNP id, "LEN", "DEL", …
+	Model        string // the monitor-name descriptor when it has one
+	Serial       string
+	WidthCM      int // physical panel size
+	HeightCM     int
+	NativeWidth  int
+	NativeHeight int
+	Year         int
+}
+
+// DisplayMode is the mode the primary output is currently running.
+type DisplayMode struct {
+	Width, Height, RefreshHz, BitsPerPel int
+}
+
+// AudioInfo is one audio adapter (SetupAPI's MEDIA class).
+type AudioInfo struct {
+	Name, Vendor string
+}
+
+// DeviceInfo is one present Plug-and-Play device: what it is, its
+// Windows device class and who made it.
+type DeviceInfo struct {
+	Name, Class, Vendor string
 }
 
 // BatteryInfo is the battery's static identity and wear, read from the

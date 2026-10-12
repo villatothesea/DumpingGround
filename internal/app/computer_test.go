@@ -31,6 +31,17 @@ func fakeMachine(m *Model) {
 		NICs:    []hwmon.NICInfo{{Index: 10, Name: "WLAN", Description: "Intel Wi-Fi 7 BE211", Kind: "Wi-Fi", MAC: "E0-C9-32-AD-FF-B1", MTU: 1500, IPs: []string{"192.168.1.20", "2001:db8::1"}}},
 		Battery: true,
 		Batt:    &hwmon.BatteryInfo{DesignCapacity: 75000, FullCapacity: 73000, CycleCount: 120, Chemistry: "LION"},
+		Displays: []hwmon.DisplayInfo{
+			{Manufacturer: "DEL", Model: "S2719DGF", Serial: "7JQXBY2", WidthCM: 60, HeightCM: 34, NativeWidth: 2560, NativeHeight: 1440, Year: 2019},
+			{Manufacturer: "LEN", Model: "FlexView 3072x1920", WidthCM: 31, HeightCM: 20, NativeWidth: 3072, NativeHeight: 1920, Year: 2025},
+		},
+		DisplayMode: hwmon.DisplayMode{Width: 2560, Height: 1440, RefreshHz: 144, BitsPerPel: 32},
+		Audio:       []hwmon.AudioInfo{{Name: "Realtek SoundWire Audio", Vendor: "Realtek"}, {Name: "Microphone Array on SDW", Vendor: "Intel"}},
+		Devices: []hwmon.DeviceInfo{
+			{Name: "Intel Wi-Fi 7 BE211", Class: "Network", Vendor: "Intel"},
+			{Name: "Realtek SoundWire Audio", Class: "Audio", Vendor: "Realtek"},
+			{Name: "USB xHCI Compliant Host Controller", Class: "USB", Vendor: "Intel"},
+		},
 	}
 	m.hw.info.Store(info)
 	now := time.Now()
@@ -90,6 +101,44 @@ func TestNewInventoryFields(t *testing.T) {
 	click("Disk 0 (C:)", "Serial number", "S6Z1NJ0T123456", "4B2QJXD7", "Partition style", "GPT")
 	click("WLAN", "Errors", "Dropped")
 	click("Battery", "Design capacity", "75.0 Wh", "Health", "97%", "Cycle count", "120", "LION")
+}
+
+// TestNewHardwareCards checks the item-two cards: a monitor card built from
+// EDID, the audio list and the present-device list.
+func TestNewHardwareCards(t *testing.T) {
+	m := New()
+	m.page = computerPage
+	fakeMachine(m)
+	tt := ui.NewTester(m.view, 1180, 1500)
+	tt.SetTitleBar(ui.TitleBar{Height: 40, Right: 138})
+	tt.Frame()
+	for _, want := range []string{"Display 1", "Display 2", "Audio", "Devices"} {
+		if !tt.HasText(want) {
+			t.Errorf("overview is missing the %q card", want)
+		}
+	}
+	click := func(name string, wants ...string) {
+		t.Helper()
+		if err := tt.Click(name); err != nil {
+			t.Fatal(err)
+		}
+		tt.Frame()
+		if !tt.HasText("Back") {
+			t.Fatalf("clicking %q did not open a detail page", name)
+		}
+		for _, w := range wants {
+			if !tt.HasText(w) {
+				t.Errorf("clicking %q: missing %q", name, w)
+			}
+		}
+		if err := tt.Click("Back"); err != nil {
+			t.Fatal(err)
+		}
+		tt.Frame()
+	}
+	click("Display 1", "Monitor", "2560 × 1440", "Current mode", "DEL", "27.2 in")
+	click("Audio", "Audio devices", "Realtek SoundWire Audio", "Microphone Array on SDW")
+	click("Devices", "Present devices", "USB xHCI Compliant Host Controller", "Network")
 }
 
 // TestDiskHealthPanel checks the NVMe verdict panel: a readable drive shows

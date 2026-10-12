@@ -32,6 +32,19 @@ func TestLive(t *testing.T) {
 		t.Logf("NIC %+v", n)
 	}
 	t.Logf("Battery=%v detail=%+v", info.Battery, info.Batt)
+	t.Logf("Display mode=%+v", info.DisplayMode)
+	for _, d := range info.Displays {
+		t.Logf("  Display %+v", d)
+	}
+	for _, a := range info.Audio {
+		t.Logf("  Audio %+v", a)
+	}
+	t.Logf("Devices=%d", len(info.Devices))
+	for i, dv := range info.Devices {
+		if i < 8 {
+			t.Logf("  Device %+v", dv)
+		}
+	}
 
 	if info.Host == "" || info.OS == "" || info.CPU.Name == "" || info.CPU.Threads == 0 || info.Mem.Total == 0 {
 		t.Errorf("basic inventory missing: %+v", info)

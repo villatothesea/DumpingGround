@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -21,6 +22,9 @@ var (
 	hwDiskCol = ui.Hex("#22c55e")
 	hwNetCol  = ui.Hex("#f59e0b")
 	hwBatCol  = ui.Hex("#84cc16")
+	hwDispCol = ui.Hex("#0ea5e9")
+	hwAudCol  = ui.Hex("#ec4899")
+	hwDevCol  = ui.Hex("#64748b")
 )
 
 // computerState is the Computer page's model: the hardware inventory, a
@@ -100,7 +104,8 @@ type hwCard struct {
 	col         ui.Color
 	value, vsub string // the big figure, and a smaller line under it
 	stats       []string
-	health      string // disks: "Good", "Caution", "Replace"; "" when unknown
+	health      string      // disks: "Good", "Caution", "Replace"; "" when unknown
+	rows        [][2]string // static cards (displays, audio, devices) instead of a chart
 	opts        chartOpts
 }
 
@@ -207,6 +212,65 @@ func hwCards(info *hwmon.Info, h []hwmon.Sample) []hwCard {
 		if last != nil && last.Battery != nil {
 			c.value = fmt.Sprintf("%d%%", last.Battery.Percent)
 			c.sub = batteryState(last.Battery)
+		}
+		cards = append(cards, c)
+	}
+
+	// The static cards: monitors (from EDID), audio and the present-device
+	// list. They have no live series, so their card bodies are plain rows.
+	for i, d := range info.Displays {
+		i := i
+		title := "Display"
+		if len(info.Displays) > 1 {
+			title = fmt.Sprintf("Display %d", i+1)
+		}
+		c := hwCard{id: fmt.Sprintf("display:%d", i), glyph: "monitor", title: title,
+			sub: deTM(d.Manufacturer + " " + d.Model), col: hwDispCol, value: fmt.Sprintf("%d×%d", d.NativeWidth, d.NativeHeight)}
+		if i == 0 && info.DisplayMode.Width > 0 {
+			c.rows = append(c.rows, [2]string{"Now", fmt.Sprintf("%d×%d @ %d Hz", info.DisplayMode.Width, info.DisplayMode.Height, info.DisplayMode.RefreshHz)})
+		}
+		if s := sizeInches(d.WidthCM, d.HeightCM); s != "" {
+			c.rows = append(c.rows, [2]string{"Size", s})
+		}
+		if d.Year > 0 {
+			c.rows = append(c.rows, [2]string{"Year", fmt.Sprint(d.Year)})
+		}
+		cards = append(cards, c)
+	}
+
+	if len(info.Audio) > 0 {
+		c := hwCard{id: "audio", glyph: "audio", title: "Audio", sub: "adapters and endpoints", col: hwAudCol, value: fmt.Sprint(len(info.Audio))}
+		for i, a := range info.Audio {
+			if i >= 4 {
+				c.rows = append(c.rows, [2]string{"", fmt.Sprintf("+%d more", len(info.Audio)-i)})
+				break
+			}
+			c.rows = append(c.rows, [2]string{"", a.Name})
+		}
+		cards = append(cards, c)
+	}
+
+	if len(info.Devices) > 0 {
+		c := hwCard{id: "devices", glyph: "chip", title: "Devices", sub: "present hardware", col: hwDevCol, value: fmt.Sprint(len(info.Devices))}
+		counts := map[string]int{}
+		for _, d := range info.Devices {
+			counts[d.Class]++
+		}
+		classes := make([]string, 0, len(counts))
+		for k := range counts {
+			classes = append(classes, k)
+		}
+		slices.SortFunc(classes, func(a, b string) int {
+			if counts[a] != counts[b] {
+				return counts[b] - counts[a]
+			}
+			return strings.Compare(a, b)
+		})
+		for i, k := range classes {
+			if i >= 5 {
+				break
+			}
+			c.rows = append(c.rows, [2]string{k, fmt.Sprint(counts[k])})
 		}
 		cards = append(cards, c)
 	}

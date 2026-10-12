@@ -46,6 +46,12 @@ func (m *Model) hwDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist []hw
 					m.hwNetDetail(c, t, info, hist, cd, uint32(idx))
 				case cd.id == "battery":
 					m.hwBatteryDetail(c, t, info, hist, cd)
+				case sscan(cd.id, "display:%d", &idx):
+					m.hwDisplayDetail(c, t, info, idx)
+				case cd.id == "audio":
+					m.hwAudioDetail(c, t, info)
+				case cd.id == "devices":
+					m.hwDevicesDetail(c, t, info)
 				}
 			})
 		})
@@ -609,4 +615,79 @@ func (m *Model) hwBatteryDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hi
 			{"Chemistry", b.Chemistry},
 		})
 	}
+}
+
+// hwDisplayDetail shows what the monitor itself reports over its link
+// (EDID), plus the mode the output is running now.
+func (m *Model) hwDisplayDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, i int) {
+	if i >= len(info.Displays) {
+		return
+	}
+	d := info.Displays[i]
+	native := ""
+	if d.NativeWidth > 0 {
+		native = fmt.Sprintf("%d × %d", d.NativeWidth, d.NativeHeight)
+	}
+	now := ""
+	if info.DisplayMode.Width > 0 {
+		now = fmt.Sprintf("%d × %d @ %d Hz, %d-bit", info.DisplayMode.Width, info.DisplayMode.Height, info.DisplayMode.RefreshHz, info.DisplayMode.BitsPerPel)
+	}
+	year := ""
+	if d.Year > 0 {
+		year = fmt.Sprint(d.Year)
+	}
+	m.hwSpecs(c, t, "Monitor", [][2]string{
+		{"Manufacturer", d.Manufacturer},
+		{"Model", d.Model},
+		{"Serial number", d.Serial},
+		{"Screen size", sizeInches(d.WidthCM, d.HeightCM)},
+		{"Panel dimensions", cmPair(d.WidthCM, d.HeightCM)},
+		{"Native resolution", native},
+		{"Current mode", now},
+		{"Year of manufacture", year},
+	})
+	m.hwPanel(c, t, func() {
+		ui.Text(c, "Where this comes from").Bold().FontSize(13)
+		ui.Text(c, "Decoded from the monitor's EDID — the block the display reports over its link — and from the current display mode. Only monitors actually attached are listed; Windows keeps EDID for displays that have been unplugged.").FontSize(12).TextColor(t.TextMuted)
+	})
+}
+
+// hwAudioDetail lists the audio adapters SetupAPI reports.
+func (m *Model) hwAudioDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info) {
+	if len(info.Audio) == 0 {
+		return
+	}
+	m.hwPanel(c, t, func() {
+		ui.Text(c, "Audio devices").Bold().FontSize(13)
+		ui.Grid(c).ColumnTracks(ui.Fr(3), ui.Fr(2)).GapX(16).GapY(8).Children(func() {
+			for _, a := range info.Audio {
+				ui.Text(c, a.Name).Selectable().SingleLine().Ellipsis("…")
+				ui.Text(c, cmp.Or(a.Vendor, "—")).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
+			}
+		})
+	})
+}
+
+// hwDevicesDetail lists every present Plug-and-Play device, by class.
+func (m *Model) hwDevicesDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info) {
+	if len(info.Devices) == 0 {
+		return
+	}
+	m.hwPanel(c, t, func() {
+		ui.Row(c).Children(func() {
+			ui.Text(c, "Present devices").Bold().FontSize(13)
+			ui.Spacer(c)
+			ui.Text(c, fmt.Sprintf("%d devices", len(info.Devices))).FontSize(11).TextColor(t.TextMuted)
+		})
+		ui.Grid(c).ColumnTracks(ui.Fr(3), ui.Fr(1.3), ui.Fr(1.6)).GapX(12).GapY(6).Children(func() {
+			for _, h := range []string{"Device", "Class", "Vendor"} {
+				ui.Text(c, h).FontSize(11).TextColor(t.TextMuted)
+			}
+			for _, d := range info.Devices {
+				ui.Text(c, d.Name).SingleLine().Ellipsis("…")
+				ui.Text(c, d.Class).TextColor(t.TextMuted).SingleLine()
+				ui.Text(c, cmp.Or(d.Vendor, "—")).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
+			}
+		})
+	})
 }

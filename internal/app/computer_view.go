@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/dumpingground/dumpingground/internal/format"
@@ -177,6 +178,22 @@ func capWh(mwh uint64) string {
 	return fmt.Sprintf("%.1f Wh", float64(mwh)/1000)
 }
 
+// sizeInches is a panel's physical diagonal from its width and height in
+// centimetres, as EDID reports them.
+func sizeInches(wcm, hcm int) string {
+	if wcm <= 0 || hcm <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("%.1f in", math.Hypot(float64(wcm), float64(hcm))/2.54)
+}
+
+func cmPair(w, h int) string {
+	if w <= 0 || h <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("%d × %d cm", w, h)
+}
+
 // hwCardView is one hardware card: icon and name, the current figure, a
 // live chart and a few facts. The whole card is the click target.
 func (m *Model) hwCardView(c *ui.Context, t *ui.Theme, cd *hwCard, hist []hwmon.Sample) {
@@ -210,7 +227,23 @@ func (m *Model) hwCardView(c *ui.Context, t *ui.Theme, cd *hwCard, hist []hwmon.
 				}
 			})
 		})
-		ui.Box(c).Grow(1).MinHeight(0).Draw(func(p *ui.Painter, r ui.Rect) { drawChart(p, r, t, hist, cd.opts) })
+		if len(cd.opts.lines) > 0 {
+			ui.Box(c).Grow(1).MinHeight(0).Draw(func(p *ui.Painter, r ui.Rect) { drawChart(p, r, t, hist, cd.opts) })
+		} else {
+			ui.Column(c).Grow(1).MinHeight(0).Gap(4).Children(func() {
+				for _, row := range cd.rows {
+					if row[0] == "" {
+						ui.Text(c, row[1]).FontSize(11).SingleLine().Ellipsis("…")
+						continue
+					}
+					ui.Row(c).Gap(8).Children(func() {
+						ui.Text(c, row[0]).FontSize(11).TextColor(t.TextMuted).Shrink(0)
+						ui.Spacer(c)
+						ui.Text(c, row[1]).FontSize(11).SingleLine().Ellipsis("…")
+					})
+				}
+			})
+		}
 		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
 			for _, s := range cd.stats {
 				ui.Text(c, s).FontSize(11).TextColor(t.TextMuted).SingleLine()

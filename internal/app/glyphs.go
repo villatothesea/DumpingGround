@@ -49,6 +49,8 @@ var glyphs = map[string]*ui.SVG{
 	"laptop":  glyph(`<path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9"/><path d="M2 20h20"/><path d="M4 16h16l1 4H3z"/>`),
 	"monitor": glyph(`<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>`),
 	"net":     glyph(`<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>`),
+	"audio":   glyph(`<path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.4 6a9 9 0 0 1 0 12"/>`),
+	"chip":    glyph(`<rect x="6" y="6" width="12" height="12" rx="1"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/>`),
 	"end":     glyph(`<path d="M18.4 6.6a8 8 0 1 0 0 10.8"/><path d="M12 8v4"/>`),
 }
 

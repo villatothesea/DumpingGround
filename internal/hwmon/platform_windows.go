@@ -18,6 +18,7 @@ var (
 	pdhDLL   = syscall.NewLazyDLL("pdh.dll")
 	dxgiDLL  = syscall.NewLazyDLL("dxgi.dll")
 	setupapi = syscall.NewLazyDLL("setupapi.dll")
+	user32   = syscall.NewLazyDLL("user32.dll")
 
 	procGetSystemFirmwareTable   = k32.NewProc("GetSystemFirmwareTable")
 	procGetLogicalProcInfoEx     = k32.NewProc("GetLogicalProcessorInformationEx")
@@ -35,8 +36,13 @@ var (
 
 	procSetupDiGetClassDevs          = setupapi.NewProc("SetupDiGetClassDevsW")
 	procSetupDiEnumDeviceInterfaces  = setupapi.NewProc("SetupDiEnumDeviceInterfaces")
+	procSetupDiEnumDeviceInfo        = setupapi.NewProc("SetupDiEnumDeviceInfo")
 	procSetupDiGetDeviceInterfaceDet = setupapi.NewProc("SetupDiGetDeviceInterfaceDetailW")
+	procSetupDiGetDeviceRegistryProp = setupapi.NewProc("SetupDiGetDeviceRegistryPropertyW")
+	procSetupDiGetDeviceInstanceID   = setupapi.NewProc("SetupDiGetDeviceInstanceIdW")
 	procSetupDiDestroyDeviceInfoList = setupapi.NewProc("SetupDiDestroyDeviceInfoList")
+
+	procEnumDisplaySettings = user32.NewProc("EnumDisplaySettingsW")
 )
 
 // platform holds what Sample needs to turn cumulative counters into rates.
@@ -62,6 +68,7 @@ func (p *platform) load(info *Info) {
 	if info.Battery {
 		info.Batt = readBatteryInfo()
 	}
+	loadDisplays(info, loadDevices(info))
 }
 
 func le64(b []byte) uint64 { return binary.LittleEndian.Uint64(b) }
@@ -90,6 +97,33 @@ func regOpen(path string) (syscall.Handle, bool) {
 		return 0, false
 	}
 	return h, true
+}
+
+// regOpenSub opens a child key of an already-open key.
+func regOpenSub(parent syscall.Handle, name string) (syscall.Handle, bool) {
+	p, err := syscall.UTF16PtrFromString(name)
+	if err != nil {
+		return 0, false
+	}
+	var h syscall.Handle
+	if syscall.RegOpenKeyEx(parent, p, 0, syscall.KEY_READ, &h) != nil {
+		return 0, false
+	}
+	return h, true
+}
+
+// regSubkeys lists a key's immediate child key names.
+func regSubkeys(h syscall.Handle) []string {
+	var names []string
+	for i := uint32(0); ; i++ {
+		buf := make([]uint16, 256)
+		n := uint32(len(buf))
+		if syscall.RegEnumKeyEx(h, i, &buf[0], &n, nil, nil, nil, nil) != nil {
+			break
+		}
+		names = append(names, syscall.UTF16ToString(buf[:n]))
+	}
+	return names
 }
 
 func regRead(h syscall.Handle, name string) []byte {
