@@ -45,9 +45,6 @@ var (
 	procDuplicateHandle   = k32.NewProc("DuplicateHandle")
 	procQueryProcessImage = k32.NewProc("QueryFullProcessImageNameW")
 	procGetCurrentProcess = k32.NewProc("GetCurrentProcess")
-	procOpenToken         = a32.NewProc("OpenProcessToken")
-	procLookupPriv        = a32.NewProc("LookupPrivilegeValueW")
-	procAdjustToken       = a32.NewProc("AdjustTokenPrivileges")
 	procRegOpen           = a32.NewProc("RegOpenKeyExW")
 	procRegDeleteTree     = a32.NewProc("RegDeleteTreeW")
 	procRegDeleteValue    = a32.NewProc("RegDeleteValueW")
@@ -55,25 +52,22 @@ var (
 )
 
 const (
-	pipeAccessDuplex   = 0x3
-	pipeTypeMessage    = 0x4
-	pipeReadMessage    = 0x2
-	pipeWait           = 0x0
-	pipeRejectRemote   = 0x8
-	pipeFirstInstance  = 0x80000
-	syncAccess         = 0x100000
-	processDupHandle   = 0x40
-	processQueryLimit  = 0x1000
-	dupSameAccess      = 0x2
-	dupCloseSource     = 0x1
-	keyWow64           = 0x100
-	keyWow64_32        = 0x200
-	maximumAllowed     = 0x02000000
-	hkeyLocalMachine   = 0x80000002
-	tokenAdjustPrivs   = 0x20
-	tokenQuery         = 0x8
-	sePrivilegeEnabled = 0x2
-	idleLimit          = 10 * time.Minute
+	pipeAccessDuplex  = 0x3
+	pipeTypeMessage   = 0x4
+	pipeReadMessage   = 0x2
+	pipeWait          = 0x0
+	pipeRejectRemote  = 0x8
+	pipeFirstInstance = 0x80000
+	syncAccess        = 0x100000
+	processDupHandle  = 0x40
+	processQueryLimit = 0x1000
+	dupSameAccess     = 0x2
+	dupCloseSource    = 0x1
+	keyWow64          = 0x100
+	keyWow64_32       = 0x200
+	maximumAllowed    = 0x02000000
+	hkeyLocalMachine  = 0x80000002
+	idleLimit         = 10 * time.Minute
 )
 
 var lastActivity atomic.Int64
@@ -274,13 +268,9 @@ func opOpenProcess(req *elevate.Request, parent syscall.Handle) elevate.Response
 	if req.PID == 0 || req.Access == 0 || req.Access&^allowed != 0 {
 		return elevate.Response{Err: "refused access mask"}
 	}
-	h, _, _ := procOpenProcess.Call(uintptr(req.Access), 0, uintptr(req.PID))
+	h, _, e := procOpenProcess.Call(uintptr(req.Access), 0, uintptr(req.PID))
 	if h == 0 {
-		enableDebugPrivilege()
-		h, _, e := procOpenProcess.Call(uintptr(req.Access), 0, uintptr(req.PID))
-		if h == 0 {
-			return elevate.Response{Err: e.Error()}
-		}
+		return elevate.Response{Err: e.Error()}
 	}
 	out, err := donate(syscall.Handle(h), parent)
 	if err != nil {
@@ -291,32 +281,11 @@ func opOpenProcess(req *elevate.Request, parent syscall.Handle) elevate.Response
 	return elevate.Response{OK: true, Handle: out}
 }
 
-// enableDebugPrivilege turns on SeDebugPrivilege — the gate to
-// protected processes (System, smss, PPL antivirus). Lazily enabled on
-// the first denied OpenProcess and logged; pending product review.
-func enableDebugPrivilege() {
-	var tok syscall.Handle
-	self, _, _ := procGetCurrentProcess.Call()
-	if r, _, _ := procOpenToken.Call(self, tokenAdjustPrivs|tokenQuery, uintptr(unsafe.Pointer(&tok))); r == 0 {
-		return
-	}
-	defer syscall.CloseHandle(tok)
-	name, _ := syscall.UTF16PtrFromString("SeDebugPrivilege")
-	var luid struct{ Low, High uint32 }
-	if r, _, _ := procLookupPriv.Call(0, uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(&luid))); r == 0 {
-		return
-	}
-	var tp struct {
-		Count uint32
-		Luid  struct{ Low, High uint32 }
-		Attr  uint32
-	}
-	tp.Count, tp.Luid, tp.Attr = 1, luid, sePrivilegeEnabled
-	r, _, _ := procAdjustToken.Call(uintptr(tok), 0, uintptr(unsafe.Pointer(&tp)), 0, 0, 0)
-	if r != 0 {
-		applog.Logf("elevated worker: SeDebugPrivilege enabled (protected-process access)")
-	}
-}
+// Deliberately absent: SeDebugPrivilege. Everything it unlocks here —
+// reading a protected process's memory or handle table, terminating
+// csrss/lsass — is debugger territory, and a VM_READ handle on lsass is
+// the textbook credential-dump primitive. The kernel draws the line
+// for us; a plain OpenProcess refusal is the answer, not a retry.
 
 // regAllowed gates HKLM deletes to leftover-shaped keys: inside the
 // uninstall hives, startup and App Paths lists, plus SOFTWARE\<vendor>

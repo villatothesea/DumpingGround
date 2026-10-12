@@ -46,6 +46,12 @@ idle minutes. Declining the prompt just keeps the original "access
 denied" error — nothing else changes. A `⛨ admin` badge in the status
 bar shows whenever that worker is alive.
 
+The worker never enables `SeDebugPrivilege`: kernel-protected processes
+(csrss, lsass, antivirus) stay out of reach — killing one would blue-
+screen the machine, and an `lsass` memory-read handle is what
+credential-dumping tools look like. The kernel's boundary is the
+feature, not a limitation.
+
 ### Processes
 
 - Flat list by default, Tree checkbox for parent/child view.
