@@ -12,6 +12,7 @@ import (
 
 	"github.com/dumpingground/dumpingground/internal/applog"
 	"github.com/dumpingground/dumpingground/internal/disk"
+	"github.com/dumpingground/dumpingground/internal/elevate"
 	"github.com/dumpingground/dumpingground/internal/format"
 	"github.com/dumpingground/dumpingground/internal/process"
 	"github.com/dumpingground/dumpingground/internal/treemap"
@@ -888,6 +889,11 @@ func (m *Model) statusBar(c *ui.Context, t *ui.Theme) {
 		st := ui.Text(c, text).SingleLine().MinWidth(0).TextColor(t.TextMuted)
 		if m.page == diskPage && m.diskLive {
 			st.Tooltip("live: the index updates itself through the NTFS change journal — file changes appear as they happen, without rescanning. Click the ⓘ icon for details.")
+		}
+		if elevate.SelfElevated() {
+			ui.Text(c, "⛨ admin").FontSize(11).TextColor(t.Warning).Tooltip("running with administrator rights — every operation succeeds without asking")
+		} else if elevate.Active() {
+			ui.Text(c, "⛨ admin").FontSize(11).TextColor(t.Warning).Tooltip("an elevated worker is answering privileged requests for this session — spawned after the UAC prompt, exits with the app or after 10 idle minutes")
 		}
 		m.statMeter(c, t, "cpu", "CPU", fmt.Sprintf("%.0f%%", m.sys.cpu), m.sys.cpu, fmt.Sprintf("Total CPU usage %.0f%%", m.sys.cpu))
 		m.statMeter(c, t, "mem", "MEM", fmt.Sprintf("%d%%", m.sys.memLoad), float64(m.sys.memLoad), fmt.Sprintf("Memory %.1f of %.1f GB used (%d%%)", float64(m.sys.memUsed)/1073741824, float64(m.sys.memTotal)/1073741824, m.sys.memLoad))

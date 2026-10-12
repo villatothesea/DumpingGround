@@ -10,6 +10,8 @@ import (
 	"os"
 	"syscall"
 	"unsafe"
+
+	"github.com/dumpingground/dumpingground/internal/elevate"
 )
 
 const (
@@ -46,6 +48,14 @@ func openVolume(root string) (*os.File, error) {
 	}
 	h, e := syscall.CreateFile(name, syscall.GENERIC_READ, syscall.FILE_SHARE_READ|syscall.FILE_SHARE_WRITE, nil, syscall.OPEN_EXISTING, 0, 0)
 	if e != nil {
+		// Volume handles need admin — on refusal the elevated worker
+		// opens it and donates the handle back; the access check ran
+		// there, so the handle works here unchanged.
+		if elevate.IsAccessDenied(e) {
+			if dh, e2 := elevate.OpenVolume(root[:2]); e2 == nil {
+				return os.NewFile(dh, root), nil
+			}
+		}
 		return nil, e
 	}
 	return os.NewFile(uintptr(h), root), nil

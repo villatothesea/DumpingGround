@@ -16,7 +16,7 @@ var priorityClass = kernel32.NewProc("GetPriorityClass")
 
 func (c *windowsCollector) Properties(pid uint32) (Info, error) {
 	info := Info{PID: pid}
-	h, _, err := procOpen.Call(processQueryLimitedInformation, 0, uintptr(pid))
+	h, err := openProc(pid, processQueryLimitedInformation)
 	if h == 0 {
 		return info, err
 	}

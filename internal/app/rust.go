@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/dumpingground/dumpingground/internal/disk"
+	"github.com/dumpingground/dumpingground/internal/elevate"
 	"github.com/dumpingground/dumpingground/internal/format"
 	"github.com/egoist/mygo/ui"
 )
@@ -330,6 +331,9 @@ func (m *Model) rustDelete(jobs []disk.RustDir) {
 			var err error
 			if recycle {
 				err = disk.RecycleFileOrDirSized(j.Path, j.Bytes)
+				if err != nil && elevate.IsAccessDenied(err) {
+					err = elevate.DeletePath(j.Path, true)
+				}
 				if err != nil {
 					// The bin refused — the path stays put. Falling
 					// back to a permanent delete would betray the
@@ -343,6 +347,9 @@ func (m *Model) rustDelete(jobs []disk.RustDir) {
 				}
 			} else {
 				err = os.RemoveAll(j.Path)
+				if err != nil && elevate.IsAccessDenied(err) {
+					err = elevate.DeletePath(j.Path, false)
+				}
 			}
 			if err != nil {
 				failed++

@@ -13,6 +13,7 @@ import (
 	"unsafe"
 
 	"github.com/dumpingground/dumpingground/internal/disk"
+	"github.com/dumpingground/dumpingground/internal/elevate"
 )
 
 var errNoRegBackup = errors.New("no .reg backup — registry item kept for safety")
@@ -51,6 +52,13 @@ func RemoveItems(items []Item, backup io.Writer, progress ...func(done, total in
 		switch it.Kind {
 		case KindDir:
 			errs[i] = disk.RecycleFileOrDirSized(it.Path, it.Bytes)
+			// Protected leftovers (Program Files, system dirs) refuse
+			// the plain delete — retry through the elevated worker.
+			if errs[i] != nil && elevate.IsAccessDenied(errs[i]) {
+				if err := elevate.DeletePath(it.Path, true); err == nil {
+					errs[i] = nil
+				}
+			}
 		case KindRegKey:
 			if bw == nil {
 				errs[i] = errNoRegBackup
@@ -66,6 +74,11 @@ func RemoveItems(items []Item, backup io.Writer, progress ...func(done, total in
 				continue
 			}
 			errs[i] = deleteRegTree(root, sub, access)
+			if errs[i] != nil && root == hkeyLocalMachine && elevate.IsAccessDenied(errs[i]) {
+				if err := elevate.RegDelete(sub, "", it.Reg32); err == nil {
+					errs[i] = nil
+				}
+			}
 		case KindRegValue:
 			if bw == nil {
 				errs[i] = errNoRegBackup
@@ -81,6 +94,11 @@ func RemoveItems(items []Item, backup io.Writer, progress ...func(done, total in
 				continue
 			}
 			errs[i] = deleteRegValue(root, sub, it.RegValue, access)
+			if errs[i] != nil && root == hkeyLocalMachine && elevate.IsAccessDenied(errs[i]) {
+				if err := elevate.RegDelete(sub, it.RegValue, it.Reg32); err == nil {
+					errs[i] = nil
+				}
+			}
 		}
 	}
 	rep(len(items), "")

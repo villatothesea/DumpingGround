@@ -4,7 +4,10 @@
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>
       <requestedPrivileges>
-        <requestedExecutionLevel level="requireAdministrator" uiAccess="false"/>
+        <!-- Unprivileged by default: the first operation that needs
+             admin spawns the elevated worker through a runas UAC
+             prompt, which donates handles / runs the closed op set. -->
+        <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
       </requestedPrivileges>
     </security>
   </trustInfo>

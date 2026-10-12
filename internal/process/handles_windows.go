@@ -146,7 +146,7 @@ func (c *windowsCollector) SearchHandles(pid uint32, query string, limit int) ([
 		if entry.PID == 0 || (pid != 0 && uint32(entry.PID) != pid) {
 			continue
 		}
-		source, _, _ := procOpen.Call(processDupHandle, 0, entry.PID)
+		source, _ := openProc(uint32(entry.PID), processDupHandle)
 		if source == 0 {
 			skipped++
 			continue

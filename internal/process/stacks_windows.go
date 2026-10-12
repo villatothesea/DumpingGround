@@ -96,7 +96,7 @@ func (c *windowsCollector) Stack(pid, threadID uint32, maxFrames int) ([]StackFr
 	if maxFrames <= 0 || maxFrames > 256 {
 		maxFrames = 64
 	}
-	h, _, err := procOpen.Call(processQueryInformation|processQueryLimitedInformation|processVMRead, 0, uintptr(pid))
+	h, err := openProc(pid, processQueryInformation|processQueryLimitedInformation|processVMRead)
 	if h == 0 {
 		return nil, err
 	}

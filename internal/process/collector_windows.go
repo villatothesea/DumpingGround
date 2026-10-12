@@ -177,6 +177,9 @@ func (c *windowsCollector) readEntry(entry *processEntry32) Info {
 	if entry.ProcessID == 0 {
 		return info
 	}
+	// The sampler stays on raw OpenProcess — a denied process must not
+	// raise a UAC prompt just for background stats. Elevation is for
+	// user-initiated ops (kill, stack, handles) via openProc.
 	h, _, _ := procOpen.Call(processQueryLimitedInformation|processVMRead, 0, uintptr(entry.ProcessID))
 	if h == 0 {
 		h, _, _ = procOpen.Call(processQueryLimitedInformation, 0, uintptr(entry.ProcessID))
@@ -277,7 +280,7 @@ func (c *windowsCollector) Terminate(pid uint32, tree bool) error {
 	}
 	var failures []error
 	for i := len(ids) - 1; i >= 0; i-- {
-		h, _, err := procOpen.Call(processTerminate|processQueryLimitedInformation, 0, uintptr(ids[i]))
+		h, err := openProc(ids[i], processTerminate|processQueryLimitedInformation)
 		if h == 0 {
 			failures = append(failures, fmt.Errorf("PID %d: %w", ids[i], err))
 			continue

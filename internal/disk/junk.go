@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/dumpingground/dumpingground/internal/elevate"
 )
 
 // Junk category indices in JunkReport.Cats, fixed order. Safe categories
@@ -287,8 +289,10 @@ func (rep *JunkReport) junkKidsW(cat int, root string, age time.Duration, warn s
 	var bytes uint64
 	var files int
 	cutoff := time.Now().Add(-age)
+	denied := false
 	filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
+			denied = denied || elevate.IsAccessDenied(err)
 			return nil
 		}
 		if junkReparse(d) {
@@ -311,6 +315,11 @@ func (rep *JunkReport) junkKidsW(cat int, root string, age time.Duration, warn s
 		files++
 		return nil
 	})
+	if files == 0 && denied {
+		// SoftwareDistribution & co. refuse even a directory listing to
+		// standard users — enumerate through the elevated worker.
+		bytes, files = junkKidsElevated(root, age, cutoff)
+	}
 	if files == 0 {
 		return
 	}
@@ -345,6 +354,44 @@ func (rep *JunkReport) junkGlob(cat int, pattern string) {
 			Base: filepath.Base(p), File: true, Mode: JunkWhole,
 		})
 	}
+}
+
+// junkKidsElevated counts files in a directory the current process may
+// not even read — the worker lists the tree, the same age and name
+// guards apply here.
+func junkKidsElevated(root string, age time.Duration, cutoff time.Time) (bytes uint64, files int) {
+	kids, err := elevate.ListTree(root)
+	if err != nil {
+		return 0, 0
+	}
+	for _, k := range kids {
+		if k.Dir || k.Reparse {
+			continue
+		}
+		protected := false
+		for seg := range strings.SplitSeq(filepath.Dir(k.Name), `\`) {
+			if junkProtected[strings.ToLower(seg)] {
+				protected = true
+				break
+			}
+		}
+		if protected {
+			continue
+		}
+		newest := k.ModUnix
+		if k.CrtUnix > newest {
+			newest = k.CrtUnix
+		}
+		if k.AccUnix > newest {
+			newest = k.AccUnix
+		}
+		if age > 0 && time.Unix(newest, 0).After(cutoff) {
+			continue
+		}
+		bytes += uint64(k.Size)
+		files++
+	}
+	return bytes, files
 }
 
 // junkProtected are directory names cleanup never enters or removes.
@@ -646,6 +693,9 @@ func JunkClean(d JunkDir, running func(string) bool) (freed uint64, removed, ski
 			return 0, 0, 0, err
 		}
 		err = os.RemoveAll(d.Path)
+		if err != nil && elevate.IsAccessDenied(err) {
+			err = elevate.DeletePath(d.Path, false)
+		}
 		if err == nil {
 			return d.Bytes, 1, 0, nil
 		}
@@ -677,7 +727,11 @@ func junkCleanKids(d JunkDir) (freed uint64, removed, skipped int) {
 			removed += len(bin)
 		} else {
 			for _, p := range bin {
-				if RecycleFileOrDirSized(p, binSizes[p]) == nil {
+				err := RecycleFileOrDirSized(p, binSizes[p])
+				if err != nil && elevate.IsAccessDenied(err) {
+					err = elevate.DeletePath(p, true)
+				}
+				if err == nil {
 					freed += binSizes[p]
 					removed++
 				} else {
@@ -689,7 +743,11 @@ func junkCleanKids(d JunkDir) (freed uint64, removed, skipped int) {
 	}
 	removeFile := func(p string, size int64) {
 		if !d.Recycle {
-			if os.Remove(p) == nil {
+			err := os.Remove(p)
+			if err != nil && elevate.IsAccessDenied(err) {
+				err = elevate.DeletePath(p, false)
+			}
+			if err == nil {
 				freed += uint64(size)
 				removed++
 			} else {
@@ -703,8 +761,15 @@ func junkCleanKids(d JunkDir) (freed uint64, removed, skipped int) {
 			flushRecycle()
 		}
 	}
+	denied := false
+	walked := false
 	filepath.WalkDir(d.Path, func(p string, e os.DirEntry, err error) error {
-		if err != nil || p == d.Path {
+		if err != nil {
+			denied = denied || elevate.IsAccessDenied(err)
+			return nil
+		}
+		walked = true
+		if p == d.Path {
 			return nil
 		}
 		if junkReparse(e) {
@@ -727,6 +792,26 @@ func junkCleanKids(d JunkDir) (freed uint64, removed, skipped int) {
 		removeFile(p, info.Size())
 		return nil
 	})
+	if !walked && denied {
+		// The whole subtree refused enumeration — list it elevated and
+		// delete through the same per-file path.
+		if kids, err := elevate.ListTree(d.Path); err == nil {
+			for _, k := range kids {
+				p := filepath.Join(d.Path, k.Name)
+				switch {
+				case k.Reparse:
+				case k.Dir:
+					dirs = append(dirs, p)
+				default:
+					newest := max(k.ModUnix, k.CrtUnix, k.AccUnix)
+					if d.Age > 0 && time.Unix(newest, 0).After(cutoff) {
+						continue
+					}
+					removeFile(p, k.Size)
+				}
+			}
+		}
+	}
 	if len(bin) > 0 {
 		flushRecycle()
 	}
@@ -738,7 +823,10 @@ func junkCleanKids(d JunkDir) (freed uint64, removed, skipped int) {
 				continue
 			}
 		}
-		os.Remove(p) // fails on non-empty, which is fine
+		err := os.Remove(p) // fails on non-empty, which is fine
+		if err != nil && elevate.IsAccessDenied(err) {
+			elevate.DeletePath(p, false)
+		}
 	}
 	return
 }

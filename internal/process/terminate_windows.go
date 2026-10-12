@@ -54,7 +54,7 @@ func (c *windowsCollector) TerminateChecked(target Info, tree bool) error {
 		if id <= 4 || id == uint32(os.Getpid()) {
 			return errors.New("process tree contains a protected target")
 		}
-		h, _, e := procOpen.Call(processTerminate|processQueryLimitedInformation, 0, uintptr(id))
+		h, e := openProc(id, processTerminate|processQueryLimitedInformation)
 		if h == 0 {
 			return fmt.Errorf("PID %d: %w", id, e)
 		}

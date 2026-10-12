@@ -28,8 +28,23 @@ This app deletes things, so the rules come first:
 ## Running
 
 Download `DumpingGround.exe` from Releases, or build below. Double-click —
-no installer, no admin required for normal use. Relaunching focuses the
+no installer, no UAC prompt at launch. Relaunching focuses the
 existing window.
+
+### Privileges
+
+The app runs unelevated and stays that way. The first operation that
+actually needs administrator rights — reading the NTFS journal or MFT,
+deleting an HKLM leftover or a protected system directory, terminating a
+process owned by another user — prompts UAC **once** and starts a
+short-lived elevated worker (`DumpingGround.exe --elevated-worker`, no
+window). It talks to the parent over a named pipe that accepts only the
+parent's PID, answers a closed set of operations (handle donation,
+whitelisted file/registry deletes, protected-directory listings), is
+logged to the same audit log, and exits when the app exits or after ten
+idle minutes. Declining the prompt just keeps the original "access
+denied" error — nothing else changes. A `⛨ admin` badge in the status
+bar shows whenever that worker is alive.
 
 ### Processes
 
