@@ -350,7 +350,7 @@ func (m *Model) openSweepScan(name string) {
 // label and 0→1 fraction to the dialog.
 func (m *Model) scanProgress(base float64) func(string, float64) {
 	return func(stage string, f float64) {
-		m.post(func() {
+		m.postProg(func() {
 			m.sweepScanText = stage
 			m.sweepScanFrac = base + (1-base)*f
 		})
@@ -486,7 +486,7 @@ func (m *Model) launchUninstall(e *uninstall.Entry) {
 			for i := 0; i < 8; i++ {
 				time.Sleep(2 * time.Second)
 				frac := 0.1 + 0.3*float64(i)/8
-				m.post(func() { m.sweepScanFrac = frac })
+				m.postProg(func() { m.sweepScanFrac = frac })
 				cur := uninstall.DirSize(entry.Location)
 				if cur == last {
 					break
@@ -661,7 +661,7 @@ func (m *Model) runSweepRemoval() {
 			}
 		}
 		errs := uninstall.RemoveItems(chosen, reg, func(done, total int, path string) {
-			m.post(func() {
+			m.postProg(func() {
 				m.sweepRmDone, m.sweepRmTotal, m.sweepRmPath = done, total, path
 			})
 		})

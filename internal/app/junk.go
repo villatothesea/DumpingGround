@@ -261,7 +261,7 @@ func (m *Model) junkDelete(jobs []*disk.JunkDir) {
 		var firstErr error
 		for i, d := range jobs {
 			path := d.Path
-			m.post(func() { m.junkRmDone, m.junkRmPath = i, path })
+			m.postProg(func() { m.junkRmDone, m.junkRmPath = i, path })
 			f, rm, sk, err := disk.JunkClean(*d, func(name string) bool {
 				return running != nil && running[name]
 			})
@@ -607,34 +607,32 @@ func (m *Model) junkPresetCard(c *ui.Context, t *ui.Theme, p int) {
 			}
 		})
 		ui.Text(c, pre.note).FontSize(10).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Tooltip(pre.note)
-		// Cost line and Clean share the card's last row — the button's
-		// bottom edge lines up with the text baseline.
-		ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
-			ui.Text(c, pre.cost).FontSize(10).TextColor(t.Warning).SingleLine().Ellipsis("…").Grow(1).MinWidth(0).Tooltip(pre.cost)
-			if m.dangerButton(c, "broom", "Clean").Disabled(bytes == 0 || m.junkBusy).Clicked() {
-				m.junkConfirm = p
+		// Cost line and the action share one row that never grows: the
+		// confirm question and then the live progress take the text's
+		// slot, the buttons take Clean's.
+		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
+			switch {
+			case m.junkConfirm == p && m.junkBusy:
+				ui.Spinner(c)
+				ui.Text(c, fmt.Sprintf("Cleaning %d of %d · %s", m.junkRmDone, m.junkRmTotal, m.junkRmPath)).
+					FontSize(10).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Grow(1).MinWidth(0)
+				ui.Progress(c, float64(m.junkRmDone)/float64(max(m.junkRmTotal, 1))).Width(90).Height(4)
+			case m.junkConfirm == p:
+				ui.Text(c, fmt.Sprintf("Delete %d locations, free %s?", len(jobs), format.Bytes(bytes))).
+					FontSize(10).TextColor(t.Danger).SingleLine().Ellipsis("…").Grow(1).MinWidth(0)
+				if ui.Button(c, "Confirm").Clicked() {
+					m.junkDelete(jobs)
+				}
+				if ui.Button(c, "Keep").Clicked() {
+					m.junkConfirm = -1
+				}
+			default:
+				ui.Text(c, pre.cost).FontSize(10).TextColor(t.Warning).SingleLine().Ellipsis("…").Grow(1).MinWidth(0).Tooltip(pre.cost)
+				if m.dangerButton(c, "broom", "Clean").Disabled(bytes == 0 || m.junkBusy).Clicked() {
+					m.junkConfirm = p
+				}
 			}
 		})
-		if m.junkConfirm == p {
-			if m.junkBusy {
-				ui.Column(c).FillWidth().Gap(4).Children(func() {
-					ui.Text(c, fmt.Sprintf("Cleaning %d of %d · %s", m.junkRmDone, m.junkRmTotal, m.junkRmPath)).
-						FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
-					ui.Progress(c, float64(m.junkRmDone)/float64(max(m.junkRmTotal, 1))).FillWidth().Height(4)
-				})
-			} else {
-				ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
-					ui.Text(c, fmt.Sprintf("Delete %d locations, free %s?", len(jobs), format.Bytes(bytes))).
-						FontSize(11).TextColor(t.Danger).Grow(1).MinWidth(0)
-					if ui.Button(c, "Confirm").Clicked() {
-						m.junkDelete(jobs)
-					}
-					if ui.Button(c, "Keep").Clicked() {
-						m.junkConfirm = -1
-					}
-				})
-			}
-		}
 	})
 	if card.Clicked() {
 		if on {

@@ -319,7 +319,7 @@ func (m *Model) rustDelete(jobs []disk.RustDir) {
 		deleted := map[string]uint64{}
 		for i, j := range jobs {
 			path := j.Path
-			m.post(func() { m.rustRmDone, m.rustRmPath = i, path })
+			m.postProg(func() { m.rustRmDone, m.rustRmPath = i, path })
 			if err := disk.SafeRustEntry(j.Path, j.Base, j.File); err != nil {
 				failed++
 				if firstErr == nil {
@@ -718,33 +718,31 @@ func (m *Model) rustPresetCard(c *ui.Context, t *ui.Theme, p int) {
 			}
 			ui.Text(c, "· "+pre.rebuild).FontSize(10).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Tooltip(pre.rebuild)
 		})
-		ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
-			if m.dangerButton(c, "trash", "Clean").Disabled(bytes == 0 || m.rustBusy).Clicked() {
-				m.rustConfirm = p
+		// The action row never changes height: Clean arms a confirm that
+		// replaces it in place, and while a delete runs the same spot
+		// shows live progress.
+		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
+			switch {
+			case m.rustConfirm == p && m.rustBusy:
+				ui.Spinner(c)
+				ui.Text(c, fmt.Sprintf("Deleting %d of %d · %s", m.rustRmDone, m.rustRmTotal, m.rustRmPath)).
+					FontSize(11).TextColor(t.TextMuted).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
+				ui.Progress(c, float64(m.rustRmDone)/float64(max(m.rustRmTotal, 1))).Width(90).Height(4)
+			case m.rustConfirm == p:
+				ui.Text(c, m.rustConfirmText(jobs)).FontSize(11).TextColor(t.Danger).Grow(1).MinWidth(0)
+				if ui.Button(c, "Confirm").Clicked() {
+					m.cleanRustPreset(p)
+				}
+				if ui.Button(c, "Keep").Clicked() {
+					m.rustConfirm = -1
+				}
+			default:
+				ui.Spacer(c)
+				if m.dangerButton(c, "trash", "Clean").Disabled(bytes == 0 || m.rustBusy).Clicked() {
+					m.rustConfirm = p
+				}
 			}
 		})
-		if m.rustConfirm == p {
-			if m.rustBusy {
-				// Deletion can take minutes through the bin — the
-				// card shows where it is rather than freezing the
-				// confirm row.
-				ui.Column(c).FillWidth().Gap(4).Children(func() {
-					ui.Text(c, fmt.Sprintf("Deleting %d of %d · %s", m.rustRmDone, m.rustRmTotal, m.rustRmPath)).
-						FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
-					ui.Progress(c, float64(m.rustRmDone)/float64(max(m.rustRmTotal, 1))).FillWidth().Height(4)
-				})
-			} else {
-				ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
-					ui.Text(c, m.rustConfirmText(jobs)).FontSize(11).TextColor(t.Danger).Grow(1).MinWidth(0)
-					if ui.Button(c, "Confirm").Clicked() {
-						m.cleanRustPreset(p)
-					}
-					if ui.Button(c, "Keep").Clicked() {
-						m.rustConfirm = -1
-					}
-				})
-			}
-		}
 	})
 	if card.Clicked() {
 		if on {

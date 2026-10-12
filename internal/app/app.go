@@ -333,12 +333,32 @@ func (m *Model) Run() error {
 	return mygo.App.Run()
 }
 func (m *Model) post(fn func()) {
+	start := time.Now()
 	select {
 	case m.events <- fn:
 		if m.window != nil {
 			m.window.Invalidate()
 		}
 	case <-m.ctx.Done():
+	}
+	// A queued event starving behind a stalled UI is worth knowing
+	// about in the field log — severe stalls only, so this stays quiet.
+	if d := time.Since(start); d > 500*time.Millisecond {
+		applog.Logf("post waited %v for the event queue", d)
+	}
+}
+
+// postProg reports progress — a stale counter is worthless once a newer
+// one exists, so it drops instead of blocking the worker when the UI is
+// behind. Anything the worker must land stays on post.
+func (m *Model) postProg(fn func()) {
+	select {
+	case m.events <- fn:
+		if m.window != nil {
+			m.window.Invalidate()
+		}
+	case <-m.ctx.Done():
+	default:
 	}
 }
 func (m *Model) sampleProcesses() {

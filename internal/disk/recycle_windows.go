@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"unsafe"
@@ -67,8 +68,12 @@ func RecycleFileOrDirSized(path string, bytes uint64) error {
 			return fmt.Errorf("too large for the recycle bin on %s — refusing to delete %q", filepath.VolumeName(path), path)
 		}
 	}
-	// SHFileOperationW is a shell call that may create COM objects on the
-	// calling thread; make sure the apartment exists.
+	// SHFileOperationW is a shell call that may create COM objects —
+	// hidden progress windows included — on the calling thread. The
+	// apartment and any window it makes belong to this OS thread, so the
+	// goroutine must not migrate mid-operation.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	procCoInitEx.Call(0, 0x2) // COINIT_APARTMENTTHREADED — S_FALSE is fine
 	p, err := syscall.UTF16FromString(path)
 	if err != nil {
