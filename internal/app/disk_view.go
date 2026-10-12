@@ -959,7 +959,9 @@ func (m *Model) prepareMap() {
 	m.mapHeight = 0
 	m.diskRects = nil
 	m.diskItems = nil
-	m.diskExtensions = nil
+	// Keep the old extension rows on screen while the re-walk runs —
+	// pumpExtensions swaps in the fresh stats atomically. Clearing them
+	// here blanked the table every live flush, which read as flicker.
 	// The map is intentionally one hierarchy level deep: a directory is one
 	// rectangle whose weight is its aggregate size. Entering it reveals its children.
 	m.mapLogMin, m.mapLogMax = 0, 0
