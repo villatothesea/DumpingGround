@@ -398,8 +398,8 @@ func (m *Model) startOrphanScan() {
 // or the uninstaller bailed, and sweeping then would list the live
 // install folder as a leftover.
 func (m *Model) launchUninstall(e *uninstall.Entry) {
-	if m.uninstBusy != "" || m.sweepOpen {
-		return // serialized — and a review in progress owns sweepItems
+	if (m.uninstBusy != "" && m.uninstBusy != e.Name) || m.sweepOpen {
+		return // serialized — but a cancelled uninstall may be retried at once
 	}
 	cmd, err := e.Launch()
 	if err != nil {
@@ -416,46 +416,38 @@ func (m *Model) launchUninstall(e *uninstall.Entry) {
 	go func() {
 		_ = cmd.Wait()
 		applog.Logf("uninstaller exited  %s", entry.Name)
-		// The review dialog opens the moment the uninstaller exits —
-		// the scan's progress is part of the show, not a hidden wait.
-		m.post(func() {
-			m.openSweepScan(entry.Name)
-			m.sweepScanText = "Waiting for the uninstaller to finish…"
-			m.sweepScanFrac = 0.05
-		})
-		// Some uninstallers spawn a child and exit early — poll until
-		// the registry entry disappears or a grace window elapses.
+		m.post(func() { m.uninstMsg = entry.Name + " — watching for the uninstaller to finish" })
+		// Forking uninstallers (Inno) exit their parent while the real
+		// uninstaller window still asks for confirmation — the registry
+		// entry is the only truth. Watch it silently for five minutes;
+		// nothing pops up while the user thinks, and a surviving entry
+		// means cancelled / never ran — treated as if nothing happened.
 		gone := entry.Gone()
-		for i := 0; i < 30 && !gone; i++ {
+		for i := 0; i < 150 && !gone; i++ {
 			time.Sleep(2 * time.Second)
 			gone = entry.Gone()
-			frac := 0.05 + 0.25*float64(i)/30
-			m.post(func() { m.sweepScanFrac = frac })
 		}
 		if !gone {
-			// The entry is still listed — the uninstaller was
-			// cancelled or bailed out. Scanning now would list the
-			// live install folder as a leftover, so don't: the row
-			// is still there and Uninstall can be retried.
-			applog.Logf("uninstaller exited with entry still listed  %s — sweep skipped", entry.Name)
+			applog.Logf("uninstaller exited with entry still listed  %s — treated as cancelled", entry.Name)
 			m.post(func() {
 				m.uninstBusy = ""
-				m.sweepOpen = false
-				m.sweepPhase = sweepReview
-				m.uninstMsg = entry.Name + " — uninstaller closed but the entry is still listed; nothing swept. " +
-					"Retry Uninstall, or right-click → Find leftovers for a manual sweep"
+				m.uninstMsg = entry.Name + " — uninstaller closed, entry still listed; nothing changed"
 			})
 			return
 		}
-		// The entry vanishing does not mean file deletion finished —
-		// spawned children keep working. Wait until the install
-		// folder's size holds still across two samples.
+		// The entry is gone — a real uninstall. NOW the dialog opens:
+		// children may still be deleting files, so the scan's settle
+		// wait is shown rather than hidden.
+		m.post(func() {
+			m.openSweepScan(entry.Name)
+			m.sweepScanText = "Waiting for file cleanup to settle…"
+			m.sweepScanFrac = 0.1
+		})
 		if uninstall.SaneLocation(entry.Location) {
-			m.post(func() { m.sweepScanText = "Waiting for file cleanup to settle…" })
 			last := uninstall.DirSize(entry.Location)
 			for i := 0; i < 8; i++ {
 				time.Sleep(2 * time.Second)
-				frac := 0.3 + 0.2*float64(i)/8
+				frac := 0.1 + 0.3*float64(i)/8
 				m.post(func() { m.sweepScanFrac = frac })
 				cur := uninstall.DirSize(entry.Location)
 				if cur == last {
@@ -464,7 +456,7 @@ func (m *Model) launchUninstall(e *uninstall.Entry) {
 				last = cur
 			}
 		}
-		items := uninstall.Footprint(&entry, all, m.scanProgress(0.5))
+		items := uninstall.Footprint(&entry, all, m.scanProgress(0.4))
 		m.post(func() {
 			m.uninstBusy = ""
 			m.uninstLoaded = false // the listing changed
