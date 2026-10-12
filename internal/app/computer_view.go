@@ -177,7 +177,14 @@ func (m *Model) hwCardView(c *ui.Context, t *ui.Theme, cd *hwCard, hist []hwmon.
 			icon(c, cd.glyph, 18).TextColor(cd.col)
 			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 				ui.Text(c, cd.title).Bold().FontSize(13).SingleLine().Ellipsis("…")
-				ui.Text(c, cd.sub).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
+				if cd.health != "" {
+					ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
+						ui.Box(c).Size(7, 7).Radius(4).Background(hwHealthColor(cd.health, t))
+						ui.Text(c, cd.sub).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Tooltip("Health: " + cd.health)
+					})
+				} else {
+					ui.Text(c, cd.sub).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
+				}
 			})
 			ui.Column(c).AlignItems(ui.End).Shrink(0).Children(func() {
 				v := ui.Text(c, cd.value).FontSize(18).Bold().SingleLine()

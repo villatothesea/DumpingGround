@@ -117,6 +117,10 @@ type DiskSample struct {
 	RespMs                float64 // average response time over the interval
 	Queue                 uint32
 	ReadBytes, WriteBytes uint64 // since boot
+	// Health is the NVMe SMART/Health log, refreshed every 30 s while the
+	// Computer page is on screen. nil when the drive does not pass its
+	// health log through (SATA, a USB bridge, NVMe behind a RAID driver).
+	Health *DiskHealth
 }
 
 type NICSample struct {
@@ -168,10 +172,12 @@ func (m *Monitor) RefreshNICs() *Info {
 	return m.info
 }
 
-// Sample reads the live counters. withGPU gates the PDH query, the only
-// part that is not trivially cheap. Not safe for concurrent use.
-func (m *Monitor) Sample(withGPU bool) Sample {
+// Sample reads the live counters. heavy gates the costlier queries — the
+// PDH GPU query, and refreshing the disk health log — which the app only
+// asks for while the Computer page is on screen. Not safe for concurrent
+// use.
+func (m *Monitor) Sample(heavy bool) Sample {
 	s := Sample{At: time.Now()}
-	m.p.sample(&s, m.info, withGPU)
+	m.p.sample(&s, m.info, heavy)
 	return s
 }

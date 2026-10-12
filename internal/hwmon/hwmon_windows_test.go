@@ -52,7 +52,7 @@ func TestLive(t *testing.T) {
 		t.Logf("GPU[%d] util=%.1f engines=%v ded=%d shared=%d hasUtil=%v hasMem=%v", i, g.Util, g.Engines, g.DedicatedUsed, g.SharedUsed, g.HasUtilization, g.HasMemory)
 	}
 	for i, d := range last.Disks {
-		t.Logf("Disk[%d] active=%.1f%% read=%d/s write=%d/s resp=%.2fms q=%d", i, d.Active, d.ReadRate, d.WriteRate, d.RespMs, d.Queue)
+		t.Logf("Disk[%d] active=%.1f%% read=%d/s write=%d/s resp=%.2fms q=%d health=%+v", i, d.Active, d.ReadRate, d.WriteRate, d.RespMs, d.Queue, d.Health)
 	}
 	for i, n := range last.NICs {
 		t.Logf("NIC[%d] up=%v in=%d/s out=%d/s link=%d totals=%d/%d", i, n.Up, n.InRate, n.OutRate, n.LinkBps, n.InTotal, n.OutTotal)

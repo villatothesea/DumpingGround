@@ -24,7 +24,7 @@ func fakeMachine(m *Model) {
 			{Slot: "DIMM B", Size: 32 << 30, Type: "DDR5", SpeedMTs: 5600, ConfigMTs: 5200, Manufacturer: "Samsung", PartNo: "M425R4GA3BB0"},
 		}},
 		GPUs:    []hwmon.GPUInfo{{Name: "NVIDIA GeForce RTX 4070", Vendor: "NVIDIA", DedicatedBytes: 12 << 30, SharedBytes: 32 << 30, Driver: "32.0.15.6094", DriverDate: "2024-10-01"}},
-		Disks:   []hwmon.DiskInfo{{Index: 0, Model: "Samsung 990 PRO 2TB", Bus: "NVMe", Kind: "SSD", Size: 2000 << 30, Letters: []string{"C:"}}, {Index: 1, Model: "WD Blue 4TB", Bus: "SATA", Kind: "HDD", Size: 4000 << 30, Letters: []string{"D:"}}},
+		Disks:   []hwmon.DiskInfo{{Index: 0, Model: "Samsung 990 PRO 2TB", Bus: "NVMe", Kind: "SSD", Size: 2000 << 30, Letters: []string{"C:"}}, {Index: 1, Model: "Crucial MX500 4TB", Bus: "SATA", Kind: "SSD", Size: 4000 << 30, Letters: []string{"D:"}}},
 		NICs:    []hwmon.NICInfo{{Index: 10, Name: "WLAN", Description: "Intel Wi-Fi 7 BE211", Kind: "Wi-Fi", MAC: "E0-C9-32-AD-FF-B1", MTU: 1500, IPs: []string{"192.168.1.20", "2001:db8::1"}}},
 		Battery: true,
 	}
@@ -38,7 +38,12 @@ func fakeMachine(m *Model) {
 			MemTotal: 64 << 30, MemUsed: uint64(24+4*math.Sin(f/3)) << 30, MemAvail: 36 << 30, MemCached: 20 << 30, Commit: 40 << 30, CommitLimit: 80 << 30, PagedPool: 400 << 20, NonPagedPool: 300 << 20,
 			GPUs: []hwmon.GPUSample{{Util: 20 + 15*math.Sin(f*1.3), HasUtilization: true, HasMemory: true, DedicatedUsed: 3 << 30, SharedUsed: 1 << 30,
 				Engines: map[string]float64{"3D": 20 + 15*math.Sin(f*1.3), "VideoDecode": 8 + 6*math.Sin(f), "Copy": 2}}},
-			Disks:   []hwmon.DiskSample{{Active: 10 + 8*math.Sin(f), ReadRate: uint64(30e6 * (1 + math.Sin(f))), WriteRate: 5e6, RespMs: 0.4, Queue: 1}, {Active: 3}},
+			Disks: []hwmon.DiskSample{
+				{Active: 10 + 8*math.Sin(f), ReadRate: uint64(30e6 * (1 + math.Sin(f))), WriteRate: 5e6, RespMs: 0.4, Queue: 1,
+					Health: &hwmon.DiskHealth{OK: true, TempC: 41, AvailableSpare: 100, AvailableSpareThreshold: 5, PercentageUsed: 3, DataRead: 6 << 40, DataWritten: 12 << 40,
+						PowerOnHours: 5000, PowerCycles: 120, UnsafeShutdowns: 4, ErrorLogEntries: 2}},
+				{Active: 3},
+			},
 			NICs:    []hwmon.NICSample{{Index: 10, Up: true, InRate: uint64(2e6 * (1.2 + math.Sin(f/2))), OutRate: 200e3, InTotal: 3 << 30, OutTotal: 1 << 30, LinkBps: 865e6}},
 			Battery: &hwmon.BatterySample{Percent: 87, OnAC: true, Charging: true},
 		}
@@ -49,6 +54,42 @@ func fakeMachine(m *Model) {
 	}
 }
 
+// TestDiskHealthPanel checks the NVMe verdict panel: a readable drive shows
+// its figures, and a drive whose health log cannot be read says so instead
+// of claiming to be healthy.
+func TestDiskHealthPanel(t *testing.T) {
+	m := New()
+	m.page = computerPage
+	fakeMachine(m)
+	tt := ui.NewTester(m.view, 1180, 760)
+	tt.SetTitleBar(ui.TitleBar{Height: 40, Right: 138})
+	tt.Frame()
+	if err := tt.Click("Disk 0 (C:)"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	for _, want := range []string{"Health", "Good", "Endurance used", "Data written", "Media errors"} {
+		if !tt.HasText(want) {
+			t.Errorf("disk health panel is missing %q", want)
+		}
+	}
+	if err := tt.Click("Back"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click("Disk 1 (D:)"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("Health information is not available for this drive.") {
+		t.Error("a drive without a health log did not say so")
+	}
+	if tt.HasText("judged from the drive's own counters") {
+		t.Error("a drive without a health log showed a verdict")
+	}
+}
+
+// TestComputerPageOverviewAndDetail
 func TestComputerPageOverviewAndDetail(t *testing.T) {
 	m := New()
 	m.page = computerPage

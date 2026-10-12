@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -20,11 +21,13 @@ const (
 
 // diskHandle keeps one physical drive open (no access rights — the
 // storage and performance IOCTLs are FILE_ANY_ACCESS) with the previous
-// counters for rate math.
+// counters for rate math and the latest health reading.
 type diskHandle struct {
-	h    syscall.Handle
-	prev diskPerf
-	ok   bool
+	h      syscall.Handle
+	prev   diskPerf
+	ok     bool
+	nvme   bool
+	health *DiskHealth
 }
 
 type diskPerf struct {
@@ -75,7 +78,12 @@ func (p *platform) loadDisks(info *Info) {
 		d.Kind = diskKind(h, d.Bus)
 		byNumber[uint32(i)] = len(info.Disks)
 		info.Disks = append(info.Disks, d)
-		p.disks = append(p.disks, &diskHandle{h: h})
+		dh := &diskHandle{h: h}
+		if d.Bus == "NVMe" {
+			dh.nvme = true
+			dh.health = readNVMeHealth(h) // read now; refreshed while the page is visible
+		}
+		p.disks = append(p.disks, dh)
 	}
 	for l := 'A'; l <= 'Z'; l++ {
 		root := string(l) + `:\`
@@ -180,6 +188,7 @@ func (p *platform) sampleDisks(s *Sample, info *Info) {
 			continue
 		}
 		ds := &s.Disks[i]
+		ds.Health = d.health
 		ds.Queue, ds.ReadBytes, ds.WriteBytes = cur.queueDepth, cur.bytesRead, cur.bytesWritten
 		if d.ok && cur.queryTime > d.prev.queryTime {
 			dt := float64(cur.queryTime - d.prev.queryTime) // 100 ns units
@@ -199,5 +208,24 @@ func (p *platform) sampleDisks(s *Sample, info *Info) {
 			}
 		}
 		d.prev, d.ok = cur, true
+	}
+}
+
+// healthEvery is how often the NVMe health log is re-read while the
+// Computer page is on screen: temperature moves slowly, and each read is a
+// few milliseconds, so doing it every tick would be wasted work.
+const healthEvery = 30 * time.Second
+
+// sampleHealth refreshes the cached health reading when it has gone stale.
+// It only touches drives that spoke NVMe at load time.
+func (p *platform) sampleHealth() {
+	if !p.healthAt.IsZero() && time.Since(p.healthAt) < healthEvery {
+		return
+	}
+	p.healthAt = time.Now()
+	for _, d := range p.disks {
+		if d.nvme {
+			d.health = readNVMeHealth(d.h)
+		}
 	}
 }

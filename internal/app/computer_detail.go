@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/dumpingground/dumpingground/internal/format"
 	"github.com/dumpingground/dumpingground/internal/hwmon"
@@ -399,6 +400,18 @@ func (m *Model) hwDiskDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist 
 	}
 	d := info.Disks[i]
 	last := lastSample(hist)
+	var health *hwmon.DiskHealth
+	if last != nil && i < len(last.Disks) {
+		health = last.Disks[i].Health
+	}
+	// Health is read from the NVMe log, so only SSDs have it (and not even
+	// all of them, when a bridge hides it).
+	if d.Kind == "SSD" {
+		m.hwHealthPanel(c, t, health)
+		if health != nil {
+			m.hwStatGrid(c, t, healthStats(health))
+		}
+	}
 	active := hwLine{col: hwDiskCol, fill: true, val: func(s *hwmon.Sample) (float64, bool) {
 		if i < len(s.Disks) {
 			return s.Disks[i].Active, true
@@ -472,6 +485,69 @@ func (m *Model) hwDiskDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist 
 		{"Drive letters", strings.Join(d.Letters, "  ")},
 		{"Physical drive", fmt.Sprintf(`\\.\PhysicalDrive%d`, d.Index)},
 	})
+}
+
+// hwHealthPanel is the disk detail's verdict panel: what the drive's own
+// NVMe SMART/health log says, with nothing invented on top of it.
+func (m *Model) hwHealthPanel(c *ui.Context, t *ui.Theme, h *hwmon.DiskHealth) {
+	m.hwPanel(c, t, func() {
+		ui.Row(c).Gap(14).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, "Health").Bold().FontSize(13)
+			ui.Spacer(c)
+			ui.Text(c, "NVMe SMART / health log").FontSize(11).TextColor(t.TextMuted)
+		})
+		if h == nil {
+			ui.Text(c, "Health information is not available for this drive.").TextColor(t.TextMuted)
+			ui.Text(c, "USB bridges and NVMe drives behind a RAID driver (Intel RST/VMD) do not pass the drive's health log through. Nothing is assumed about the drive's condition.").FontSize(12).TextColor(t.TextMuted)
+			return
+		}
+		status, reasons := hwmon.JudgeHealth(h)
+		col := hwHealthColor(status, t)
+		ui.Row(c).Gap(9).AlignItems(ui.Center).Children(func() {
+			ui.Box(c).Size(10, 10).Radius(5).Background(col)
+			ui.Text(c, status).FontSize(16).Bold().TextColor(col)
+			ui.Text(c, "judged from the drive's own counters").FontSize(11).TextColor(t.TextMuted)
+		})
+		if len(reasons) == 0 {
+			ui.Text(c, "No faults reported: spare blocks are above the threshold, endurance is not near its limit, and no media errors are recorded.").FontSize(12).TextColor(t.TextMuted)
+		} else {
+			for _, r := range reasons {
+				ui.Text(c, "• "+r).FontSize(12).TextColor(col)
+			}
+		}
+	})
+}
+
+// healthStats are the raw figures behind the verdict. The counters the NVMe
+// spec does not treat as faults — unsafe shutdowns, error log entries — are
+// shown as information only and never fold into the verdict.
+func healthStats(h *hwmon.DiskHealth) [][2]string {
+	temp := "—"
+	if h.TempC > 0 {
+		temp = fmt.Sprintf("%d °C", h.TempC)
+	}
+	spare := fmt.Sprintf("%d%%", h.AvailableSpare)
+	if h.AvailableSpareThreshold > 0 {
+		spare = fmt.Sprintf("%d%% (threshold %d%%)", h.AvailableSpare, h.AvailableSpareThreshold)
+	}
+	items := [][2]string{
+		{"Temperature", temp},
+		{"Endurance used", fmt.Sprintf("%d%%", h.PercentageUsed)},
+		{"Available spare", spare},
+		{"Data written", format.Bytes(h.DataWritten)},
+		{"Data read", format.Bytes(h.DataRead)},
+		{"Power-on time", durHM(time.Duration(h.PowerOnHours) * time.Hour)},
+		{"Power cycles", format.Int(h.PowerCycles)},
+		{"Unsafe shutdowns", format.Int(h.UnsafeShutdowns)},
+		{"Media errors", format.Int(h.MediaErrors)},
+		{"Error log entries", format.Int(h.ErrorLogEntries)},
+	}
+	if h.WarningTempMinutes > 0 || h.CriticalTempMinutes > 0 {
+		items = append(items,
+			[2]string{"Above warning temp", durHM(time.Duration(h.WarningTempMinutes) * time.Minute)},
+			[2]string{"Above critical temp", durHM(time.Duration(h.CriticalTempMinutes) * time.Minute)})
+	}
+	return items
 }
 
 func (m *Model) hwNetDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist []hwmon.Sample, cd *hwCard, index uint32) {

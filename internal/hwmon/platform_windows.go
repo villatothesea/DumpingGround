@@ -35,12 +35,13 @@ var (
 
 // platform holds what Sample needs to turn cumulative counters into rates.
 type platform struct {
-	cores  []coreTimes
-	disks  []*diskHandle
-	nics   map[uint32]nicPrev
-	gpu    gpuState
-	perf   perfInfo // GetPerformanceInfo walks the process list: refreshed every perfEvery
-	perfAt time.Time
+	cores    []coreTimes
+	disks    []*diskHandle
+	nics     map[uint32]nicPrev
+	gpu      gpuState
+	perf     perfInfo // GetPerformanceInfo walks the process list: refreshed every perfEvery
+	perfAt   time.Time
+	healthAt time.Time // last NVMe health refresh
 }
 
 func (p *platform) load(info *Info) {

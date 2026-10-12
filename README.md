@@ -76,6 +76,13 @@ The page the app opens on (Ctrl+1; Ctrl+2–5 are the other tabs).
   `NtQuerySystemInformation`, performance counters (PDH), the disk
   performance IOCTL and the IP helper API. Temperatures and fan speeds
   are not shown — Windows only exposes them through vendor drivers.
+- SSD health comes from the drive's own NVMe SMART/Health log (log page
+  0x02): temperature, endurance used and spare blocks, data written and
+  read, power-on time, power cycles, unsafe shutdowns and media errors.
+  The verdict — Good, Caution or Replace — is the NVMe spec's own and
+  always shows its reasons; there is no invented health score. A drive
+  that does not pass its health log through (SATA, a USB bridge, NVMe
+  behind Intel RST/VMD) says so instead of guessing.
 
 ### Processes
 

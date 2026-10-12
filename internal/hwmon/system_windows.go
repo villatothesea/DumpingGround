@@ -146,7 +146,7 @@ type coreTimes struct{ idle, total uint64 }
 // GetPerformanceInfo costs a few milliseconds, and these change slowly.
 const perfEvery = 5 * time.Second
 
-func (p *platform) sample(s *Sample, info *Info, withGPU bool) {
+func (p *platform) sample(s *Sample, info *Info, heavy bool) {
 	p.sampleCPU(s)
 	// Physical memory and the commit charge are microsecond calls: read
 	// them every tick. The rest comes from the cached slow query.
@@ -170,8 +170,11 @@ func (p *platform) sample(s *Sample, info *Info, withGPU bool) {
 	s.Uptime = time.Duration(ms) * time.Millisecond
 	p.sampleDisks(s, info)
 	p.sampleNICs(s, info)
-	if withGPU && len(info.GPUs) > 0 {
-		p.sampleGPU(s, info)
+	if heavy {
+		p.sampleHealth()
+		if len(info.GPUs) > 0 {
+			p.sampleGPU(s, info)
+		}
 	}
 	s.Battery = sampleBattery(info.Battery)
 }

@@ -100,6 +100,7 @@ type hwCard struct {
 	col         ui.Color
 	value, vsub string // the big figure, and a smaller line under it
 	stats       []string
+	health      string // disks: "Good", "Caution", "Replace"; "" when unknown
 	opts        chartOpts
 }
 
@@ -173,6 +174,7 @@ func hwCards(info *hwmon.Info, h []hwmon.Sample) []hwCard {
 			ds := last.Disks[i]
 			c.value = fmt.Sprintf("%.0f%%", ds.Active)
 			c.stats = []string{"R " + format.Rate(ds.ReadRate), "W " + format.Rate(ds.WriteRate)}
+			c.health, _ = hwmon.JudgeHealth(ds.Health)
 		}
 		cards = append(cards, c)
 	}
@@ -245,6 +247,18 @@ func netChart(index uint32) chartOpts {
 		{val: rate(true), col: hwNetCol, fill: true},
 		{val: rate(false), col: hwNetCol.Mix(ui.Hex("#ef4444"), 0.55)},
 	}}
+}
+
+// hwHealthColor maps a health verdict to the theme's status color.
+func hwHealthColor(status string, t *ui.Theme) ui.Color {
+	switch status {
+	case "Replace":
+		return t.Danger
+	case "Caution":
+		return t.Warning
+	default:
+		return t.Success
+	}
 }
 
 func memPct(s *hwmon.Sample) float64 {

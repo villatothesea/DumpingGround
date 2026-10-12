@@ -63,6 +63,11 @@ Ctrl+4 Uninstall、Ctrl+5 Startup。
 - 不安装任何驱动、不写入任何内容：数据源是 SMBIOS、`NtQuerySystemInformation`、
   性能计数器（PDH）、磁盘性能 IOCTL 和 IP Helper API。不显示温度和风扇转速
   ——Windows 只通过厂商驱动才暴露这些。
+- SSD 健康度来自硬盘自己的 NVMe SMART/健康日志（日志页 0x02）：温度、已用
+  寿命和可用备用块、累计读写量、通电时长、通电次数、不安全关机次数和介质
+  错误。结论——良好 / 注意 / 需要更换——用的是 NVMe 规范自己的判据，并且
+  总会列出依据，不编造"健康分数"。不转发健康日志的硬盘（SATA、USB 桥接、
+  走 Intel RST/VMD 的 NVMe）会如实说明读不到，而不是猜一个"良好"。
 
 ### 进程
 
