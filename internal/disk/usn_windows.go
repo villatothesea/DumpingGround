@@ -30,13 +30,13 @@ type usnJournalData struct {
 // and pinning the record version requires V1; V0 must pass JournalID = 0
 // and returns ERROR_INVALID_FUNCTION otherwise.
 type readUSNInput struct {
-	StartUSN                          int64
-	ReasonMask                        uint32
-	ReturnOnlyOnClose                 uint32
-	Timeout                           uint64
-	BytesToWaitFor                    uint64
-	JournalID                         uint64
-	MinMajorVersion, MaxMajorVersion  uint16
+	StartUSN                         int64
+	ReasonMask                       uint32
+	ReturnOnlyOnClose                uint32
+	Timeout                          uint64
+	BytesToWaitFor                   uint64
+	JournalID                        uint64
+	MinMajorVersion, MaxMajorVersion uint16
 }
 
 func openVolume(root string) (*os.File, error) {

@@ -672,9 +672,11 @@ func junkCleanKids(d JunkDir) (freed uint64, removed, skipped int) {
 		// file stays, never a silent permanent delete.
 		rm := os.Remove
 		if d.Recycle {
-			rm = RecycleFileOrDir
+			rm = func(path string) error {
+				return RecycleFileOrDirSized(path, uint64(info.Size()))
+			}
 		}
-		if err := rm(p); err != nil {
+		if rmErr := rm(p); rmErr != nil {
 			skipped++
 			return nil
 		}

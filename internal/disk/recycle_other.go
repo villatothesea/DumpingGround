@@ -9,3 +9,9 @@ import "os"
 func RecycleFileOrDir(path string) error {
 	return os.RemoveAll(path)
 }
+
+// RecycleFileOrDirSized mirrors the Windows signature; there is no bin
+// capacity to check off Windows.
+func RecycleFileOrDirSized(path string, _ uint64) error {
+	return os.RemoveAll(path)
+}

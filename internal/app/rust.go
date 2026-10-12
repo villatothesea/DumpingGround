@@ -310,13 +310,16 @@ func (m *Model) rustDelete(jobs []disk.RustDir) {
 	}
 	m.rustBusy = true
 	m.rustMsg = "Deleting…"
+	m.rustRmDone, m.rustRmTotal, m.rustRmPath = 0, len(jobs), ""
 	recycle := m.rustRecycle
 	go func() {
 		var freed uint64
 		var failed, unbinned int
 		var firstErr error
 		deleted := map[string]uint64{}
-		for _, j := range jobs {
+		for i, j := range jobs {
+			path := j.Path
+			m.post(func() { m.rustRmDone, m.rustRmPath = i, path })
 			if err := disk.SafeRustEntry(j.Path, j.Base, j.File); err != nil {
 				failed++
 				if firstErr == nil {
@@ -326,7 +329,7 @@ func (m *Model) rustDelete(jobs []disk.RustDir) {
 			}
 			var err error
 			if recycle {
-				err = disk.RecycleFileOrDir(j.Path)
+				err = disk.RecycleFileOrDirSized(j.Path, j.Bytes)
 				if err != nil {
 					// The bin refused — the path stays put. Falling
 					// back to a permanent delete would betray the
@@ -352,6 +355,7 @@ func (m *Model) rustDelete(jobs []disk.RustDir) {
 			freed += j.Bytes
 			m.post(func() { m.rustGone[j.Path] = true })
 		}
+		m.post(func() { m.rustRmDone, m.rustRmPath = len(jobs), "" })
 		m.post(func() {
 			m.rustBusy = false
 			m.rustConfirm = -1
@@ -720,15 +724,26 @@ func (m *Model) rustPresetCard(c *ui.Context, t *ui.Theme, p int) {
 			}
 		})
 		if m.rustConfirm == p {
-			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
-				ui.Text(c, m.rustConfirmText(jobs)).FontSize(11).TextColor(t.Danger).Grow(1).MinWidth(0)
-				if ui.Button(c, "Confirm").Clicked() {
-					m.cleanRustPreset(p)
-				}
-				if ui.Button(c, "Keep").Clicked() {
-					m.rustConfirm = -1
-				}
-			})
+			if m.rustBusy {
+				// Deletion can take minutes through the bin — the
+				// card shows where it is rather than freezing the
+				// confirm row.
+				ui.Column(c).FillWidth().Gap(4).Children(func() {
+					ui.Text(c, fmt.Sprintf("Deleting %d of %d · %s", m.rustRmDone, m.rustRmTotal, m.rustRmPath)).
+						FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
+					ui.Progress(c, float64(m.rustRmDone)/float64(max(m.rustRmTotal, 1))).FillWidth().Height(4)
+				})
+			} else {
+				ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
+					ui.Text(c, m.rustConfirmText(jobs)).FontSize(11).TextColor(t.Danger).Grow(1).MinWidth(0)
+					if ui.Button(c, "Confirm").Clicked() {
+						m.cleanRustPreset(p)
+					}
+					if ui.Button(c, "Keep").Clicked() {
+						m.rustConfirm = -1
+					}
+				})
+			}
 		}
 	})
 	if card.Clicked() {

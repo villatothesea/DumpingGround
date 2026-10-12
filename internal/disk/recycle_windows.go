@@ -18,6 +18,7 @@ var (
 	procCoInitEx     = coInitDLL.NewProc("CoInitializeEx")
 	rcyKernel32      = syscall.NewLazyDLL("kernel32.dll")
 	procGetDriveType = rcyKernel32.NewProc("GetDriveTypeW")
+	procDiskFree     = rcyKernel32.NewProc("GetDiskFreeSpaceExW")
 	rcyAdvapi        = syscall.NewLazyDLL("advapi32.dll")
 	procRcyOpenKey   = rcyAdvapi.NewProc("RegOpenKeyExW")
 	procRcyCloseKey  = rcyAdvapi.NewProc("RegCloseKey")
@@ -50,8 +51,21 @@ const (
 // Explorer policy — is checked here first and returned as an error, so
 // the recycle path never silently becomes a permanent delete.
 func RecycleFileOrDir(path string) error {
+	return RecycleFileOrDirSized(path, 0)
+}
+
+// RecycleFileOrDirSized additionally checks the item against the
+// drive's bin capacity — an item bigger than the whole bin is deleted
+// permanently even with FOF_ALLOWUNDO, so it is refused up front.
+// bytes of 0 skips the capacity check.
+func RecycleFileOrDirSized(path string, bytes uint64) error {
 	if err := recyclable(path); err != nil {
 		return err
+	}
+	if bytes > 0 {
+		if cap, ok := binCapacity(path); ok && bytes > cap {
+			return fmt.Errorf("too large for the recycle bin on %s — refusing to delete %q", filepath.VolumeName(path), path)
+		}
 	}
 	// SHFileOperationW is a shell call that may create COM objects on the
 	// calling thread; make sure the apartment exists.
@@ -110,30 +124,64 @@ func recyclable(path string) error {
 	return nil
 }
 
+// binCapacity estimates the bin's maximum size on the path's drive:
+// Explorer's BitBucket MaxCapacity is a percentage of the drive.
+// Unknown settings report ok=false — the caller then skips the size
+// check rather than guessing.
+func binCapacity(path string) (uint64, bool) {
+	vol := filepath.VolumeName(path)
+	if len(vol) != 2 {
+		return 0, false
+	}
+	pct, ok := bitbucketDWORD(vol[0], "MaxCapacity")
+	if !ok {
+		return 0, false
+	}
+	root, err := syscall.UTF16PtrFromString(vol + `\`)
+	if err != nil {
+		return 0, false
+	}
+	var freeAvail, total, totalFree uint64
+	r, _, _ := procDiskFree.Call(uintptr(unsafe.Pointer(root)),
+		uintptr(unsafe.Pointer(&freeAvail)), uintptr(unsafe.Pointer(&total)),
+		uintptr(unsafe.Pointer(&totalFree)))
+	if r == 0 || total == 0 {
+		return 0, false
+	}
+	return total * uint64(pct) / 100, true
+}
+
 // nukeOnDelete reports whether Explorer's BitBucket policy turns the
 // bin off for this drive — deletions there bypass the bin entirely
 // even with FOF_ALLOWUNDO.
 func nukeOnDelete(drive byte) bool {
+	v, ok := bitbucketDWORD(drive, "NukeOnDelete")
+	return ok && v == 1
+}
+
+// bitbucketDWORD reads one DWORD under the drive's BitBucket policy
+// key — NukeOnDelete and MaxCapacity live there.
+func bitbucketDWORD(drive byte, name string) (uint32, bool) {
 	sub := `SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\BitBucket\` + string(drive)
 	subP, err := syscall.UTF16PtrFromString(sub)
 	if err != nil {
-		return false
+		return 0, false
 	}
 	var h uintptr
-	r, _, _ := procRcyOpenKey.Call(0x80000001 /*HKEY_CURRENT_USER*/,
-		uintptr(unsafe.Pointer(subP)), 0, 0x20019 /*KEY_READ*/,
+	r, _, _ := procRcyOpenKey.Call(0x80000001, /*HKEY_CURRENT_USER*/
+		uintptr(unsafe.Pointer(subP)), 0, 0x20019, /*KEY_READ*/
 		uintptr(unsafe.Pointer(&h)))
 	if r != 0 {
-		return false
+		return 0, false
 	}
 	defer procRcyCloseKey.Call(h)
-	nameP, err := syscall.UTF16PtrFromString("NukeOnDelete")
+	nameP, err := syscall.UTF16PtrFromString(name)
 	if err != nil {
-		return false
+		return 0, false
 	}
 	var kind, val, sz uint32 = 0, 0, 4
 	r, _, _ = procRcyQueryVal.Call(h, uintptr(unsafe.Pointer(nameP)), 0,
 		uintptr(unsafe.Pointer(&kind)), uintptr(unsafe.Pointer(&val)),
 		uintptr(unsafe.Pointer(&sz)))
-	return r == 0 && kind == 4 && val == 1 // REG_DWORD == 1
+	return val, r == 0 && kind == 4
 }

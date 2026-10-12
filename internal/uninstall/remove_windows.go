@@ -50,7 +50,7 @@ func RemoveItems(items []Item, backup io.Writer, progress ...func(done, total in
 		rep(i, it.Path)
 		switch it.Kind {
 		case KindDir:
-			errs[i] = disk.RecycleFileOrDir(it.Path)
+			errs[i] = disk.RecycleFileOrDirSized(it.Path, it.Bytes)
 		case KindRegKey:
 			if bw == nil {
 				errs[i] = errNoRegBackup

@@ -245,6 +245,7 @@ func (m *Model) junkDelete(jobs []*disk.JunkDir) {
 	}
 	m.junkBusy = true
 	m.junkMsg = "Cleaning…"
+	m.junkRmDone, m.junkRmTotal, m.junkRmPath = 0, len(jobs), ""
 	go func() {
 		// The process check is minutes stale by now — a browser
 		// launched since the scan must still guard its cache.
@@ -258,7 +259,9 @@ func (m *Model) junkDelete(jobs []*disk.JunkDir) {
 		var freed uint64
 		var removed, skipped, failed int
 		var firstErr error
-		for _, d := range jobs {
+		for i, d := range jobs {
+			path := d.Path
+			m.post(func() { m.junkRmDone, m.junkRmPath = i, path })
 			f, rm, sk, err := disk.JunkClean(*d, func(name string) bool {
 				return running != nil && running[name]
 			})
@@ -274,6 +277,7 @@ func (m *Model) junkDelete(jobs []*disk.JunkDir) {
 		}
 		m.post(func() {
 			m.junkBusy = false
+			m.junkRmDone, m.junkRmPath = len(jobs), ""
 			m.junkConfirm, m.junkSel = -1, -1
 			m.junkRowConfirm = ""
 			msg := fmt.Sprintf("Freed %s", format.Bytes(freed))
@@ -612,16 +616,24 @@ func (m *Model) junkPresetCard(c *ui.Context, t *ui.Theme, p int) {
 			}
 		})
 		if m.junkConfirm == p {
-			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
-				ui.Text(c, fmt.Sprintf("Delete %d locations, free %s?", len(jobs), format.Bytes(bytes))).
-					FontSize(11).TextColor(t.Danger).Grow(1).MinWidth(0)
-				if ui.Button(c, "Confirm").Clicked() {
-					m.junkDelete(jobs)
-				}
-				if ui.Button(c, "Keep").Clicked() {
-					m.junkConfirm = -1
-				}
-			})
+			if m.junkBusy {
+				ui.Column(c).FillWidth().Gap(4).Children(func() {
+					ui.Text(c, fmt.Sprintf("Cleaning %d of %d · %s", m.junkRmDone, m.junkRmTotal, m.junkRmPath)).
+						FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
+					ui.Progress(c, float64(m.junkRmDone)/float64(max(m.junkRmTotal, 1))).FillWidth().Height(4)
+				})
+			} else {
+				ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
+					ui.Text(c, fmt.Sprintf("Delete %d locations, free %s?", len(jobs), format.Bytes(bytes))).
+						FontSize(11).TextColor(t.Danger).Grow(1).MinWidth(0)
+					if ui.Button(c, "Confirm").Clicked() {
+						m.junkDelete(jobs)
+					}
+					if ui.Button(c, "Keep").Clicked() {
+						m.junkConfirm = -1
+					}
+				})
+			}
 		}
 	})
 	if card.Clicked() {

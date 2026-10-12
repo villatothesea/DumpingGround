@@ -2,525 +2,432 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<title>DumpingGround — 希望清理污染，像清理电脑垃圾一样容易</title>
+<title>DumpingGround — 清理电脑点一下就行，清理海洋没有这个按钮</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="DumpingGround 是一款 Windows 原生系统管理工具：进程查看、磁盘空间分析、软件卸载、启动项管理。单文件，双击即用。">
-<meta property="og:title" content="DumpingGround — 希望清理污染，像清理电脑垃圾一样容易">
-<meta property="og:description" content="进程、磁盘、软件卸载、启动项，一个 Windows 原生小工具全搞定。">
+<meta name="description" content="一首歌、一支 MV、一个网站，和一个顺手做的小软件。DumpingGround 呼吁：像爱护自己的电脑那样，爱护海洋。">
+<meta property="og:title" content="DumpingGround — 清理电脑点一下就行，清理海洋没有这个按钮">
+<meta property="og:description" content="像爱护自己的电脑那样，爱护海洋。">
+<meta property="og:image" content="img/shore-a.jpg">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230078d4'/%3E%3Cg transform='translate(4 4) scale(1)' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.4 20.6c1.6-5.4 4.6-8.6 8.2-8.6s6.6 3.2 8.2 8.6z'/%3E%3Cpath d='M2 20.6h20'/%3E%3Cpath d='M10.8 12V3.2'/%3E%3Cpath d='M10.8 3.2l6 2.2-6 2.4'/%3E%3C/g%3E%3C/svg%3E">
+<script>
+document.documentElement.classList.add('js');
+try{var t=localStorage.getItem('dg-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');document.documentElement.dataset.theme=t}catch(e){}
+</script>
 <style>
 *{box-sizing:border-box}
-:root{--bg:#ffffff;--surface:#f4f4f5;--hover:#e9e9ec;--pressed:#dddde1;--border:#d9d9de;--text:#18181b;--muted:#71717a;
- --accent:#0078d4;--accent-h:#006abb;--accent-p:#005a9f;--accent-t:#fff;--danger:#dc2626;--warn:#d97706;--ok:#16a34a;
- --sel:rgba(0,120,212,.25);--shadow:rgba(0,0,0,.16);--glow:rgba(0,120,212,.10);
- --sky:#7e8c9e;--sea:#47708f;--foam:#6d9cc4;--slick:#575b40;--sand:#857b6a;--trash:#b04a44;--pile:#786f60;--flag:#0078d4;--seatint:26%;--sandtint:30%}
-[data-theme=dark]{--bg:#18181b;--surface:#27272a;--hover:#323236;--pressed:#3c3c41;--border:#3f3f46;--text:#f4f4f5;--muted:#a1a1aa;
- --accent-h:#3393dc;--accent-p:#0066b4;--danger:#ef4444;--warn:#f59e0b;--ok:#22c55e;--sel:rgba(0,120,212,.4);--shadow:rgba(0,0,0,.55);--glow:rgba(0,120,212,.18);
- --sky:#8496a8;--sea:#4f7391;--foam:#8ab4d4;--slick:#6d7055;--sand:#8b8272;--trash:#d4695f;--pile:#9d9280;--flag:#3393dc;--seatint:12%;--sandtint:18%}
-html,body{overflow-x:hidden}
-html{scroll-behavior:smooth;scroll-padding-top:72px}
-body{margin:0;background:var(--bg);color:var(--text);font:16px/1.65 "Segoe UI","Microsoft YaHei UI","Microsoft YaHei",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+:root{--bg:#fbfbf9;--fg:#1a1a1a;--mut:#6b6b68;--faint:#a8a8a4;--line:#e3e3de;--panel:#f3f3ef;--stage:#0d0d0f;--ok:#0f6e56;--acc:#0078d4}
+[data-theme=dark]{--bg:#0e0e10;--fg:#ececea;--mut:#9a9a96;--faint:#5e5e5b;--line:#27272a;--panel:#151517;--ok:#7dd3a0}
+html{scroll-behavior:smooth;scroll-padding-top:64px}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.85 system-ui,"Segoe UI","Microsoft YaHei UI","PingFang SC",sans-serif;-webkit-font-smoothing:antialiased}
 a{color:inherit;text-decoration:none}
-svg.i{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
-.wrap{width:min(1120px,calc(100% - 48px));margin:0 auto}
-.muted{color:var(--muted)}
+.mono,.nav nav,.bar,.sh,.tbtn,.btn,.tr .th,.slot,.player,.stat .l,.src,.foot{font-family:ui-monospace,"Cascadia Mono",Consolas,Menlo,"Microsoft YaHei UI",monospace}
+.wrap{max-width:1280px;margin:0 auto;padding:0 24px}
+.col{max-width:700px}
+svg.i{width:1em;height:1em;vertical-align:-.12em}
 
 /* nav */
-.nav{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
-.nav .wrap{height:60px;display:flex;align-items:center;gap:28px}
-.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px}
-.logo{width:28px;height:28px;border-radius:8px;background:var(--accent);color:#fff;display:grid;place-items:center;flex:none}
-.logo svg{width:18px;height:18px;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.nav nav{display:flex;gap:22px;margin-left:12px;color:var(--muted);font-size:15px}
-.nav nav a:hover{color:var(--text)}
+.nav{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.nav .in{max-width:1280px;margin:0 auto;padding:0 24px;height:52px;display:flex;align-items:center;gap:26px}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px;letter-spacing:-.01em}
+.logo{width:24px;height:24px;border-radius:6px;background:var(--acc);display:grid;place-items:center;flex:none}
+.logo svg{width:16px;height:16px;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.nav nav{display:flex;gap:20px;font-size:12px;color:var(--mut)}
+.nav nav a:hover{color:var(--fg)}
+.nav nav i{font-style:normal;color:var(--faint);margin-right:5px}
 .nav .sp{flex:1}
-.iconbtn{width:36px;height:36px;border-radius:8px;border:0;background:none;color:var(--text);display:grid;place-items:center;cursor:pointer;font-size:18px}
-.iconbtn:hover{background:var(--hover)}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 22px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
-.btn:hover{background:var(--hover)}
-.btn.primary{background:var(--accent);border-color:transparent;color:var(--accent-t)}
-.btn.primary:hover{background:var(--accent-h)}
-.btn.primary:active{background:var(--accent-p)}
-.btn.sm{height:36px;padding:0 16px;font-size:14px}
+.tbtn{white-space:nowrap;height:30px;padding:0 10px;border:1px solid var(--line);background:transparent;color:var(--fg);font-size:12px;cursor:pointer;border-radius:0}
+.tbtn:hover:not(:disabled){border-color:var(--fg)}
+.tbtn:disabled{color:var(--faint);cursor:default}
 
-/* hero: ascii ocean scene */
-.hero{position:relative;text-align:center;overflow:hidden;border-bottom:1px solid var(--border)}
-.ocean{position:relative;height:clamp(380px,58vh,560px);overflow:hidden;background:linear-gradient(112deg,color-mix(in srgb,var(--sea) var(--seatint),var(--bg)) 30%,var(--bg) 54%,color-mix(in srgb,var(--sand) var(--sandtint),var(--bg)) 94%)}
-.ocean pre{position:absolute;left:50%;top:0;margin:0;transform:translateX(-50%);font:400 clamp(7px,.95vw,12px)/1.02 "Cascadia Mono","Consolas",monospace;letter-spacing:0;white-space:pre;pointer-events:none;user-select:none}
-.l-sky{color:var(--sky)}.l-sea{color:var(--sea)}.l-foam{color:var(--foam)}.l-slick{color:var(--slick)}
-.l-sand{color:var(--sand)}.l-trash{color:var(--trash)}.l-pile{color:var(--pile)}.l-flag{color:var(--flag)}
-.ocean canvas{position:absolute;inset:0;width:100%;height:100%}
-.ocean .scrim{position:absolute;inset:0;background:linear-gradient(180deg,transparent 40%,color-mix(in srgb,var(--bg) 55%,transparent) 78%,var(--bg) 98%);pointer-events:none}
-.vsw{position:absolute;right:14px;top:10px;display:flex;gap:4px;z-index:3}
-.vsw button{height:26px;padding:0 10px;font:inherit;font-size:12px;border-radius:6px;border:1px solid var(--border);background:color-mix(in srgb,var(--bg) 70%,transparent);color:var(--muted);cursor:pointer}
-.vsw button.on{color:var(--text);border-color:var(--accent);background:var(--sel)}
-.clar{position:absolute;right:14px;bottom:12px;display:flex;gap:8px;align-items:center;z-index:3;padding:5px 10px;border-radius:8px;border:1px solid var(--border);background:color-mix(in srgb,var(--bg) 72%,transparent);font-size:12px;color:var(--muted)}
-.clar button{height:24px;padding:0 9px;font:inherit;font-size:12px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer}
-.clar button.on{color:var(--text);border-color:var(--accent);background:var(--sel)}
-.clar input{width:170px;accent-color:var(--accent);cursor:pointer}
-.hero .wrap{position:relative;margin-top:-190px;padding-bottom:64px}
-.hero h1{margin:0;font-size:clamp(30px,4.6vw,52px);line-height:1.2;letter-spacing:-.5px;font-weight:800;text-wrap:balance}
-.hero h1 em{font-style:normal;color:var(--accent)}
-.hero p.lead{margin:18px auto 0;max-width:640px;font-size:clamp(15px,1.8vw,18px);color:var(--muted)}
-.hero .cta{margin-top:28px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-.hero .meta{margin-top:16px;font-size:14px;color:var(--muted);display:flex;gap:6px 18px;justify-content:center;flex-wrap:wrap}
-.hero .meta span{display:inline-flex;align-items:center;gap:6px}
-.hero .meta svg{color:var(--ok)}
-.caption{position:absolute;left:18px;top:12px;font-size:12px;color:var(--muted);opacity:.8;pointer-events:none;letter-spacing:.4px;text-align:left}
+/* scene (ascii -> photo) */
+.scene{margin:0 auto;max-width:1280px;padding:0 24px}
+.scene .box{border:1px solid var(--fg)}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:0 12px;height:32px;font-size:12px;color:var(--mut);background:var(--bg)}
+.bar b{font-weight:500;color:var(--fg);font-variant-numeric:tabular-nums}
+.bar1{border-bottom:1px solid var(--fg)}
+.bar2{border-top:1px solid var(--fg)}
+.bar button{height:22px;padding:0 8px;border:1px solid var(--line);background:transparent;color:var(--fg);font:inherit;cursor:pointer}
+.bar button:hover{border-color:var(--fg)}
+.bar input[type=range]{flex:1;min-width:80px;max-width:420px;accent-color:var(--fg);cursor:pointer;height:16px}
+.stage{position:relative;aspect-ratio:3168/1344;background:var(--stage);overflow:hidden}
+.stage canvas,.stage img{position:absolute;inset:0;width:100%;height:100%;display:block}
+.js .stage img{opacity:0;transition:opacity .9s ease}
+.js .stage.done img{opacity:1}
+.stage canvas{image-rendering:auto}
+.scene figcaption{display:none}
 
-/* mock window */
-.mwrap{position:relative;border-radius:12px;box-shadow:0 24px 70px var(--shadow),0 0 0 1px var(--border);overflow:hidden;background:var(--bg);aspect-ratio:1100/620}
-.mwin{position:absolute;left:0;top:0;width:1100px;height:620px;transform-origin:0 0;display:flex;flex-direction:column;font-size:12px;line-height:1.35;color:var(--text);background:var(--bg);user-select:none;text-align:left}
-.m-top{flex:none;height:40px;display:flex;align-items:center;gap:4px;padding-left:12px;background:var(--surface);border-bottom:1px solid var(--border)}
-.m-brand{display:flex;align-items:center;gap:8px;width:150px;font-weight:700;font-size:14px}
-.m-logo{width:22px;height:22px;border-radius:6px;background:var(--accent);display:grid;place-items:center}
-.m-logo svg{width:16px;height:16px;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.m-tabs{display:flex;height:40px}
-.m-tab{position:relative;display:flex;align-items:center;gap:6px;padding:0 12px;color:var(--muted);white-space:nowrap}
-.m-tab.on{color:var(--text);font-weight:600}
-.m-tab.on::after{content:"";position:absolute;left:10px;right:10px;bottom:0;height:3px;border-radius:3px 3px 0 0;background:var(--accent)}
-.m-cnt{font-size:11px;font-weight:400;line-height:16px;padding:0 6px;border-radius:8px;background:var(--hover);color:var(--muted)}
-.m-tab.on .m-cnt{background:var(--sel);color:var(--text)}
-.m-meters{display:flex;gap:2px;margin-left:6px;padding-left:8px;border-left:1px solid var(--border)}
-.m-meter{position:relative;display:flex;gap:5px;height:28px;align-items:center;padding:0 7px 2px;font-variant-numeric:tabular-nums;white-space:nowrap}
-.m-meter .l{color:var(--muted)}
-.m-meter b{min-width:30px;text-align:right}
-.m-meter .bar{position:absolute;left:7px;right:7px;bottom:2px;height:2px;border-radius:1px;background:var(--pressed)}
-.m-meter .bar i{display:block;height:100%;background:var(--accent);border-radius:1px}
-.m-meter .net b{min-width:34px;text-align:right}
-.m-fill{flex:1}
-.m-search{white-space:nowrap;overflow:hidden;display:flex;align-items:center;gap:6px;height:28px;width:150px;padding:0 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--muted)}
-.m-ic{width:34px;height:28px;display:grid;place-items:center;font-size:15px}
-.m-win{display:flex;margin-left:6px}
-.m-win span{width:46px;height:40px;display:grid;place-items:center;font-size:12px}
-.m-body{flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
-.m-status{flex:none;height:26px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:var(--surface);border-top:1px solid var(--border);color:var(--muted)}
-.m-bar{flex:none;height:40px;display:flex;align-items:center;gap:8px;padding:0 12px}
-.m-sel{flex:none;height:36px;display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--surface);border-top:1px solid var(--border)}
-.m-sel .grow,.m-bar .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.m-btn{height:28px;display:inline-flex;align-items:center;gap:6px;padding:0 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);white-space:nowrap}
-.m-sel .m-btn{background:var(--bg)}
-.m-btn.p{background:var(--accent);border-color:transparent;color:#fff}
-.m-btn.d{color:var(--danger)}
-.m-seg{display:inline-flex;gap:2px;height:28px;padding:2px;background:var(--surface);border:1px solid var(--border);border-radius:6px}
-.m-seg span{display:grid;place-items:center;padding:0 10px;border-radius:4px;color:var(--muted)}
-.m-seg span.on{background:var(--bg);color:var(--text);box-shadow:0 0 0 1px var(--border)}
-.m-field{display:flex;align-items:center;gap:6px;height:28px;padding:0 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--muted)}
-.m-tr{display:grid;align-items:center;height:32px}
-.m-tr.h{color:var(--muted);border-bottom:1px solid var(--border)}
-.m-tr.s{background:var(--hover)}
-.m-tr>div{padding:0 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
-.m-tr>div.n{justify-content:flex-end;font-variant-numeric:tabular-nums}
-.m-ico{width:16px;height:16px;border-radius:4px;color:#fff;font-size:9px;font-weight:700;display:grid;place-items:center;flex:none}
-.m-chip{display:flex;align-items:center;gap:8px;height:28px;padding:0 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface)}
-.m-chip.on{border-color:var(--accent);background:var(--sel)}
-.m-chip i{display:block;width:34px;height:4px;border-radius:2px;background:var(--pressed);overflow:hidden;position:relative}
-.m-chip i::after{content:"";position:absolute;left:0;top:0;bottom:0;width:var(--u);background:var(--accent)}
-.m-pb{height:4px;border-radius:2px;background:var(--hover);flex:1;overflow:hidden;min-width:30px}
-.m-pb i{display:block;height:100%;background:var(--accent)}
-.m-tile{position:absolute;color:#fff;font-size:11px;padding:3px 4px;overflow:hidden;white-space:nowrap;border-right:1px solid var(--bg);border-bottom:1px solid var(--bg);line-height:1.25}
-.m-sw{width:30px;height:16px;border-radius:8px;background:var(--pressed);position:relative;flex:none}
-.m-sw::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#fff}
-.m-sw.on{background:var(--accent)}
-.m-sw.on::after{left:16px}
-.m-badge{padding:0 8px;height:18px;line-height:18px;border-radius:9px;font-size:11px;border:1px solid var(--border);color:var(--muted)}
-.m-badge.h{color:var(--danger);border-color:var(--danger)}
-.m-badge.m{color:var(--warn);border-color:var(--warn)}
+/* hero text */
+.hero{padding:56px 24px 72px}
+.kicker{font-size:12px;color:var(--mut);letter-spacing:.08em;margin:0 0 18px}
+.hero h1{margin:0;font-size:clamp(28px,4.4vw,52px);line-height:1.28;letter-spacing:-.02em;font-weight:650;text-wrap:balance}
+.hero .en{margin:14px 0 0;font-size:13px;color:var(--mut)}
+.lead{margin:26px 0 0;font-size:18px;color:var(--fg);max-width:640px}
+.cta{margin-top:30px;display:flex;gap:10px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:8px;height:42px;padding:0 18px;border:1px solid var(--fg);background:var(--fg);color:var(--bg);font-size:13px;cursor:pointer}
+.btn small{font-size:11px;opacity:.6}
+.btn.ghost{background:transparent;color:var(--fg)}
+.btn:hover{opacity:.86}
+.btn:disabled{background:transparent;color:var(--faint);border-color:var(--line);cursor:default;opacity:1}
 
 /* sections */
-section{padding:88px 0}
-.sec-h{text-align:center;max-width:680px;margin:0 auto 44px}
-.sec-h h2{margin:0;font-size:clamp(26px,4vw,38px);line-height:1.25;letter-spacing:-.3px}
-.sec-h p{margin:12px 0 0;color:var(--muted);font-size:17px}
-.alt{background:var(--surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.sec{border-top:1px solid var(--line);padding:84px 0}
+.sh{display:flex;gap:12px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin:0 0 22px}
+.sh .n{color:var(--faint)}
+.ph{margin:0 0 20px;font-size:clamp(24px,3.2vw,34px);line-height:1.4;font-weight:600;letter-spacing:-.015em;text-wrap:balance}
+.sec p{margin:0 0 16px;color:var(--mut)}
+.sec p.ph{color:var(--fg)}
+.gap{height:84px}
 
-/* showcase */
-.stabs{display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin-bottom:36px}
-.stab{display:inline-flex;align-items:center;gap:8px;height:42px;padding:0 20px;border-radius:21px;border:1px solid var(--border);background:var(--bg);color:var(--muted);font:inherit;font-weight:600;cursor:pointer}
-.stab:hover{color:var(--text);background:var(--hover)}
-.stab.on{background:var(--accent);border-color:transparent;color:#fff}
-.show{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:44px;align-items:center}
-.show h3{margin:0 0 6px;font-size:26px;line-height:1.3}
-.show .sub{color:var(--muted);margin:0 0 20px}
-.show ul{list-style:none;margin:0;padding:0;display:grid;gap:12px}
-.show li{display:flex;gap:10px;align-items:flex-start}
-.show li svg{margin-top:5px;color:var(--accent);font-size:16px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);margin-top:44px;border:1px solid var(--line)}
+.stat{padding:22px 22px 20px;border-left:1px solid var(--line)}
+.stat:first-child{border-left:0}
+.stat .v{font:500 clamp(22px,2.6vw,30px)/1.2 ui-monospace,"Cascadia Mono",Consolas,monospace;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.stat .v small{font-size:.5em;color:var(--mut);margin-left:4px}
+.stat .l{margin-top:10px;font-size:12px;line-height:1.7;color:var(--mut)}
+.src{margin-top:14px;font-size:11px;line-height:1.7;color:var(--faint)}
 
-/* highlights */
-.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
-.card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:24px}
-.card .ci{width:42px;height:42px;border-radius:10px;background:var(--sel);color:var(--accent);display:grid;place-items:center;font-size:20px;margin-bottom:14px}
-.card h4{margin:0 0 6px;font-size:18px}
-.card p{margin:0;color:var(--muted);font-size:15px;line-height:1.6}
+.meta2{display:grid;grid-template-columns:260px 1fr;gap:36px;margin-top:44px;align-items:start}
+.mark{border:1px solid var(--line);background:var(--panel);padding:26px 22px}
+.mark .logo{width:84px;height:84px;border-radius:20px}
+.mark .logo svg{width:56px;height:56px}
+.mark p{margin:18px 0 0;font-size:13px;line-height:1.8}
+.tbl{border:1px solid var(--line)}
+.tr{display:grid;grid-template-columns:110px 1fr 1fr;border-top:1px solid var(--line)}
+.tr:first-child{border-top:0}
+.tr>div{padding:14px 16px;font-size:14px;line-height:1.7}
+.tr .th{font-size:11px;letter-spacing:.06em;color:var(--mut);background:var(--panel)}
+.tr .tab{font-size:13px;font-weight:600}
+.tr .sea{color:var(--fg)}
+.tr .pc{color:var(--mut)}
 
-/* name */
-.name{display:grid;grid-template-columns:auto 1fr;gap:40px;align-items:center;max-width:860px;margin:0 auto}
-.bigicon{width:150px;height:150px;border-radius:36px;background:var(--accent);display:grid;place-items:center;box-shadow:0 16px 40px var(--shadow)}
-.bigicon svg{width:96px;height:96px;fill:none;stroke:#fff;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
-.name h2{margin:0 0 12px;font-size:clamp(24px,3.4vw,34px);line-height:1.3}
-.name p{margin:0 0 10px;color:var(--muted);font-size:17px}
-.name p b{color:var(--text)}
+.player{display:flex;align-items:center;gap:16px;border:1px solid var(--fg);padding:14px 16px;margin-top:36px;font-size:12px}
+.player .pb{width:38px;height:38px;border:1px solid var(--fg);background:transparent;color:var(--fg);font:inherit;font-size:13px;cursor:pointer;flex:none}
+.player .pb:disabled{border-color:var(--line);color:var(--faint);cursor:default}
+.pinfo{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pinfo b{font-size:14px;font-weight:600}
+.pinfo span{color:var(--mut)}
+.wave{flex:1;text-align:center;letter-spacing:.12em;color:var(--faint);white-space:nowrap;overflow:hidden;font-size:14px}
+.player.on .wave{color:var(--ok)}
+.time{color:var(--mut);font-variant-numeric:tabular-nums}
+.mv{margin-top:20px;border:1px solid var(--fg)}
+.mvbox{position:relative;aspect-ratio:21/9;background:var(--stage);color:#7dd3a0;display:grid;place-items:center;text-align:center;overflow:hidden}
+.mvbox pre{margin:0;font:13px/1.35 ui-monospace,"Cascadia Mono",Consolas,monospace;color:#7dd3a0;opacity:.85}
+.mvbox video,.mvbox iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
 
-/* download */
-.dl{max-width:760px;margin:0 auto;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:36px;text-align:center}
-.dl .v{display:inline-block;padding:2px 12px;border-radius:12px;background:var(--sel);color:var(--accent);font-weight:600;font-size:14px}
-.dl h2{margin:12px 0 6px;font-size:32px}
-.dl .btn{margin-top:22px;height:52px;padding:0 34px;font-size:17px}
-.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:32px;text-align:left}
-.step{padding:16px;border-radius:10px;background:var(--bg);border:1px solid var(--border);font-size:14px;color:var(--muted)}
-.step b{display:flex;align-items:center;gap:8px;color:var(--text);font-size:15px;margin-bottom:4px}
-.step b span{width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:12px}
+.acts{margin:34px 0 0;padding:0;list-style:none;border-top:1px solid var(--line)}
+.acts li{display:grid;grid-template-columns:44px 1fr;gap:6px;padding:18px 0;border-bottom:1px solid var(--line)}
+.acts .n{font:12px/2.1 ui-monospace,"Cascadia Mono",Consolas,monospace;color:var(--faint)}
+.acts b{display:block;font-size:16px;color:var(--fg);font-weight:600}
+.acts span{color:var(--mut);font-size:15px}
 
-/* faq */
-.faq{max-width:760px;margin:0 auto;display:grid;gap:10px}
-details{border:1px solid var(--border);border-radius:10px;background:var(--bg);padding:0 20px}
-summary{cursor:pointer;list-style:none;padding:16px 0;font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:12px}
-summary::-webkit-details-marker{display:none}
-summary::after{content:"+";font-size:22px;color:var(--muted);line-height:1}
-details[open] summary::after{content:"–"}
-details p{margin:0 0 16px;color:var(--muted);font-size:15px}
+.slots{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:34px 0 22px}
+.slot{border:1px dashed var(--faint);padding:20px 18px;font-size:12px;color:var(--mut);display:flex;flex-direction:column;gap:4px}
+.slot b{font-weight:500;color:var(--fg)}
 
-footer{border-top:1px solid var(--border);padding:32px 0;color:var(--muted);font-size:14px}
-footer .wrap{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
-footer .sp{flex:1}
-footer a:hover{color:var(--text)}
+.soft{display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 22px}
+.chips span{font:12px/1 ui-monospace,"Cascadia Mono",Consolas,monospace;border:1px solid var(--line);padding:7px 10px;color:var(--mut)}
 
-@media(max-width:860px){
- .nav nav{display:none}
- .show{grid-template-columns:1fr;gap:28px}
- .grid3{grid-template-columns:1fr 1fr}
- .name{grid-template-columns:1fr;text-align:center;justify-items:center}
- .steps{grid-template-columns:1fr}
+.foot{border-top:1px solid var(--fg);padding:34px 0 60px;font-size:12px;color:var(--mut);line-height:1.9}
+.foot .row{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
+.foot a{border-bottom:1px solid var(--line)}
+.foot a:hover{border-color:var(--fg)}
+.foot .big{font-size:13px;color:var(--fg)}
+
+@media (max-width:860px){
+  .nav nav{display:none}
+  .meta2{grid-template-columns:1fr}
+  .stats{grid-template-columns:1fr}
+  .stat{border-left:0;border-top:1px solid var(--line)}
+  .stat:first-child{border-top:0}
+  .slots{grid-template-columns:1fr}
+  .tr{grid-template-columns:1fr}
+  .tr.h{display:none}
+  .tr>div[data-l]::before{content:attr(data-l) "  ";font:11px ui-monospace,Consolas,monospace;color:var(--faint)}
+  .sec{padding:60px 0}
+  .scene{padding:0 12px}
+  .bar .note{display:none}
+  .player{flex-wrap:wrap}
+  .wave{order:5;flex-basis:100%}
 }
-@media(max-width:560px){.grid3{grid-template-columns:1fr}.hero{padding-top:56px}section{padding:60px 0}}
+@media (max-width:560px){#snd:disabled{display:none}.nav .in{gap:14px}}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.js .stage img{transition:none}}
 </style>
 </head>
 <body>
 
-<header class="nav">
-  <div class="wrap">
-    <a class="brand" href="#top"><span class="logo"><svg viewBox="0 0 24 24"><path d="M2.4 20.6c1.6-5.4 4.6-8.6 8.2-8.6s6.6 3.2 8.2 8.6z"/><path d="M2 20.6h20"/><path d="M10.8 12V3.2"/><path d="M10.8 3.2l6 2.2-6 2.4"/><path d="M7.8 17.2h.01M12.4 16.4h.01M14.4 18.6h.01"/></svg></span>DumpingGround</a>
-    <nav><a href="#concept">概念</a><a href="#features">软件</a><a href="#music">音乐</a><a href="#download">下载</a><a href="#faq">常见问题</a></nav>
-    <span class="sp"></span>
-    <button class="iconbtn" id="theme" title="切换明 / 暗主题" aria-label="切换明暗主题"></button>
-    <a class="btn primary sm" href="#download">下载</a>
-  </div>
-</header>
+<header class="nav"><div class="in">
+  <a class="brand" href="#top"><span class="logo"><svg viewBox="0 0 24 24"><path d="M2.4 20.6c1.6-5.4 4.6-8.6 8.2-8.6s6.6 3.2 8.2 8.6z"/><path d="M2 20.6h20"/><path d="M10.8 12V3.2"/><path d="M10.8 3.2l6 2.2-6 2.4"/><path d="M7.8 17.2h.01M12.4 16.4h.01M14.4 18.6h.01"/></svg></span>DumpingGround</a>
+  <nav><a href="#reality"><i>01</i>现实</a><a href="#metaphor"><i>02</i>隐喻</a><a href="#sound"><i>03</i>声音</a><a href="#action"><i>04</i>行动</a><a href="#donate"><i>05</i>捐助</a><a href="#software"><i>06</i>软件</a></nav>
+  <span class="sp"></span>
+  <button id="snd" class="tbtn" disabled>♪ 声音 · 即将上线</button>
+  <button id="theme" class="tbtn" aria-label="切换明暗主题" title="切换明 / 暗">◐</button>
+</div></header>
 
 <main id="top">
-<div class="hero">
-  <div class="ocean" id="ocean" aria-hidden="true">
-    <canvas id="ocv"></canvas>
-    <div class="scrim"></div>
-    <div class="caption">ASCII 动图 · 字符渐渐清晰成照片 — 海滩上的垃圾，和电脑里的一样多</div>
-    <div class="vsw"><button data-v="a" class="on">版本 A</button><button data-v="b">版本 B</button></div>
-    <div class="clar"><button id="clauto" class="on">自动 ▶</button><span>清晰度</span><input id="clarity" type="range" min="0" max="100" value="0"></div>
-  </div>
-  <div class="wrap">
-    <h1>希望清理污染，<br><em>像清理电脑垃圾一样容易。</em></h1>
-    <p class="lead">但现实总是残酷的。DumpingGround 是一个概念项目：海里的垃圾我们一时清不完，你电脑里的那座垃圾山，现在就能清。</p>
-    <div class="cta">
-      <a class="btn primary" href="#download"><svg class="i" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>下载软件</a>
-      <a class="btn" href="#concept">了解这个概念</a>
-    </div>
-    <div class="meta">
-      <span><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Windows 原生 · 单文件</span>
-      <span><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>同名歌曲与 MV 筹备中</span>
-    </div>
-  </div>
-</div>
 
-<section id="features">
-  <div class="wrap">
-    <div class="sec-h"><h2>这个软件，负责清理你的那座垃圾山</h2><p>四个页签，每个只做一件事，操作入口只有一个，不绕路。</p></div>
-    <div class="stabs" id="stabs"></div>
-    <div class="show">
-      <div id="showText"></div>
-      <div class="mwrap" id="showShot"></div>
-    </div>
+<figure class="scene" data-k="a" data-start="load">
+  <div class="box">
+    <div class="bar bar1"><span>FIG.01 · 海岸线 / SHORELINE</span><span><b class="pct">000</b>% RESOLVED</span></div>
+    <div class="stage"><canvas></canvas><img src="img/shore-a.jpg" alt="海岸线上，一堆打包的垃圾，顶上插着一面破旗" decoding="async"></div>
+    <div class="bar bar2"><button class="replay">↻ 重播</button><input type="range" min="0" max="100" value="0" aria-label="清晰度"><span class="note">数字符号 → 现实</span></div>
+  </div>
+</figure>
+
+<section class="hero wrap">
+  <p class="kicker">DUMPINGGROUND · 为海洋写的一首歌</p>
+  <h1>清理电脑，点一下就行。<br>清理海洋，没有这个按钮。</h1>
+  <p class="en">Cleaning a computer takes one click. The ocean has no such button.</p>
+  <p class="lead">这里有一首歌、一支即将完成的 MV，和一个顺手做的小软件。它们想说的只有一件事：像爱护自己的电脑那样，爱护海洋。</p>
+  <div class="cta">
+    <a class="btn" href="#sound">♪ 听这首歌 <small>即将上线</small></a>
+    <a class="btn ghost" href="#action">我能做什么 →</a>
   </div>
 </section>
 
-<section class="alt">
-  <div class="wrap">
-    <div class="sec-h"><h2>少一点折腾，多一点掌控</h2></div>
-    <div class="grid3">
-      <div class="card"><div class="ci"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg></div><h4>总量常驻标题栏</h4><p>CPU、内存、磁盘、网络的总量一直在顶栏，切到哪个页签都看得见；过高自动变橙、变红。</p></div>
-      <div class="card"><div class="ci"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></div><h4>一个搜索框，到处能搜</h4><p>进程页搜名称、PID、路径，磁盘页过滤文件名，软件和启动项同样适用，不用到处找输入框。</p></div>
-      <div class="card"><div class="ci"><svg class="i" viewBox="0 0 24 24"><path d="M6 3l14 9-14 9z"/></svg></div><h4>扫描只有一个按钮</h4><p>点盘符、点扫描，扫描中同一个位置变成取消。取消后保留已扫到的部分结果。</p></div>
-      <div class="card"><div class="ci"><svg class="i" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></div><h4>明暗双主题</h4><p>一键切换，随系统强调色。深夜清理磁盘，眼睛也舒服。</p></div>
-      <div class="card"><div class="ci"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></div><h4>危险操作先确认</h4><p>结束进程、卸载软件、禁用启动项都会先确认。结束进程还会核对创建时间，防止 PID 被复用误杀。磁盘分析只读，不会替你删文件。</p></div>
-      <div class="card"><div class="ci"><svg class="i" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg></div><h4>原生、轻、快</h4><p>一个约 12 MB 的 exe，不用安装，不依赖 WebView2。NTFS 整盘扫描在权限允许时走 MFT 快速路径。</p></div>
-    </div>
+<section class="sec" id="reality"><div class="wrap">
+  <div class="sh"><span class="n">01</span><span>现实 / REALITY</span></div>
+  <p class="ph col">删除一个文件，空间立刻回来。<br>海边的垃圾，没有这样的回收站。</p>
+  <div class="col">
+    <p>在电脑里，垃圾是一个个能选中的文件：选中、删除，空间还给你。在海边，垃圾被浪推上沙滩，被日晒碎成更小的碎片，又被下一次涨潮带回海里。没有回收站，也没有撤销。</p>
+    <p>清理的速度，永远追不上它们被丢下的速度。所以真正有用的事，是让它们少一点被丢下。</p>
   </div>
-</section>
+  <div class="stats">
+    <div class="stat"><div class="v">7,500万–1.99亿<small>吨</small></div><div class="l">估计已经存在于海洋中的塑料总量</div></div>
+    <div class="stat"><div class="v">1,900万–2,300万<small>吨 / 年</small></div><div class="l">2016 年进入河流、湖泊与海洋等水体的塑料垃圾，约占当年塑料垃圾产生量的 11%</div></div>
+    <div class="stat"><div class="v">≥ 85<small>%</small></div><div class="l">海洋垃圾中塑料所占的最低比例</div></div>
+  </div>
+  <p class="src">数据来源：UNEP《From Pollution to Solution》(2021)；Borrelle 等，Science (2020)。各项均为估算，故以区间标注。</p>
+</div></section>
 
-<section id="concept">
-  <div class="wrap">
-    <div class="sec-h"><h2>一个关于「垃圾场」的概念</h2><p>海洋是最大的 dumping ground，电脑是最小的那个。</p></div>
-    <div class="grid3">
-      <div class="card"><div class="ci"><svg class="i" viewBox="0 0 24 24"><path d="M2 12c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M2 17c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M2 7c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/></svg></div><h4>海里的垃圾场</h4><p>每年有上千万吨塑料进入海洋，一部分漂到海滩上，堆成一座座没人认领的小山——和上面动图里的一样。</p></div>
-      <div class="card"><div class="ci"><svg class="i" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div><h4>你电脑里的垃圾场</h4><p>进程越开越多，文件越堆越高，装过的软件从不卸载，开机项悄悄变长。这座山小得多，但它是你能动手清的那个。</p></div>
-      <div class="card"><div class="ci"><svg class="i" viewBox="0 0 24 24"><path d="M2.4 20.6c1.6-5.4 4.6-8.6 8.2-8.6s6.6 3.2 8.2 8.6z"/><path d="M2 20.6h20"/><path d="M10.8 12V3.2"/><path d="M10.8 3.2l6 2.2-6 2.4"/><path d="M7.8 17.2h.01M12.4 16.4h.01M14.4 18.6h.01"/></svg></div><h4>海滩上的锚点</h4><p>图标是一座立在海滩上的垃圾山，山顶插着旗。旗就是锚点：插下去，这片垃圾场就归你管。</p></div>
-    </div>
+<figure class="scene" data-k="b" data-start="view">
+  <div class="box">
+    <div class="bar bar1"><span>FIG.02 · 近处一座，远处一串 / PILES</span><span><b class="pct">000</b>% RESOLVED</span></div>
+    <div class="stage"><canvas></canvas><img src="img/shore-b.jpg" alt="沙滩上散落的垃圾，远处还有一排插着旗子的垃圾堆" loading="lazy" decoding="async"></div>
+    <div class="bar bar2"><button class="replay">↻ 重播</button><input type="range" min="0" max="100" value="0" aria-label="清晰度"><span class="note">垃圾山不止一座</span></div>
   </div>
-</section>
+</figure>
 
-<section id="music">
-  <div class="wrap">
-    <div class="dl">
-      <span class="v">概念原声</span>
-      <h2>同名歌曲《DumpingGround》</h2>
-      <div class="muted">为这个概念写的同名歌曲即将上线，MV 也在制作中——海滩、垃圾山，和你的电脑。</div>
-      <a class="btn" style="pointer-events:none;opacity:.6"><svg class="i" viewBox="0 0 24 24"><path d="M6 3l14 9-14 9z"/></svg>即将上线</a>
+<section class="sec" id="metaphor" style="margin-top:84px"><div class="wrap">
+  <div class="sh"><span class="n">02</span><span>隐喻 / METAPHOR</span></div>
+  <p class="ph col">一个软件，只是一个比方。</p>
+  <div class="col">
+    <p>DumpingGround 原本是一个 Windows 小工具，帮人看清电脑里到底堆了些什么。把它放在这里，是想借它说一件事：我们愿意定期清理自己的电脑，为什么不能用同样的心思，对待海洋？</p>
+  </div>
+  <div class="meta2">
+    <div class="mark">
+      <span class="logo"><svg viewBox="0 0 24 24"><path d="M2.4 20.6c1.6-5.4 4.6-8.6 8.2-8.6s6.6 3.2 8.2 8.6z"/><path d="M2 20.6h20"/><path d="M10.8 12V3.2"/><path d="M10.8 3.2l6 2.2-6 2.4"/><path d="M7.8 17.2h.01M12.4 16.4h.01M14.4 18.6h.01"/></svg></span>
+      <p>软件的图标，来自 FIG.01 里那座打包的垃圾堆：山顶插着一面旗。<br><b>旗插下去，意思是：这座山，我来接管。</b></p>
+    </div>
+    <div class="tbl">
+      <div class="tr h"><div class="th">软件页签</div><div class="th">在电脑里</div><div class="th">在海洋里</div></div>
+      <div class="tr"><div class="tab">进程</div><div class="pc" data-l="电脑">先看见：此刻正在发生什么</div><div class="sea" data-l="海洋">先看见：每天有多少垃圾流进海里</div></div>
+      <div class="tr"><div class="tab">磁盘</div><div class="pc" data-l="电脑">看清是什么占满了空间</div><div class="sea" data-l="海洋">看清海岸线上到底堆了什么</div></div>
+      <div class="tr"><div class="tab">软件卸载</div><div class="pc" data-l="电脑">不再需要的，就卸载</div><div class="sea" data-l="海洋">不再需要的一次性用品，别再用</div></div>
+      <div class="tr"><div class="tab">启动项</div><div class="pc" data-l="电脑">管住一开机就自己运行的</div><div class="sea" data-l="海洋">管住源头：垃圾从哪里出发</div></div>
     </div>
   </div>
-</section>
+</div></section>
 
-<section id="download" class="alt">
-  <div class="wrap">
-    <div class="dl">
-      <span class="v">v0.1.0</span>
-      <h2>DumpingGround for Windows</h2>
-      <div class="muted">单个 exe，约 12 MB，免安装</div>
-      <a class="btn primary" href="#download" id="dlbtn"><svg class="i" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>下载 DumpingGround.exe</a>
-      <div class="steps">
-        <div class="step"><b><span>1</span>下载</b>保存 DumpingGround.exe 到任意位置。</div>
-        <div class="step"><b><span>2</span>双击运行</b>无需安装；再次启动会激活已打开的窗口。</div>
-        <div class="step"><b><span>3</span>想扫得更快？</b>右键「以管理员身份运行」，NTFS 整盘扫描可使用 MFT 快速路径。</div>
-      </div>
-    </div>
+<section class="sec" id="sound"><div class="wrap">
+  <div class="sh"><span class="n">03</span><span>声音 / SOUND</span></div>
+  <p class="ph col">有一首歌，也叫 DumpingGround。</p>
+  <div class="col"><p>歌曲上线后，打开这个页面就会播放；同名 MV 完成后，会放在下面。</p></div>
+  <div class="player" id="player">
+    <button class="pb" id="play" disabled aria-label="播放">▶</button>
+    <div class="pinfo"><b>DumpingGround</b><span id="pstate">同名歌曲 · 即将上线</span></div>
+    <div class="wave" id="wave" aria-hidden="true"></div>
+    <span class="time" id="ptime">--:-- / --:--</span>
   </div>
-</section>
+  <audio id="song" loop preload="auto"></audio>
+  <div class="mv"><div class="mvbox" id="mvSlot"><pre>┌──────────────┐
+│              │
+│      ▶       │
+│              │
+└──────────────┘
+MV · 制作中 / COMING SOON</pre></div></div>
+</div></section>
 
-<section id="faq">
-  <div class="wrap">
-    <div class="sec-h"><h2>常见问题</h2></div>
-    <div class="faq">
-      <details><summary>需要安装吗？</summary><p>不需要。下载后双击 exe 即可使用，删除文件即完成卸载。</p></details>
-      <details><summary>需要管理员权限吗？</summary><p>不需要。进程查看、普通目录和盘符扫描都能用。以管理员身份运行时，NTFS 整盘扫描可使用 MFT 快速路径；权限不足会自动回退到普通目录遍历。</p></details>
-      <details><summary>它会自动删除我的文件吗？</summary><p>不会。磁盘分析是只读的，你可以一键定位到资源管理器自行处理。结束进程、卸载软件、禁用启动项都会先弹出确认。</p></details>
-      <details><summary>会联网或上传我的数据吗？</summary><p>不会。所有数据都在本机处理，应用没有联网功能。</p></details>
-      <details><summary>扫描结果准确吗？</summary><p>同时提供“占用空间”和“逻辑大小”两种口径，硬链接的占用空间只计一次。扫描的是运行中的文件系统，不是一致性快照，所以结果可能与卷已用空间略有差异。</p></details>
-    </div>
+<section class="sec" id="action"><div class="wrap">
+  <div class="sh"><span class="n">04</span><span>行动 / ACTION</span></div>
+  <p class="ph col">没有那个按钮，但有几件今天就能做的小事。</p>
+  <ul class="acts col" style="max-width:none">
+    <li><span class="n">A.01</span><div><b>少用一次性的东西</b><span>自带水杯和布袋，拒绝不需要的吸管与包装。少一件，就少一件漂向海里的可能。</span></div></li>
+    <li><span class="n">A.02</span><div><b>垃圾留在该去的地方</b><span>海里的塑料，大部分先经过河流。你家门口那条小河，终点也是海。</span></div></li>
+    <li><span class="n">A.03</span><div><b>走一趟海边，带走几件垃圾</b><span>参加本地的净滩活动，或者只是散步时多弯几次腰。</span></div></li>
+    <li><span class="n">A.04</span><div><b>买得少一点，用得久一点</b><span>过度包装、用完即弃，都是从源头流出来的垃圾。</span></div></li>
+    <li><span class="n">A.05</span><div><b>把这件事说出去</b><span>转发这个页面，把歌分享给一个人。让更多人知道：这个按钮不存在。</span></div></li>
+  </ul>
+</div></section>
+
+<figure class="scene" data-k="c" data-start="view">
+  <div class="box">
+    <div class="bar bar1"><span>FIG.03 · 想回到的样子 / WHAT IT COULD BE</span><span><b class="pct">000</b>% RESOLVED</span></div>
+    <div class="stage"><canvas></canvas><img src="img/shore-clean.jpg" alt="干净的沙滩，海鸥和螃蟹在海边" loading="lazy" decoding="async"></div>
+    <div class="bar bar2"><button class="replay">↻ 重播</button><input type="range" min="0" max="100" value="0" aria-label="清晰度"><span class="note">只要有人先动手</span></div>
   </div>
-</section>
+</figure>
+
+<section class="sec" id="donate" style="margin-top:84px"><div class="wrap">
+  <div class="sh"><span class="n">05</span><span>捐助 / DONATE</span></div>
+  <p class="ph col">给海洋留一个捐助入口。</p>
+  <div class="col"><p>捐助通道正在筹备。开启后，会向选定的环保机构捐赠；机构名单和资金去向，会在这里公开。现在先把位置留着。</p></div>
+  <div class="slots">
+    <div class="slot"><b>[ 机构 01 ]</b><span>待公布</span></div>
+    <div class="slot"><b>[ 机构 02 ]</b><span>待公布</span></div>
+    <div class="slot"><b>[ 机构 03 ]</b><span>待公布</span></div>
+  </div>
+  <button class="btn" disabled>捐助 · 筹备中</button>
+</div></section>
+
+<section class="sec" id="software"><div class="wrap">
+  <div class="sh"><span class="n">06</span><span>软件 / THE ARTIFACT</span></div>
+  <p class="ph col">顺手做的那个软件。</p>
+  <div class="col">
+    <p>DumpingGround 是一个 Windows 原生小工具，单文件、免安装。看进程，查磁盘空间，卸载软件，管理启动项。磁盘分析只读，危险操作会先确认。</p>
+  </div>
+  <div class="chips"><span>进程</span><span>磁盘</span><span>软件卸载</span><span>启动项管理</span><span>Windows · 单文件</span></div>
+  <div class="soft">
+    <a class="btn" href="#software">下载 v0.1.0 <small>下载地址待发布</small></a>
+  </div>
+</div></section>
+
 </main>
 
-<footer>
-  <div class="wrap">
-    <a class="brand" href="#top"><span class="logo"><svg viewBox="0 0 24 24"><path d="M2.4 20.6c1.6-5.4 4.6-8.6 8.2-8.6s6.6 3.2 8.2 8.6z"/><path d="M2 20.6h20"/><path d="M10.8 12V3.2"/><path d="M10.8 3.2l6 2.2-6 2.4"/><path d="M7.8 17.2h.01M12.4 16.4h.01M14.4 18.6h.01"/></svg></span>DumpingGround</a>
-    <span class="muted">希望清理污染，像清理电脑垃圾一样容易。</span>
-    <span class="sp"></span>
-    <a href="#features">功能</a><a href="#download">下载</a><a href="#faq">常见问题</a>
-    <span>v0.1.0</span>
+<footer class="foot"><div class="wrap">
+  <div class="row">
+    <div><div class="big">DumpingGround — 为海洋写的一首歌。</div>清理电脑点一下就行。清理海洋，从少丢一件开始。</div>
+    <div>© 2026 DumpingGround<br>视觉风格致敬 <a href="https://ascii.rest">ascii.rest</a>（MIT，© @bas3line）</div>
   </div>
-</footer>
+</div></footer>
 
 <script>
-const $=s=>document.querySelector(s);
-const ICON={sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',moon:'<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',check:'<path d="M20 6 9 17l-5-5"/>'};
-const svg=n=>`<svg class="i" viewBox="0 0 24 24">${ICON[n]}</svg>`;
+const $=(s,r=document)=>r.querySelector(s);
+const OCIMG={"gw":200,"gh":52,"a":{"src":"img/shore-a.jpg","rows":[";~~~~~~~====--------+++++++++************x**xxxxxxxxxxxxx###################%%%%%%%%%%%%%%%%########%%%%%%%%%@@@@@@@@@@@@@%%%%@@@@@%%%%%%%%%%%%%%@@@@@@@@@@@@@@@@@@@@@%%##xxx***********xxxxxx*********+","~~~~~~~=====-----++++++++++********xxxxxxxxxxxxx################################%%%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@@@%%%%%%%%@@@@@@@@@@@%%@@@@@@@@@@@@@@@@@@@@%%%%%%%@%%#xxxxx***********xx##xxxxxxxxx**+++","~~=========------++++++++++*******xxxxxxx#################%%%%##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@@@@@@@@@@%%%%%@@@@@@@@@@@@@@@@@@@@@@%%%%%%%%%@@%%%#######xxxxxxxxxx##xxxx********+++++","~=======-------++++++++++++*******xxxxxxxxx################%%%%%%%%%#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@@@@@@@@@%%%%@@@@@@@@@@@@@@@@@@@@@@@@@%%%%%%%%%%%##########xxxxxxxxxxxxx*******+++++++","~========-----++++++++++*********xxxxxxxxxxxx###################%%%x:#%%%%%%%%%%%%%%%%@@@@@@%%%%%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%%%%%%%%%%%###########xxxxxxxxxxxx*******+++++++","~========----++++++++**********xxxxxxxxxxx###############%%%%%%%%%%x;=%%%%%%%%%%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%@@@@@@@@@@@%%%%%%%%%%%%%%%#######xxxxxxxxxxx***********++++","======-------+++++++*********xxxxxxxxx##############%%%%%%%%%%%%%*-~:·#%%%%%%%%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%##########xxxxxxxxxx**************","===-------+++++++++********xxxxxxxxxx##############%%%%%%%%%%#*+~*-==:=%%%%%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#############xxxxxxxxxxxx****+-+***","==--------++++++++********xxxxxxxxxx###############%%%%%%%%%%+;~~=*==~·x%%%%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%%%%%%%%%%%%%%%%%%###############xxxxxxx***-=··:==:","==-------++++++++********xxxxxxxxxxx###############%%%%%%%%#x:~~~==*=-·;%%%%%%%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%%%%%%%%%%%%%%%%%%%%%%%%%%##xxxxx####xxx*+-===~·········","===------+++++++++*******xxxxxxxxxxxx###############%%%%%%#xx~;~=~:-x-~·+%%%%%%%%%%%%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%%%%%#x************xx####xxx**+++-------------=;=---=~·········","===-------++++++++********xxxxxxxxxxx#################%%%%%%%x~~~=~~~==··x%%%%%%%%%%%%%%%%%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%#x***++++++**++++++++++++++++++++--------+--===~;;;;;~;;;::::·····","=====-----++++++++********xxxxxxxxxxxxx###################%%%x;~~~~;~;+=;-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@@@@@@@@@@@@@@%%%%%x***++**+++++++++++++++++++++++++++++++-+--=~~~~;;;;;;;::······.....","=====------++++++++**********xxxxxxxxxxxxx###################*:;;:;;==**;;x%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#********************+++++*******++++++++++----====~:······...........",";;;;;;;;~~~~~~~~~~===============-----------------+++-+++++++=·;;=++===*-:=*+++++++++++++*+++++++***********************************xxxxxxxxxxxxxx##################x##xxx**+--=~;;:::;;::·····.........","······:·:::::::::::;;;;;;;;;;;~;~~;~~~~~~~~~~~~~========~===-===-----===+~:--++------=-****x+----=-+++*+*******xxxxxxx#xx#xx##############x#xxxxx#xx##x##xxxxxx***+++--===~~~~~~~~~=~~~:~~;:;::··:··.··.","········:::::::::::;;::;;;;;;;~~~~;~===~===~~~========~~~==------+++-~====;=*****xxxxxxxx####xxxxxxxx##x######x###xxx#x######xxxxxx###xx#xx########x####x***+---===~====-=~~=-=:~~=~~~~:;:;:;~;:;:;;;:;;",".··········:::::;;;;;;;;;;;::;~~;;;;~==-----+-=*xxxxxxxx###%##%%*=##~==---~:x%#x##########xxxxxxxxx****++**x+*+***+++*x****x*xxxxxxxxx*xx#x*xx**###xxx###%%#x+++++-=-==~~=~;;~---=;;::;-~;;;;;·.:;::::::","······:·::·::;~;;;;;~~-------------++++++-++**-*xxxx#####xxxxxx#x+~=:=--==--;xxxxxxx**+**+*****************xxx*xxxxx*xxx*******x*xxxxx#xxx*+x####x######%%%#**++++--~;;~==~~~:~;=+~-~~;;=;;;;;::;;::::··",";;;~~~~~~~~~~=======--++++++++++++++***++---+--+++*+-+++++-++-++++~:.:=--+++;=++++******xxxxxxxx***********++xx#xxxxxxxxx##xx*xxxxxxx**x#####%xxxxxx###%%%%x*+--=~~;~====~~;;;;;·~-~:·:;;;;:::::::·;:   ",";~~=~~~=-==---+++++-++++*++++---++---=~=~~~====~===~-=======---+++-::=++*+**+:*************+++*++++++--+**x**********xxx#*xx**++-+*++xx#xxx*xxxxx###%###*+-++--=~~;;~;~-==~;~~==~;-~;~;;;=~;:::~=~:~:···","~~~=~~~~~~~~~~;~;::::::::::;;;;:;~=~~======-----++--++-**+-++-+++*+=++*****++=~+-++++++++***+***+***+**xx++-+**x****xxx*xx###xx***x#%#%%#x**xx###%##x**+-==-=~~~~===;~:~=~-==;~::::~;==~:~·:..··;;::::::","···········::::::;;;;;;;;;~~~==========----------===--------------=+---++**+**:+**+*+++******+-++***+-=-=--~---+*xxx*xxx***x##xx#%%#xxxxx###%%##x++++=-+=-~;=-=;;~~=~;===;=~:;+;:;;;~=-~~~;·:;~;~;~::;::","···::::;;;;;~~~~;~~~~~=~~=====~=~~=======~~==~===========~~~=-++++----++==~==-~;+--+*+****+++=~==++-----=--++**x*+**xx+-**x***xx*x##x#%%#+**++++;;;~;;===--=~~~=+=~==~--=~;::-==~~=~~~~···~~~;;;;;;;::;:",":::::;;~~~~~~~~~~~~=~~~~~~~~~~;~~~=====-===~~;;;~~~~=---------------==--++**++-:-==~;~;;~~=~~~=--++***+-++-+*+***x#########%####%%##xx***-~-=-~;=;;-==~===~;··:;;::;:~:···::;==~~=~;:·....·..·;:;~~;;=+;",":::::;;;~;~~~~~~~~~~~~~==~~~~~====--~~====---------+-----++-++--+--+++--+=-+--=-~---++--===-==-+*+*++++-+*xxx#xxxx%###%%#####x*++++++++-~~~--++;=-;==-+---~=~=+++x--++*=-+-=~~;=;·..··...·:.....·;;;--:.",":::;:::::::::;;:;;;;;;;;;;;;;~=~=====~~~;:····:;~~~~========---===~~~~;;~===-+x%~x---===-;=-=~-****+++**x##########%####x*++-+==-++--~~=-;;;==;===;;=~;=~····-=*;====-+*~*=~~:··.·......·:·..·.··.···;:·",":::··::::::::;;;;;::···········::;;;;;::;;;;;;~~~=-+++++++--=---*x+---=---+**xx*=;*-=~=~.....·:=x#########%%%%%%%%%%##x*+-=:==~;:=:;+=+*~==~==--=-=;·...···;-=~~+++-~=+=~;:;..~;·:-::=~:·::;::::::;:;:::","·····::::::::········::··::::;;;;;;~=======~~~~~~;~~~~~=====+===*##x-**x=+=~~==-::~~;·.:.  ...·=*#%##x######x-##x**+++=++;~=~~=:==~;~=-+=-~=--=;~:::;:::~~;::;~-~:.·=;::;;;;:;~==~~~~;~~~~;::;;;:;;::::;","··············:::···:::;;;;;;~~~~=~~;;;;;::;::;:;;;;:;;~~~-**-+*x***xx+-===*~~;;;·:~;~~··..·.·+--x##x+*+++x**=+-+++*-~=;;~;-;;:;·~~~==--+-=~;~;;~~=;~~·~+++===;~=;~~·.·:;;~==+*=~~=~~~~~~~;::;;;::;;::::",".······::::::::;;~~~~~~;;;;;;::············::::::;~~~~===-=+*--+~~~;=;;;:::·:~:~=~=:~:;::·:·:=+~~-x##%++xx*xxx~==~+-~-*~~~=-~~~==~~=--+==---------=~~;~~=-=~--+-=~~~;:;=;··;:~~;~~~;~~;:~~~~;:;;;;;;;:::","···::::;;;;;;;;;;::::::·::;;;:;;:::::::;;~~;~~~==-~~~=+--;-=~;=;-~:::.·;;:~=~~-=;-*+x+=. .··=--=--*x#x#*x*--+x#-=-*-*=:::~=+=-++--=-+**-=~~=--=;:~--x+~=~-=~==--=-+-=-:·. :. .;;~-+;:::;;~;~;:;;;;::::;:",":::··········..····.....····::;;~~==~~~~==~=+-==---**+-+=:.:==~-*#*= :~;+=+++*-=-===--+++*****+--====*#*+*#-~~#*-=;~~~-+++--+**---~;~;;·:::::;~;=::;··.·;==~+**+-~:::;~;;:··;;::·~**-+-~=:;;:·...·;;:::;",".....·.··.·..·······::·::::;;~;~~~=====~~~~~==---++x***-:··-x-=+xxx#==--+==;:=~~+:~+;~++**+*##%%*~=;;~=+-~+*#;=x=+++--=-+++*+=::;.·:**:..·;:·;;*-;~=~::~~=-==~:;~==----===~~~~~~;~~~=~~·:;;::.. ..·:;:::","....·...·····::;:;;;;;;;;~~~~;~~~;;;;========---++*+;~:=~=~~·::;*#xxxx*x#x;-+-~=x#x###x+-+****x#%x-~~~==-+++xx=*#%#-**---=*++*++;···:=-+~-=~:·=~=~:~~:++===;~--===-+***+===~==---~~;;;~;=-~;:;;::;;:;;:·","·..···:~:::::::;;~~~;;;~~~~~~~~~~~~--=----+++-+++--;  ...  ..~+***xx#xxxx+=~*-===+**++x*==-=+-**####-;;;~==*x**=-x%#+++=-x-~=***++~==;-~;~:;~~:::;==~=x++-=-=;~=-=-+=;~~;=~;~:::.:==~~~~~~;~;;;;:::·····","·······:::;::;~;::;~;;;;~~===~~=-+-++-+*++*****+~;..  ......=+==+-+==+xx#+;-==-=+-=**+-*=::=+=-+--++x#;:~~~;~+*%+=-#-~;;;-==~=~~=++~-*~~-===~;;~~*x---==---++-+-+*-=---=~~~:.··..·;;;;::~~;;;;;::::::;;;",":·····:::::::;:;;;~~~~=~-++-==--***+*+**++****+~....   .. :=+-;~=--~:;=x*;==~-=~;-++++*=+=·;;;;:=~;;~x+:;:;==***=~=~*-=~:··...··..:;=~;===---==+;~;~~=--++=+*----+x***==~;:.·...·::··;;:;;;;;;;;;;··::::","··:·:;:::;~~:;;;;==---==--==+****x*+*x*++*++-==·...  ... :==~+-;:~;...:;:·:·:~;:·~=~~~=--~··~+-;~=-*x*+;;;~=*---~-+~;--:.··..:~~;··::·;=-===+*+--;:····:~=-=;~--*+=~::·····::;;;:...·::;;;;;::;::;:::::·","·::::;=======~;~~;=-=++-+++--+*+**----=~~~~~~~=·         ·~=~=~:··;;;·.  ··....··:···;;;=;·::~=-:;=x+~~;:::;~~;-####+;++~·=-*-~;~~~:;:;::·;~;;:·;=·····.··:::::;;;·:;;:;;~;~~;:;;:···:::··:·.···..·:···:","·::::;~=~===~;~=-=-++-+-===-++-=~~;;;~~~~==~==-:         ::;~~;··:-++~·::·.·::··..·.:;:;-; :·;;~·~:~-==·.:·:;~~~+#xxx*---+~~*-;~-=;.::·:··;::;;:·:··:~····::::..·.··::::~~~;;;;:···::··.  ..........·..·",";~;~~~~~~==-+==-===--===~~~;;::·.·:;;:;=====~==;..      .:;=:··.·;=;==.·;··~;;:···...::::;·:;:;··~;:;·...:··;:-+*x#x+-=---=~+~~=~·=+;:;:;;..·..····:;:~:.;..··....::;.·::.·:~-;:....  ..··:::··::::·:::·","~;;;;;=~=~==-~~~~~;:::::::::·.·... .....·:;··-~. .......·;;;::;::::~;~·:;:;-=~~;;:·:·..·.··.:.··.:·.  .:··:··;;;;=-+x*x;·::;;=--=;:~~::···.....····. :;;·...··;=++;..··:·.:~=;::=;:;=~;;;·::;:·····::···",";;;;;;~;;:::::··:::::::·.    .      .  ..;;~=~~·.      ·;;~~;;*;;=;··;~;;~==--+=+***~;=~=--;~·.       ..:::;.. .;~-==+x-:;-==~:·:;==:·:::;;.. ..·.···::::..  ·==~:·...;~.::·.··.  ..:;;·.···:::··::·····",":::···········:::::·.·:;··.    ..  .:::~=;·;;~:.·..·..··~~:;;-~=~~:·;-~;~=~;;;==x*xx++**;=-=·.    ........;::.·~;~=+#=*-·~=~=~;~-=~=;.····;~·:=**-;--=:::·....·.···..·=x:. ·-=:.·..··:··..;==~;::.······",".....·····:::;::::.·:·..   ....·:····:.·:;~:···.·;;;;-:·.......:··.:~~;;::~;::+-+--++*+-~;·· ·      . .. ..···.;;~+**=~=~xx~:··:;=*+~~==~~+~;~=~=++~:;xx;::..·:...···.:;~:::··:::··..     ·::::::······.",".·········.·.·..·...··.........;;:::::··:;;;..·.:=~=--;:·.·.       ;~;;;;:·::;;:;~~==~;;-~;. .    .        .·::·:·;;==-;;+==~;.·~~=::=~~~+;;~~-+=;:::=-+::::·.·::::::·..·;;;;;;::·.........··.·...······","···.........·..  ....   ..·::::;::·:;~~~=~;;~·.·~~~~-+~=~.       .:::;;:~:···::~:··:~~;~~;.   ·          .·:·...·::~==x+.:-=;~~:··.·;-+~;:;=-=~;:·:··:::::;;~;;;;;:::;;;;;;;~:;:::······::············..",".····..··  .··· . ..:.··:::::···:::::::·..·;=;··;~:·:;;;.        ···;:·::::···:····.·:~~~:    ·      .....··..·...:~*=-+·.:;·:..·~~··=-···~::.···...:·.·;;;~=;;;=;;:;;;:::::::··:;:.:::::····.........··"," .···:.   ..      .;···:;;~~~:::·.·.·.··..·;;·.;::;···;.           ....·.:;~;:·. ·.···.···.  .··.........  .  .. .·+x==~··.···...·;=~=-~;~~~;:;::;~;:~~=--===~;;:;;::;:::::;;;;;::::::···········.··.··.","  ..··       ..  .··::···:::::·.;;:...:::·.·:··;:·:····.            ...·...·::·.......··:··:.  ·              . .:;-~~:·   :;·;;;::;;;;~~~~~~~::·;~===;·;~=-=;;;::··:=:·.·:;;;:::;;;::::·········.··....","           .······..........· :;:·.......   :···:·..·..          .   ..:..·.·...·...····· ·:::··..            ·..·:~;;:==··:;····.  ..·::::::·..::·:;~;;:::·:;~;~=;::·:::····::::·····:::··········....."],"pal":["#e1d3ce","#dcd0cc","#dbcdc9","#d7ccc9","#d6c9c6","#d4c5c0","#cdc2c0","#c9bdbc","#c6b8b6","#beb5b6","#bcb1b0","#baaba6","#b2aaac","#afa5a5","#aea19d","#a6a0a2","#a89a95","#a09899","#9a9698","#969294","#998e8c","#8e8d90","#958680","#937a6c","#86878a","#818183","#807b7c","#767a7d","#7f726c","#747375","#6f7175","#666f71","#79685e","#6b6866","#63696c","#5f6366","#6d5e54","#5f5d5b","#65544a","#5c5149","#535e60","#51585a","#525252","#455153","#514b46","#50473f","#444a4b","#394849","#4a423b","#463c35","#3c4040","#3d3731","#343d3f","#343432","#283b3b","#273435","#302f2c","#2c2926","#252b2c","#1b2a2d","#202222","#162022","#11181a","#0c1215"],"idx":"pooojjjiifeedbbbZZZZYYYVVVVVTSSRRPPRRRPPPPPPPPNNMMMMMMMMMKKJJKKJJJJJJJJIIHHHHHGGGHHGFFGGGGHHHIJIIHHHHHGGFEEEDDCBAABBBBBBBCDEDDDCCCBDEGHHHHGGFFFFECCAAAAAAAAAAAAAAAAACCEFILNOOQQQRRRRRRRQOOOOOQQQQQQQQUUUoooojjiiffeedbaZZYYYVVVVVVVTTSSPPPPPPPNNMMMMMMMMMKKKJJJJJJJJJJJJJJJJJJJJJIIHHHHHHHHGGGFGGGGGGGGGGGFFFEEEEEDCCCCCCDDEEEEEEDCCCCCCBBBAAEECCCCAAAAAAAAAAAAAAACFGGFFFECEFILNOOOOQQQRRRQQQQOLLLOOOOOOOOQQUUWWjjiiffeeeedbbaZZZYYYVVVVVVTTSRRPPPPPPNMMMKKKKKJJJJJJJJJHHHHHHHHHHHHHHHHHHHHHHGGGGGGGGFEEEEEEEEEEEDDDDEDDDDDDDDCCCBBBBBBBBBCDEEEECBBAAAAAAAAAAAAAABCCCCCEFFFFFFCCCCEFIIIKKKLLNOOOOOOOLLLLLLOQQQQQQQUUWWWWjiiffeeebbbbZZYYYYVYVVVVVVTTSSRPPPPPNNNMMMMKKKKJJJJJJJJIIIHHHHHGGGGHKGGGFFFFFEEEEEEEEEDDDDDDEEEEEFFGGFFFEEEEEDCCBBAAAAAABBCDDDDCCCBAAAABCCCCBAAAAAAABCCCCEEEEEFFGHHIIIIKKKKLLLLLLLLLNOOOOOQQQQRUUUUWWWWWjiiiffeeebbbZZYYYVVVVTTTTTSSSRPPPPPPNNMMMMMMMMKKKJJJJJJIIIIHHHHHHHHMyKGGFEEEEEEEDDEDDDDDDDDDDDEEDDDDDDCBBBBAAAAAAAAAAAAABBCCCBBBBAAAAAAAAAAAAAAAAAAACCCCEEEFFFFFGHHIIIIKKKKKLLLLLLLLNOOOOOQQQQUUUUUWWWWWiifffeeeebbZZYYYVVVTTTTSSSRRRPPPPPNNMMMMMMKKKKJJJJJIIHHHHHHHHHGGGGHMrdHGFEEEEDDDDDDDDDDCCCCCCBBBBBBBBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBCCCCCDDCCCCCCCCCCCCEEEEFFFFFFGHHIIIIKKKLLLLLLNNOOOOQQQQQUUUUUUUUUUffeeedbbbbZZZYYYVVVTTSSSRRPPPPPNNMMMMMKKKKKJJJJIIIHHHHHHHGGGGGGGHPajv2KGGEEEEEDDDDDDBBBBBBBBBBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBCCDDDEEEEEEEEEEEEEEEEEEEFFFFFFFFFFHHIIIIIKKKLLLLLLLNNOOOOQQQQQQQQQQQQQQfeebbbbZZZYYYYVVVVTTSSRRRPPPPNNNMMMMMKKKKJJJJIIIIHHHHHHGGGGGGKRWkTbiiveGGEEEEDDDDCCBBBBBBBBBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBCCCCCDDDEEEEEEEEECEEEEEFFFFFFFFFGHHHIIIIIIKKKKKLLLLLLLOOOOOOQQQQUWaWUQUeebbbbZZZZYYYVVVTTSSSRRPPPPPNNNMMMMMKKKKKJJJJIIIHHHHHHHGGGGGGVqmkhSdeo6PGFEEDDDDDCCBBBBBBBBBBBBBBBBBBBBAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBBBCCCCCCCCCCCCCEEEEEEFFFFFGGHHHHHIIIIIIIKKKKKKLLLLLLLOOQUUah14yhhyeebbbbZZZYYYVVVTTTSSSRRPPPPPNNNMMMMMKKKKKJJJJIIIIHHHHHHGGGHJNvlkkhdTfd6rHGFEEEEDDDDDDCCCBBBBBBBBBBBBBBBBBBBBBBBAABBBAAAAAAAAAABBBBBBBBCBCCCCCCCCEEEEEEEEFFFFFFFFFFGGHHHHHHIKLNONLLLKLLLOUWaehel143141143eedbbbZZZYYYYVVVTTTSSRRPPPPPNNNMMMMMKKKKKJJJJJIIIHHHHHHHHHHNMonmkmuZNbp6ZGGFFEEEEEDDDDDDDDDDDCCCBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBCCCCCDEGGFHJMPSSSSSPPPPPPPNKKKKLNNRTVYYZaaaaaaaaaaaahqhaaadl111111111feebbbbZZZYYYYVVVTTSSRRRPPPPPNNNMMMMMKKKKKJJJJJIIIIHHHHHHHHHHMmmkgpoode32MGGGFEEEEEEEDDDDDDDDDDDDDCCCCCCCCCCCCBBBBBBBBBBBCCCCCCCCCCCDFKPSTTTTTTTTTTTVVVVVVYYYYYVVVYYYYYZZZZZaaZZaaddhlqsusqlqqquyyy11114feeedbbZZZYYYYVVVTTTSSRRPPPPPNNNMMMMMMMKKKKKJJJJJJIIIIIHHHHHHPnkmkkpopYhqaGGGGGFFEEEEEEEEEEEEDDDDDDDDDDDDDDDDDDDDDDDCCCCCCCDCCCDDDDHNSTTTTTTTTVVVVTTVVVVVVYYYVVVVVVVYYYYZZZZZddhlllpqqqqsuuyy11113377777ffeeebbbZZZYYYYVVVTTTSSRRPPPPPPNNNMMMMMMMMKKKKKKJJJJJJIIIIIIHTxtnwtuddUQsuMGGGGGGGGFFFFFEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEDDDEEDDEGGKSSSSTTTTSSSTTTTTTTTTTTTTTTSSSSSTUUUUUUUUUWZaaccchhlw11111186788778879rrrrrpppppooojjjjiiiiffffffeeeeeebbbbbbbbbbbbbZZZZYZYZYYYYYYYe1nqhYYhhdQawhTVVVVVVVVVVTTVTTVVTVTTTTTSTTSSTSSSRRPRRRRRRRSRRRPPPPRRRPRPNNPPMPNNMMMMMKKJJJJJJKKJKJJKLKLLKLLOOQQUXckkntwywttxz1416488668698932022200000vvvvvuvurrrrrrpprrroroopjjjjjjjjooooifffifiiijieebiiebbbZahhcWlyZZYYZZbbbdfZSPRSPYbbZbeaVVYTVTSTTTRPNPNNNNMKMMJMNKIIHHJIJJJJJKKMKNOPMNKMNKKLLLLNLNNOQQUWWWaachhkkkkkkkkkgkkmtmmsysw011y418616222222200000vvuvvvvruuvpprrrppoooopjfifjifioijiiffffifijieebbbbZZVYVclhchcshSSPPPNNPNNMMMJHHKPMPPNNPNKJMKIJJKKMJJKNPMKMKIIKJHNNMMPNKKKNMKNMKKKKKJKKLJJJKOQQUWXccgggkghchchllhchullgkllltntstskswtwsnnwst633223333300vv00rrrrurrrrrpuvrooppppoiebZZZZYbeSPNMMNMMMJJJHHJHHPdJKhghccckwPHJMKJJKJJKJKKNMNMNNNMPSSPRVYTPNVTUTRRUUYROPSPQNRONLLNNNNORNLKNRMMRRKJKLLLKIIGFIOWXWWXXgcggllhlqshZddhruywnckmmnms19xntxzxxx633222000000upoprruroibbZbZZbbZbbbZYYVYYYZVYTTZTPPMMJJKKKNNPMMMKMYjdvdacchcasMMMMNPPPSVSPVTSRPRRPPRRRPPQPPPOOOROOONNQNONOQQOQQQOROONLLKLNOQWNJKJJMKKKKIIGFIKQUWXXXcckssmgchllulqdZjallsnhssqtswwttzwwxz4pppopoojjjjjjiifeeeebbVVVYYVYYTVVVTTTSSVTZbZYZZYVYTVZYVVVYZYYZYYVVpy6vdaaYVYqhTVVVSSSRSSPPPNNNNPRRSSSSTRTRRVUOPLMLOOOOLLLKLLOSOLLLOONRSOKJKKHHNOOONLLKIHGGHLUWXcgkmnkcggkkkstntq4jdpy4ussnnwywxtwx1nx+/+ppoiioofbfebbZYYYYYbYVTYTVVVYZZbYYZbbfifijjifiiiiifidefieeiebbZVYVbyueVVSVTSVwRRPRRTSTSSRSSYYTSTVTTYVZaURRPPSTTTRPQRPOLLLQONQSUUZYSUYNMKNMOOONNLLKKIHIIIQWXXXXcgkkqqnnkcccmnllhhopdlqjqqqdlqxwzlgkyly411jojfjooooooojopjrvv0vuuvvvvppruupjiojfifieedbbbbYYZZYVZTTYZVTZVVVTVdVVSSSSTVThlYZYVTTYYYVTRTTSRRUTRPVSRONUVZYTTOTQRQOOOTONKKLNOQUQMJHKHHIOQQOLKIIHIKLQUWXgccgkkljedgsltmcnchhpluyuuludcmuj1y5641snwxtwww033333333300v0yvurrprrrrpppjjiieefeeffebbbZbbZZZZdfebZbdbbbbaZdbbZiYbbbVVRRTTRxURTVTTYYTSTTTSYaVVRRTVZddhaajbaaYSNNOROOMPTTNKKMMIHHJMNOONLIIHHILOWXWXgcWccjqhdcpqkkgmngghshkwsUqyqnqlhcklms1wtmnmtkxznxz2020vvuurrrpppoopooojjijjifiifjijjedeefiijjefjiieeeifffiijojdZYVVVZbaZVZeeiiedlqYbZTRTTTTSVYYfjhhZVaddbddaaZUSQNQUTRMNUZSPMPRQLOOOKINIHHLUQUWWWWnqqlsqhfjaacknlgWclcclbZelqywcdhllgmkkl332hmmmmnnnntwwntvvvvuurpppoooooojjjijoopjjjjjoppopfeeefbdfioopppoooiebdbdbbbZdbabbbbiddZVVRSTVbwZiijpoqqojilljeaZVVPSRUZUYaVRVSRRNKJIKKKIIHHHHIIHIIKLOQQUXkXcXkngnqcchlcggms222uu0vr0j2222vynkgmkgknw377773971swtkknnhYqvvvvvrrpppopjjjjjojoojjifjjjjoiifibbjjfffebZbbbbZbbYZZZZZYVZYYbZYaZVTVdZYdbYZbdakadaYZZafeddeeaYSURUVUUaYQNOOKOOOMHIIIHHIIIIKOQUWXXWWXWXlkkccWWshashgXXXXXkglhUUWOXXUZUccWcgkkncq1777389830999993qqqaay6vvuuuvyvvvv0uprvrrprrpppprrppjijieeefjjpuv2322vroojjifeiiefebbbffeijppppjeedbYMHkNZacggcduddhpZUPTSUZVRRMKIIJHIJIHJHIIILOQUXXXggXWXXckhcassqieuhhcqnkmngk2332deRpiedeaURjUcjl0279278889+6277779136331swz0v00200000yvuruurrv0233336333300uurpruuvuuurrpjjifbYVVVVVYZbibbbTMVdZbebZbVSPMMRgnQcgmgk697796ueNKJKJHIIKJHGHHHHHGGHIKNQXXgwgglnygysUcWQlhhlcgaccahtz58854znZhljZYZZofYdoq0u76pu3yaywhnwzzxswxwwwttwtwxx333630vvvyyvy033223300022000urrrrrpjiieeefeijjjjpqpooojifiidVeeiPKHPbRPPfVfiifdaxxmkn18x5++9763dTKGJKNKKJIIIOaKLLQUWXXgXWnmgmkgvfhlqpkcakcmgXXgnovuyrvzxhknxuqjboy81eqywtmstynmggkkmmtmmmmnwwttswntwxxwt332333300233200v002200vrrruupjjojioprupruyuuuuuuurpuvurpjjaQQXWQOUQQLNVZfifVjknnn1zkskk1488464VZZNIKMTRUUVLUOgXXXXXUXmgsvpqbssys4kkmgkXXWXgknmtnqlhtkn2jYWWcghqlenkk48zttnmgcWOckkgkkkkkmknwwsnntwttxxww7633333000vvvyurrpopopprrrrrpy023323330336300yyyyuoopoiiebiYRabWkmkuhvvrv022vqylhihulyszz1y1yhUolcOLHGWWNLQOLOlchlWaobSlllgalkmggmkkXXXgcXXcXXXXaccljqkjcXgkXXWXgkkknxngs41txkksmmmskmswmmmkswntnttttxww30000vuuuurrruuruvu000030vrruuuuuuuuvyuqqppqpijidbppjeYZbpbdkmdmckwxy63vrvoeoobdpZRUOWe8+611hZdeacQNLOIQORaXWOKffbSaSdwzwlgWgXXXXccXWQRagkkhaactzlaaOWkgkcgkggXXgXWacay28+y5+6snhaYqxxxnnmmmsyrpqtxxxxtz0000022333223666666677663320yvrpojiijjjjiijeYZeddaaTSUdUf06uhdjdPJRe+uouWcTYVTafaeedcXWYTTPPPRTZZhdhhULQZQKamkLQdhslmkXXXWXXWWWXXckqlpv22v2v2ukshuys145zqgkkUUUUaktwxnksntz1oo0y1lSRdValgttnw27991tswxxt776666663666633332000000yvurqoqojjiiefejljjjieabdVVPRSRay01aPafYMMNJdeaZYfirvhokWtkXmlWURSVSKHGGTlirroeWdlWQIqgLgXXWXcggXXXQXgtyu66yRRu772r02rnUZnmhlxwkkggggmttmggXXXXgggkkmmkknmklell4zsnwz59+981zsxxx8878679630220vvuuurppqqqpoooopjooqqqpefedddhhaZZVTRVqiyioflp2xtuPKMLNNPPKPobYaphNKNIILLWaYSSTTMIENdpooiidWWWOOgUIELXQQXXXgWWWUWWqz14ydaWlbfly1llhl0jlwXWgggnmXXgggXXUQQWgggkggccalmtntmnhannwttxxttwttz4378600yju0yuyuuupolopppljjoppjolpjjddeaZaaYVVaVTYbZp++979++79lVPPSNPKMMNPYhjTbfieWQQWULQhfZfVYSPKHJKZrrupjhUQQQgaOFIWZWgXLajfQUUUUmggtaluozqlltwwthgmgOWWXgXgmmgcgXWgnmktgmsltxw8xhgkkkmkmnmntmtxtxzz44463300000vvuvuupquurlqpqqpjfieijdaYZYZaYSVTRSPPSYop79++999879iTefYbYdeVNOKZubefZeUahQQWaUcwyfVfZVbbTYPJrvpopskWQIWfbKXmrqsagglhllcUWnaRllahgkmqtmkUOXXXggXXXXWcXXWUXgXXXgkkmz515581nnttxtmkntsnswwwxxtnnt033223yyuy00yruuqqpjjjejdYVZidbaRTSVRTSSTTRPSSTj7999+++99+veYbrjcaahvpeNRqeeocclqaYWWWUgWc6uorr0hpprjNW0r0uggUQQgpfiQcgkw556883498yqhmnhehacahhWnktlphXXXXgWQZaZbUOQSUkhlu081885zwt4znnxstttmnntttzzzzzz63020u00ypppuurqpeebbdefZZddYRTRRNSVPNPVVSUZccg69999+999/0fijVZruls6760pu1y3ylqt1lhjqlccXk44lVbplhaRNUWnstqhUXXXlaVjrcXw81486ulln44zx1tkchhfYSVZdpv2222vlddhqjbaSYdlwx63633xwsnnz5581txmttmnzxtwwttxwwxz20v00riiefedioplppdZeVVbVVYZZVTTPTadachkkkkkkkk49++9+++//3ofifo021uru07+/46697864yzzztnngs1xxlidyscLUmktx00smmtXKIIIZsXXm3hZPZjqkmktqvpvxzulqv03ri7722377220vvvrru2untztnkmmknxqnxz54wtx44x4733188zxz11z3yv0ypofoffejpjdbibYYYYaeieZVYdhkmnnmmmkkggkggcx+++++/+/+yvpjjp27vZVYo20y196yy369666znwtcs+w1quj1lulcgg48y3ysmkkXLLOLQXXXUlkRaslags8zz1y32vvvvvv2v22vo272222v0777777vwwwmkmtnntzz44xw148++8889798886686zpppooojjjidbVfiZeeibbehhhllnsxx185ztsyugggggkghq89////+/8urfv1173pepde73u31jru0031665xxxxt4xnxt23lpvt1886z11nwcWULILWcccabhkVlpfo2hWsxuvvv772772227vp0p27r77337777v0u720w54wlZtx8988+++84zwwxz5zwtx1zxxzorpqqqfoijiibjlllpqyxxwwwxwz484999++89991uq11bi6+68888851uqswwsyywwlql1wtypbfllpuy1yz6636669w6238y68//7y61t41ssnngXXOQLu32zsqiZbfrulov22227979773239+yqq279773reTYr77332z8ylhpyuhqwsgnstn1xwtwz4z41zx455puqurqpquuy0yyzzzzzxxwx48++++8++//++9//88snjejo07//+//+1rpoorpTrrep11qjnpoieZbYeYSRRjpfihaZql19+//++/+99uyys88+8skXkgWOXyvdhijv22riiv22vwsq79+9737322uyyu79++3eej27999ul8xt16469++88ztt465z1xwxzzzzz4444yy0144444444zzzxwwx460yu366+///68//9zzwmgs5urj0637966931ojusqajeilu6qZlnoforvpibPSPNUUQRpcXhz5+//+97999778syz81knmgWLgUX4ldlhovoZfoft87234nl3yhURdubahyy01677727723994dPw6+1ddw84654zz4588sidjuyw5444414555555441zzwyuyyy073y388///88881u415zw5zxtmy33186uprpby38688596z558yllqsvvor2vTbTZbYWUUalt46/z++/+++9999+994149ntkWQUgmglNNov222veTYjlifoiYoqlhphYYlypMMqzz89307785555yqkzwu44zzx5558///++4wwy0yu4zzz1585544414446558368677544888887768qnxwxwxzzxtmn6968uhofZduy6638/+////+smnnsq032vvv0rpjeckmsXks8/5++/+9++++//++95txzw1tmggasqZehou92pojyyilojVqnlpdVduyzyhdYvv00266vvxtxxz591nnttntxx159888888844855584154455448999889+9188++8+55+++551zxxwtxxzwnmkkkmnnl151llojZVleo6++/////6uwyqqwpu3732vov230lmnkks5///5////++///+54x15585xwmggLW6vagnllv1183ubYkqyseahpuy4w11wty0wsnmnnnsuwxttttntnmmwtxxx441zz1xz45144544411z58556366816//9323+9+85z85zzxtwx636xxxxwwx1584rfp41slu3vqqq7+///+///333uy1xyy03322233664zmkl0+///4//++/+8858636885898wkUcXW160q1z672pp16iY411lyy6544888y55ztntkgntncntwtnnwxwxwwx4zwtw8xxxxxz45555555888544+8106y8+/+99+++/++8q4zzztqjllxwx4845z511663rr16uywu23zq9+++////////9777460tmmx5++064z454169/+8448888+989++++++58+96WOgcmz184466881shlhalqlklnwtwwslnwmkgXcgggknntttxwtwxwwxttnttxxzxwx154145454455555558//8843+++++/+99++81zzzz4zxtwwwz8ssy879ty0791u44pv3016519////////////88859854xxz89988854zz4106+/5/////////////+8/60qclmx5++/xn4nntxwnsnnmkkklkmywzshhhhtzqlhagmnnwwzzwgwz54xnttwzxtttwwwxz41zzz1555445898+/////+++++54445z55555588+854+yq068+97779+/+y1660376686+++//+++++9+++85x88455555688844553+2vvv2169///////////+z870ulttyhh45xtz4z45/+884wxxxzxz55xt4wqlnnxww4xsjqkgnwxzxxx44z4xxxxz444zzxxz41z11145555558"},"b":{"src":"img/shore-b.jpg","rows":[";;;;;~~~~~~~======-----------++++++++++*********xxxxxxxxxxx###################%%%%%%%%%%%%%%%%%%%%%%%%@@@@@@@%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%%%%%%%%%%#############xxxxxxx********++++++++--------=====",";;;;;~~~~~======------+++++++++++++**********xxxxxxxxxx############%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%%%%%%%%%%%#############xxxxxxxxxxxx*******+++++-------====",";;;;~~~~~~~======-------++++++++********xxxxxxxxxxxxxxx############%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%%%%%%%%%%%%%%%%%%%%############xxxxxxxxx*******+++++++-------====",";;;~~~~~~~=======--------++++++**********xxxxxxxxxx###############%%%%%%%%%%%%%%%%%%%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%%%%%%%%%%%%%%%%%%############xxxxxxxxx*******++++++--------=",";;~~~~~~~=======--------++++++++********xxxxxxxxxxxx#############%%%%%%%%%%%%%%%%%%%%%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%%%%%%%%%%%%%%%%%###########xxxxxxx****+~=+*+-=;~==~==;;",";~~~~~~~======--------++++++++**********xxxxxxxxxxx#############%%%%%%%%%%%%%%%%%%%%%%%%%%@%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#+++-xx++%%%%%%%%%#x*#%%x***+=--=~~~~~~~;;;;:::·   ··... ....... ",";~~~~~~======--------++++++++*********xxxxxxxxxxxx#############%%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@@@@@@@@%%%%@@@@@@@@@@@@%###%%%%%%%%%%+;;:·:::::···:;~=~;:::::::::::::::::··:·······..       ....          ",";~~~~~~======-------+++++++++*********xxxxxxxxxxx###############%%%%%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@#+~~~~~~==-*#%##*+-=~~~~===~~~=;:·::::::::::·····:::::::::··:··:·············..............           ",";;;;;;~~~~~~========-----------+++++++++++++**************************xxxxxxxxxxxxxxxxxxxxxxxx#xxx*++++++**********x**x****+*+++------------------+++++++--+++++--==~=~~~~~~~;;;;:::::···....··.....  ..",":·:::::::;;;;;;;;;;;~~~~~~~~~~~~~===========-------++++++++++++++++++++++++****************x*xxxxxxxxxxxxxxxxxxxx###############*~#######################*;x#x++-*-+x*----==========~~~=~~~;;;;;;:::·;;:",":::::::::;;;;;;;;;;;;~~~~~~~~~============---=-----------+--++++++++++*++************xx*xx*xxxxxxxxxxxxxxx#xxxx#############%#%%=.-%%%%%%%%%%%%%##%###x*+-x+==*==----~=~=---=----===~=~~=~~~~~;~;~~~;;::","::::::::;;;;;;;;;~~~;~~~~~~=============--====--------+----+++++++++++*+*+**************xxx*xxxx**xxxxxxxxxxxx#####x########%%%%:.·-%%%%%%%%##xx###x*-+=---=:·;*--~-*==----==-~~--====-====;:;~~;;;:::::","::::::;:;;;;;;;;;~~;~~~~~~~~~~~~==========~=--=-----+++-++--+-++--++++++++***********xxx***xxxxxxx#xxxxx##xx#########%#%#%%#%#%%.··:+%#x#xxx%x#x*=-~;~=--++--~~·.:::~*+-==-=====--====~=-==;~==~~~=~~;:.","::::;::;;;;;;;;;~~~~~~~~~~~~~=======-------=--==--=---=-+-++++++++**************x*xxxxxxxxxx###x##xx*xxxx#########%##%#%%####%#x~-;::*##%%####x-=~==++=%%%*@-=~==-;~-====+=+-==-=-====-----=-=====~;~;;:","::::::::;:::;;;;~~~~~~~~==~~~~~~=~=~=--=====----------+-++++*+*****++*+*******xx+**xxxxxxxxxx#xx######x#xx#################xxxx*x@@-;;#%#x+--+**---+**=~~;*+~******x+*+-++=-=~-=~===;;~-====-====~~~=~~~","·:::;:;;;;;~;;;;:;;;~~~~~~~~~~=====------------++------++++++++++++*******x***+**xxxxxxxxxxxxxx*xxxx#xx#x##xxxxx##xxxxx*****+++*#@@x~:=x**==--++-+x+;:·:.=-**-*++-**x+--++-===-;+=-*-=;=~---==~~==~~~~~;","::;:;::::;;:;;;;;~~~~~~;~~~=~=---===--=-=======-------++++++++++++*+++***+***xxx*x****xx*****xxxxx###xx#xxx*xxxx#x*+-=~-*xx#x#%*%@@%;~;%*-~=--=++*~~.:;;.·;-~·=x#*+*#x++-+++-=====~==~-*=~=:::;=~~~~~~;;","::;;;;:;;;;;;;;;;;;;~;~~~~~~~~======-========----++++++++++++****++++*******+***********xxxxx**xx***xx*******+=-+-+++x#%%%@@%##-x%@%=;;@#---*--=-=;··-=~:~+=~=--=-+++++-++;;+----====~;;~;;========++=~~","::::;:::::;;;;;;;~~~~~~=~===~~===-------=-------++-------------+++++**+++++*****xxx*+*****x*+*x***+*********++++-++*#@@%%%%%#x+=+--+**+%@++-+++--+-++++*+-+x******x***+**++-*+-~=-~==~--==:~+;;+=;::~~~;","::;;;;;;;;;;~~;;;;~~~~~~======-===--===-------------+--+++++++++++++*+****+**+***********+-+**++**++++**++++---*#%%@%%%%%#x*+++=-~=--+xx%*+-+*****++*x***+*x*xxx*+----x***+**+:·.  :~~~-;;-=-;:==;;;;:~;",";;;:;;:::;;;;;;;;~~~~~==~=====~~~===========-+++----+---++++-+++*++++******++++******+++**+*++++++**++*+++**+-*#%%%%%x++----+=~~--**xxxxxxx*+*x+xx%###xx+*x**x+***xxx#x***+*-++=~=~~=-=-====;~=-;~;;;;;;",";;;;;::::;;;;;~~~~~~~~~~;;~~~~=====~===----------------+-++++++-=--++++-+++++-+------==---+-+*++-++-=--==+####%%%#*+-+****-=--=--+*xxxxx*-++*#xxxxx###xxx*x##x#xx**x*#*=+#x*xx+-++x+**+~=~=;;~~~;~-++-;;","::;;;;;;;;;;;;;;;;;;~;;~~=======--=~~==---====------------------+++-===---~~~~===---+++--++--=~~~---**xx######x-+-+*+**x*+++----+x#x#x+*+-*###%%%%#%#xx####x**x*++*xx*..:=--:~~:·;-#%%#*+-===~-=~==-=~~;",":::::::;;;;;;;;;;~;~~~~~====~~~~~=====-======-----==--=-======--=====----=======---~~==-===--+++****xx#%##*++++++****++---=-*x+xx*##x##*x*x***##*x*x####x**xxxxx******-~=:*@~;;-=-~==--===~===-==-=~=-=~","::::;;;;;;;;;;~;;;;;;;;~~~~======~~~===-----===~~~~~~=+----==~~;;~~~~~;;~;~~~===~====---++*+**xxxx#####*+----++++*-+-~;==-+*x*+xxx***xxx#++**++x%%x+xxxx+*x#xxxxxxxx**xxxx*xx*+====-+~=~;=;=~---=======;","::·:::::::::;:;;;~~~~~~=~~~~~;;~~===~~~~~~;~~========~~~;~~~~~~~~==~==~====~~===--=--+++****########*+++++==+***+*-===+-+*#%+++x***#xx*x#xx*x#*+*x*####xx%%%%++*###xx#x**xxxx*+****--*+=+=~;::;;~~~=~~~:","::::;;;;;;;~;;;;;;;;~~~~~;~~;~~;;;;~~~~==~~===~;;;;;;~~;;~~~~~==~~~~~~=====~~~===--+++***xx#####x*+------++*x+-+++--+*@*@@@@@x#x##-=xx*x***++*x##x*x#@x+=xx##x%@##-~-##=-+==--+-----*+--++-~~=~~~;;;;;~~","::::::::::;;;;;;;;::::;;;;;;;;;~~;;~~;;;~~~~;;;;;;~;~;;;~~=~~~~~~====~~;~;;~===+++*xx#######x**+++++++~;··+++++*x**+%%@x%@%@#+-x~-;=-#@@@@x#%##%#**x#x*#-=;=**+=~~=~-=x~·::··.;%-+-----====-====---+~~··","::::::::::;:;;;::::;;;;;;;;;;;::;;;;;;;:;:::;;;;:::;;~~~;;~~;~;~~~~~~;~+-=-+++*xx########x**********--~-*+xxx+--=-#*=++=~~·:@#x#%@@@%**@@@@@@xxx#x#x#x**x###x***+--++-=~~+#*-=~--++~x%x--=~;=;;~--x#-==.","·····::::::::::::;;;;;;:::·::::;;;;;;;;;:::;;;;~~~~~~~;;;~;;~~~~~~~---#=-+*x*xxx####xxx*******+***+=;;~-+**#@@#**=-==#-=@@*=x@x@xx%**%x~*x#%#+**xx*+-*x+-+**+x##x**x*+-=~-++-*#*~-**---=;;~~~~~~~~~~~;;;","::···.·········::·····::::;;;;;;;;::;;;;;;;;;~;;;::;·:;;;;~~=~~-+x--=-***xxxxxxxxx****+-=-+**+-=+-=~-+-+**%%@+-x*;·;;=#%@@@@+x-+=-+*#%%%#~-+@@*=-xxxxxxxxx#xxx*x#x*+-*-***----~~-++*+=--~~~~~~~~;~~~~~;;","....····:::··::····:::::::;::;:::::::;;;;;;::···:::::······:·;==-+***xxxxxx*x*-+---+-~-x#**x~~;~-+*x#*++xx@##xx=~~~;~~x%##x*+#--x+*=~-*+##:;·*%-~##x++xx****x#+*x+**x*x***++****x*--+*--=~~;=--==~~~~~;~","··········:::···::::;;;::~::··:::;;;;;;::·......····:;;~;;;~=+*****x****+--======---=--=-~-~:~;++*#xx*##@#%+~##=-x*#*-x*=~~;=%*---%x·;·~**:::=:--~**+*xx++xx++++*x**xx******+--++--++--~~~=~~====~===~~~","···················::·::::::::::······:. ..···:;;;~~~=-+++++*+****+++-=~~~~~~~~=------=-====++*x##*****@x@@-==~==#@@@x**~;:;~#-x#*%%;.:..::··:·:~~+x-++++==+**+++-*x*x++++*xx+++--=----=;;;~~~~==~==~;~~","················.····::::·:·..... .   ...··:;;~~=~=-+++++++++++++++--======-----=~;;==-+-***+x#x*x*x%x-**@%=. ..·-#x#@%@@+~;=*+=x%%x*=····;·~+~+%=:=-+*x*x**xxx*+**+++--**++x#%x--=~~~-+~-*+;=~.;==~;~=~",".······...········.............·....··::::;;~~~==-=----++--------~:   =~~-=~---~;;;;-+====*xx*---+xxx-:.~%%..... :=-+x***##-@@%*+*+=+x=~:~~=;=;-%x;;-*+xx*x*xx--*+x**--++*+++-++-=-=-=--~:::~·:···:·.:;;",".............   . ........·······:·:::;;~~~===------------+--==;...·:;~=------+*-==~=~=---=***-*+*--+=:·:=%=     ;x%%x=;:·-x@@*+#+x*=*x-;:;~~;=-##+·;=*x+=*x++**xx-==-*++-+*+--------~==--==~~;·::=-=;..","               ...·········:::::::::;:;~====--==---------====~~~=~~~===-+**++--===+=:;;~=+++--+-=--=;:· ;~:-:::·:;=-=-~;:;=-~-+#*%x%*++-:·;~;;·~**-;:~-+%##%#xxx*+*-++***-==--==-~;;~~=:;;;···;+=·..:::·","        .......····.···:::··:::::;~~=~=========--=====~~~~~;;;;;;;~==-++*+----+-++*x+-+--+=-x+---+-:::·.:-*x--+=:~~=~--~:: ;~~:·:*%%#x#x.··;;:.·:#*.·-+-+*%#%***xx+-==+-++----=~=~~;~;:==~===~~:;;;·..:;","        .....·········:::::;;;;;;~~~~===========~~~~;;;;~~~~;;;;=---+-----+--==--**+-++x+-==xx+-*x~:·..·~#x**=+~;·x+;··~;;·.·:;;·++x*#xx;:::;;:;··::;:-+·:-+===+***++~;+---+-+-=~==~=~;;~~~~~~-~~=~;::::","     ....·...······:::;:::;~;~~~=~=====~~~~~~;;;:;:;;;;;~~~~;;~=-=--++-+++---=::·:;-xx*+--=+x#@*+-:··.~~+x-x-~-~;·-%~::;:;·~;+*=-*==++**···:;:~:·  ;:::==~;::;:---++===-=---=~~-+-==~~~~;;~~;~=~::;;~~::","  . ......····:·:::·::;;;;;~~~~~=====~~~~~;;;:::::;;;~-~===~=~:~~~;-+++=++--+~;;;=++-~=+++++=;;;::;=··;~···· .:~·~*#x~-;:;·~-=*x-~x-+:··.···::·.:· .;=x:     . :=-=++-=;~~--==~~~;~=~:;;::;~:·:;~;::::::","........····::·:::;::;;;;;;;~~~~~~~~~~~~~;;::;;;;~;~;+*~==-=:..···.::;=-+=;=--=---*++------=;::···*x=;~··.    ..·~+*x+~·..::;.·;;:-++. .. ...:.··..  ·*+·    . .;**++--==-===~;;:~~~;·;::::.::;::;::;::·",".....···..·~;;:::;;;;;;;;;;:;;;;;~;;;;~~~~;~;;:·;;;;·.··.  .;;;:·;:~=+-=~-*+**+-====--+++-~:·::·;:*-~:.. ·-·     .:=x#+-;;.......·;=:   ..·:·. .·~xx~x##=*~++--=-++*+-----++=;·.:::===~;:;;;;;~=~==;:···",".... ..····::::::;;;;;;;:·.    .:;;;:;;;;;;;~~;:;~·.:. ..··;;=·~:~=~~+++-++--==-----==---+---=~:··:~~~  ..·; .     ·~-;·.:·... ···.=;···.··:;..;-#+~+%xx*-;@x+----+====;;;~=-===~;;;~~=~~~~;;::::;;-::::"," ....·.······:::::::·..    .···:::::::;;:::;~;;;::.· ··;;:;:;~=-----===-===--=---*x-=-+~~====~:;:.··::   ..        .···::::..  ·:-==;+-=-~· .··*+=:;~-x*--==-=-+*+++----=--~===-=~~;;~~:;~~~;~~;:·:;::::",".......··.······::·      ·:::::::::::::·:::~~~;;~;:·;;~~;;:;==-~~=-===--~;=-+-==*+*-++*+=;;:::;=:;=~;:.   .    ..  .·:·::·:·.. ;-++--==--=~··:.:;=+-~~=-~;=+---=--==~-=---~~~~~++++~;~~;::::+*##*~::::::","...........····..     .·=:··::::::;:;:::;;;~;=~~~;;;;==~:;~==~=~~==~~~==;-++~=--=~;++-=---~~=-=----==-·  .       .....   .···;-~++**+--=;;····~~::*@x;~-;-=---=~=-+-----===~;~~;=~~;;;;:;;=+-~;;~····..·",".......·······.     ..·····::··.::;;;;;;;;;;;~:~-;:;~-;=;~=~~=~=--=~====--=;=--=~=;=+;;--===+**--==+##+:~-=-====-;.····:··.. ;~~+-~==;;:;..  ·;=~::~+~~==-===--+----------=~~~~=~~;;;;;~#*+**x-:       .","........···.........········  ·::::::;;::;··::.;#;;*;;;;:;~~;;=++-=-==~~~~;~-+--~:;x#++--++---++---==-===~;;;::::··~;;;~;;;;·~*+-*##x++-- .··;+~=--=--=~~==~~==--=-======;~~~~~~;;~~;;;;~+-=~=-=.  ·.   ","..........··........···········:···:::·.. .:;·;;;·:···;;;~;::;~---=~~====~~~==--==~==--x--x-=-**-=~==~~~;~;~~~;::;;;~-=~==~~;;;~++~=-;+**:~~=--==--=-=-=~=-~~======-====;:~~;;;;;;~~~;·:;:~:::-*+·.  .. ","...............·················:···:::;::::·:;:··:::;;;~~:~~=~;;==;~~~=-==~~~=====;~~-+;**~~=+++----+-+-=--==;~;;~;·;-+-~~~~==+#x*x#=--x+===--=++====~~~~==~=---~=======::;;;;;::~;:...:::::::·;::··..."],"pal":["#afb6b9","#a5b0b6","#a5aaad","#98a7b1","#aa9b8d","#979ea2","#8e9da7","#89969e","#a78d76","#a18368","#908e8d","#928376","#818f98","#7d878c","#77858f","#6e828e","#957b64","#90745a","#827973","#827164","#876b54","#806752","#7a685a","#79614d","#6d7c86","#6a757e","#6d6b6c","#6e625a","#5f7280","#5e6870","#576773","#4b6572","#755d49","#6c5c50","#6e5544","#685444","#615853","#615146","#604e40","#5d493a","#4f5c68","#4e545b","#534c49","#53463f","#445565","#434b56","#3d4b59","#304a56","#544236","#4a403a","#3f4045","#34404d","#453933","#4a2f2a","#36363b","#352d2b","#283b45","#28313b","#2a282b","#202831","#222024","#181e27","#15171e","#0c0d12"],"idx":"vvuuuussssssoffffeeeeccccccccccccYYPPPPPPPPPPPOOMMMMMMMHHHHHHGGGGGGGGGGGGGGGGGDDDDDDDDDDDDDDDDDDDDDDBBBBBBBBBBBBBBBBBBBBBBAAAAAAAAAAAABBBBBBCCCCCCCCCDFFFFFFGHHHHHHHHHMMMMNNNOOOOOYYYZZZZZZZZZddddddoooovvuuusssssooffeeeecccccccccccccYYPPPPPPPPPOOOMMMMMMHHHHHGGGGGGGGGGDDDDDDDDDDDDDDDDDDDDDBBBDBBBBBBBBBBBBBBBBBBBBBBBBBBBBAAAAAAAAAABBBBBBBBBBBCCCCCCDDDDDFFFFFFFFFGHHHHHHHHMMMMMMNNNNNNOYYYZZZZZZdddddeooovuuuussssssoffffeeeeccccccYYYYYPPPPPOOOOMMMMMMMMMMMHHHHHHGGGGGGGGGGDDDDDDDDDDDDDDDDDDBBBBBBBBBBBBBBBBBBBBBBAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBCCCCCCCCCCCCDDFFFFFFFFFFHHHHHHHMMMMMMNNNOOOYYYZZZZZZcdddddeeoovuuussssssooffffeeeecccccccYYYPPPPPOOOOOMMMMMMMHHHHHHGGGGGGGGGGGGDDDDDDDDDDDDDDDBBDDDBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBCCCCCCCCCDDDDDFFFFFFFFFFFHHHHHHMMMMMMNNNOOOYYYYZZZZZZddddddduuussssssofffffeeeeccccccccYYPPPPPPPOOOOMMMMMMMMHHHHHGGGGGGGGGGGDDDDDDDDDDDDDDDDDDDBBBBBBBBBBBBBBBBBBBBBBBBBABBAAAAAAAAAABBBBAAABBBBBBBBBBBBBBBBBCCCCCCCDDDDDDFFFFFFFFFFFHHHHHMMMMNNNNOZpoZYYdotpoopootzuussssssofffffeeecccccccccYYPPPPPPPOOOOMMMMMMMHHHHHHHGGGGGGGGGGDDDDDDDDDDDDDDDDDDDDBBBBBBBBBBBBBBBBBBBBBBBBBBAAAAAAAAAAAAAAAAAAABBBBBBBHYZZZNNZYCBBBCCCCCHNNHFDMNYNZoddopppttpptzzzz445+++77999+9999999/uusssssofffffeeeecccccccYYPPPPPPPPOOOOMMMMMMMHHHHHHGGGGGGGGGGGDDDDDDDDDDDDDDDDDDDDBBBBBBBBBBBBBBBBBBBDDDBBBBBBBBBAAAABGGGDGGDDDCBCCYtty5222225554ytppyz2222222222245455555555757799++++//+99+9+/////////uusssssofffffeeecccccccYYYPPPPPPPPOOOOMMMMMMMHHHHHHGGGGGGGGGGGGGDDDDDDDDDDDDDDDDDDDDBDDBBBBBBBBBBBGYsssssssfcOHGGGOZeosssssssssssu255552522222555555222555555555555557777777777999999+9889+++///////////vvvuuuussssssfffffffefeecccccccccccccYYYPPPPPPPPPPPPPPPPOOOOOOOOOOMOOOMMMMMMMMMMMMMMMMHHMMMHHHHHMMPYYYYYYPPPPPPOOOONOONNNOOZYYZZdddddddddddddddddaZZZZaaaaaaZaaaaakklklqqqqqqrxxxy32236668++868888++//8+4444444zzzvvvvvuuuuuusssssssssssssoooffffffeeececcccccccccccccYcccZYYYYYYYYPPPOOPOOPOOOONNNNNNMMMMMMMMMMMMMHMHHHHHHHHHHHHHHHHHHFSlFFFFFFFFFFFFFFFFFFFFFFFNnKFKSYaNWSKSbWWXhhhjjhljjhllmhmmmrx00rx33030x0444444zzzzzvvvvvuvuuuuussssssssofoooffffffeeeeeeeecccccccccccZZYYYYYZYPYYPYOOOOOOOONNNMNNNNNNNMNMMMMHMMMMHHHHHHFHHFHHFHHFFFFFFFFh1UFFFFFFFCFCCFFFFFFFFKSSaLRlkShjXWWblhmhXXXgggXghhjlhlljllrmrrmrrlrrx004444z4zzvvzvvvvuusuuusssssssofoosooffofeeeefffeeecceccccccccZZZYYZYYYYPYYYOYNOOONNNOONOONMMNMMMMNNMMMMMMMNNMHHHHHHHMHHHFFFFFFFFC111UCFFFFFFFFFKKKFFKLWTkbhWk23xSaaqbLhkWbbblhXnlXgiiigghihlyyxrlrx00300044444zzzvzzvvvzvusuussssssssssssoofffooooosfeeeccceeccccccceccZcccZYYccZZYYYOOYOOONYONMNNNNMMMMMMMHMHMNHHHMHFFHHFFFFFFFFFFFFFFFF1111QFFHHKKKFKKKShWqxmhXVUUgVqq69554qQTbhhbkhjjhbhjjihmjhhlrlhhlmmlllr084444zzzzvvvuuuuvuuusssussssssoooeeffeeeeeeeeeefeeeeeceecZccZZZYYZYYPPPOOOOONOOOONNNMMMMMHHHMHHHMHHHHNHMHHHFFFFFFFFFFFFFFFFFFFFFKiUn11QFKCCFFFKKWlqklTWkECFSCbhmjjgrlVljhkWkTbkjgiXiighVVXXhjhjljjhlxrx00444zzz4zzzzzuuuusuuussssoossssssososseeeeeeeeeeceeeeeccccYYYYYYPPPYYYYYOYPOYOOMMYYYMMMMMMMMMMHHHFFHHHHHHHHFFHFFFHHHHFFFFHHHHMHNNLAAUniECFKTbWWSLWhWWLOolinSZqQQJJJRITSTWTWhajrbklhjlxwmXhijhbljjlrmljllm544zzzvvvuuuuuzzzvvususssssssssfooeeecececccceccceecceecZYZYZZcYYYYYOYYYOOMOOOYNNMMHMMMMMHNMHMMNHHHMHHHHHHHHMMMHHHHMHMMNYNNYaaSSEAAIi1gKLShlbbTWVRKZx3758kbSNbLRRVQQLRXWWTbhlhXrTjbSbhrhlbbhjjmrllrnmmrx44zzzzzz4zzzzzzzvuuusssusssssoeeeooeeeeeoooooeoeeecccecYZZZYZZZZYYPYZYPPOYYOOMNMNNONONMNNNNNNMHHMHHHHHHHHMMNMMMHHMYYadpaSKKKKFCLEAAEiinETbrkbbhUUQtp81yy96xaq7oLKSTLKLURXUURXgiihirjgnbShlk000xlmmmmrrrx44zzzzzzzzuvzzuuzzzusussssssusooofoeeeeooooooeeecZccZZYYYYZZYYOOYYZZZYOOOONYYNOONNNNNNNNNMHMMNNNMNNNNNOONONOYZpdZaSaaKFFCCCCCFKbLEACinnAEWhVRVVjWlt66bkr0qSlnjWXgVURUURVURwwTbWXXggjlmwrtxwjhjhhjjhSTkmm4z44zz4zzzzuuuuzussssssosooossooeeeeeeeeeeeeedccZZccdddddddddecZZZYYOOYZYZYONNONMNNNYONNOONNYYNNNOZYOYOYOOONYZZZaaSSFCACFCCCELTgTXWTLQREATUVURRVVUVUURRRUVUJRRRRQQJQQRRQRRUXLTWlhXmhllbakl0mTxxTlr00rlmr4zzzzzzzuuuuuuuuzussssstofeeoeeeooeeoooecdddddedddccZddZZZZZZYYYZZZYYYYOYOYOYYONNNYYNNOYYZdYYYYYOYYZZYONZYYYadbSKECCCFCCFKLSTTUiWliWWUJIEQUXUQJQRQURQJJJQRRJJJJJQTXXVXJQQQRLQR038/+2llrhxrWjbr0kjwrr00rxzvzzzz44zzzzuuuuusstusoosooeeospsooooooooooeccZZcdecZcdZYYZZZZZYOYZYYYYONNNZZYYYYYYYOYZZYNZYZZZZZZYYZZYYZZSSSaSEECCCFKTTbbbbThjmXWQQJJJJJJIJRJJRJIEIIIJJRQIQQJRQQJJJJIJQQRULWTTjljrriXkghllkurlhrmrxxxxxvuvzzzzzzzuuuuuuutstspttuutpppooooopooeddcddcdededddddZZdZYYYZZdoddZZYYdZZZZZZZdddZdddddddZZZOYZZZZdoaakkSKKEEFCFKSTWTTQLQbkbWiWWTQJJJIJJVURQIJIJJIIEIJIJQIIIIIIJQJJQIQjTIIQJJRVRRJRQQWlhppyvtnnwnbSSarrzzzzzzzuuuuuzzuuuuzuuuutpooeoooeeeoppooeeeoooeddddddddddddddcddZZYYcddodddptppooddddZYZddZZZadpppaaaSSLKEEEFFELbTbTTTTQLQTTTWWXXRIIJIJRRRVRIIIEEEEIEIJJEIIIJQQJQRUQIJQ88ykWa0ll03xaEEEEQUVjjjlgjmjiXilrr44444zzzzzuuuuuuuuutttspoooopppttooooeeoooeoeddddeoeddedoooeooddeooooddddoeooooodddppoodopoaaaSSSLLLLKEFFKLTTTTTTQQQQTTWWVjVQJUIIQIIIIIRJQIQQQIIQJQIIIIIIQQJIIIJQQQQQQVlh0LCqxxbhbrkhWWjhhmjhigigXgmjXhn4zzzzzuzzzuzzuuuuzuuuttppppoooeoopppooeeddddooppppptpoZddddooppttttptttttttppooopopdddaaaTSSSLLLKKKKFFKLTbbWWTTTTTWTWmrjhXRRJJUIJJQQQJJIIRRRQRRJEEIRJIIJUQIIJJJJIJJJQRJIIJJIIQUhjjhhUlkqxlwlmXVVgjjjjjjx4454zzzz444zzzzzutsssssopttpttttpoooppptptttpooooeeoopppttptpppppoopoopeoooppododdoaaSSSSLSLKEKFFFFKSSTTTTbkTTQQTLWhhhTVTLEERRUJRQQIIIQJIJJJIIQURJJIIIIIJEEEETUQIIIIIIJQJJJJJQRQQRRWhQRkTlrx00xwnmljlmm04zzzzzzzzzuttuuuuzzttpttttttttttttttttpooppooopzzzzztttttttttpoopppptpoooopppppkkbaSTSSLLKKEFFFKKSSabbbbWTSLLTWRURWXTQASAAAAAIILEKffNIQJJQQURJIIIJRJECJTjLLEELEEEEaqVIIihUhhVVUXXXgVQUgVWTWlrllllxrxxrrm44445454zzzzzzzzuz455zzzzzztttttttttttttpppttttttttttttttpoppppppooooptttyyppkkTTTLLKKKEEEEKKLQTTTTTWWrr33TTTRUQJQSaECAKCAEEEUaMsfvfcEAAAEIIEIIEIQQIIIQEbhrjLQTjllijVkLq622668yFgUXXVVVijjgVgjjhbbWTln6654zz444zzzzzzzzz44zzzzzutttuzzzzzuuzzuuzzz4zttzzz2zzttttttttttttpppppyqabkWTTTLLKKEEEEEEKLLQQQQQQQQQWWmhQTJIIRWoofHYfccsyq32AEKFCACAEQLAAAAAAIJIIIIJIJQQJIIIIRJJTWbUUginnUEQXgnbbTTmLELXXjlwjxxqaaKHZoo8555754z44zz44zzzzzzuzzzz455544zzzuuuuuuuzzzzztttppppttttttttttttpqqbabKhhTLLLKKKKKKKKLLQQQQQQQTQQQRgwxmWWQQIAAFPPodoiEWkAASiIAKCLLELLELqLLEEIUQJJJQUXRJUVURQUJIIJJQIJRgjnhTadSFNlWSSbbbkr0nnrnnrmnllqxw0445777777557575555555554zzzuzzzuuzzzzzuuuttttttyyzyy52yttytpppqaTLbbhWSSLLKKKKLLLLLQQRTVhhWQQThjWhgmVUXUQJEECZdLSu5twXICAAAARIWThXTLEEECKqdWAAJjgIJJJJJJJIIIJJQIIIQUVQXRQRXWWbqrgRURRgXVmrmmnlmnwnmnnnww999777555455554555554zz44zyzzzzz444zzzzzzzzz255522222666633330khbTSLLLLKKKKLLLXWWWWTblbIEQQLrr0rhUQIIJRRJIAEKIIgrqpylnLEEKMPcEbbLTShqbSTEE3v5SCeqEIJRRJJRRQQJIRQJRQQJQJQQQRRQQRQLQVVURVXimmwiXggjnnmmmwn7555555555544555444zyqyzztz45554zzzzzuzz268++88866522xrlrwwlhTSSSSLLLLLSSabhhhkkkbbWkbbjXnXm0nwUURIJJQIEAEEUnEEhWLLESWKSkvvvoESbbWEK7r6lSL354o5ffqQQURJJURJJRUUUQIQRJJQJJRQRUVVVUXXUUVVlmmjmngijimijjnwn5555575555755555555255525544zz4555525628++96652yyqqklhbTTTSSSSSSSSSSadppqqqqqqkkbbaabbhXhjigURQJIIJRQQLAKAAUgkqklKAACKSNp44vtEaKKSEEy7297z477464uvZLVUUUUjiUJRRRUVQJQJRURRQIITUUVXgXVVXjwr0qqmnjjmjimwnn77777577775577777755555445559898++++/+888652yqqqklkbTTTTTSaaaaaaaaaabkkhkhlbbbbbkszrklVTXRQQRJIJJIJJEIbNNCFk9+997aFKHACCCatvpSakLEEKSk6363x3qTnREk4sdVRJQJQQJJIQWQRRRUVXRRRUIEELVVgmnmWTlbSSykp8xkklwmjn777777777777755777779999999+99867888652222xrqqlhbbbbbbaTTaaaaaabbq2+/+jlqhhlhWWlxwwwXTjjijQJJRVUXULIKe49qCC99999+5oaeNNNZIJiACESTSTkSKkq0rnjxkwXEIrvfZUJJQJJJJXXRTLQQVVUURRUUXURXgggXigXr000q3036626+3rr9999997777799+++9+9999998777555652222yxxqrlkkbbbbbaaaaaaaaaabbkq88862rqlbWWWWWRRWhjmlmiXVgjRQJVRUJWdcs475kEk/////yKCCKk256gJCELWETLLkNNdv2rrnxkWIIR34fSLRiJJRRQJIJgjjVRRRVURRVVVVgVVXjgiXXghnmw310kdot99///+++++//+++++99977777775522222222200rlkkkbbbbkWWaabbbbbbkkkqqqllqqlhhhRQQURWXkljRl2r0njURUXVUUgVbsv47+0r4e44454ykbgXmw00kescSEQEKCSZZe440mww6qJQVw2voSEEIEIJJJJRRVURRQQVigVXijVnwwwmj00ww338rTk8890033////++++9999979777777552225222220xqlkkkkkkbbkbbbbbkkkkkqrqqrrrqxxrqlhXWUQTXWWWWWWTQLThTXgUiXLTXgXTb444495bSLWWUk4qlkmXVm229vffv45LEEKLKK833wx3860IQ86XToWLEEESQRJJRXjjUXURVXVXjmgnnwnw0ginjiimn0xwr3973x++++++++9997757776555522222yxxxxrqllkkkkkkkbbkkkkqqqrrxrqqqqxyyxkhWXUVgXXVUVVghXVRQTVURLUViiLLTVQLq47997qEILTjUnw3KSy63r0r594vvv4aTLLEKLr000xx026311w1ha80WTghbRRQRRRmwUVVXUXUVjjgjmjn00nnnnnnWnmjmw03039++++99997997577565222yy20xqxrqlkkkkkkkqqqpqqyyy2yyxxxxrqqlqrxqhhhhWUUVUURVXXh3033wXLKQUVXiTKKCLSd4479qpTLWLbmgnw3bCt22z5w8qyYNkaSkkSTSS366000q56++1110hkl030x0VVgUUgiiggXVXimnXVXgjnmmnwwmm0nin000wnw33++9++9997766552522232yyyxxrqqqqlkkkkkkqqqqqyy2222yxxxqbmljjlll2qqqrXUUUjRUVWTlwwwiUUXniUUUUUkyy444vf53ni1777+80n6qSKKpdv4x3qbbLKakKaS266+866003+23/+wgL0//+++9+0jgjRUgjwmwXXijmnnwmin0ww00xn031wn00100109999988666662y32y2yy0rxyyyyqqqqqqllqqqqqqxx00xxxxrrrxTQlllbl29+6668300igUjwjXggXVVRRUUUUVVXkv44477SLlnm559///+997pZNKSq78811w86xr2aSS8++++888277779+/3TT3++++9/+xRRUUVXjiVigjlxx2nmmw300000830w01w00003899986666886qqy220xxxxryyyyy2yxxyyqqqrrrrmrxrrx06xrwx69868++8xxx0303niWXinXRRQRUXiiijVVUUUXq44225z4Lbm199+5b8///++7zpKKSWww8+88+886yk2+/+8+6268+93vMNqKEEiRmURVXjgRRRUVXVVXUUg069522lgjm030wwwwlkqkkx03339+++++86633322222yyyyxxx06+////82yyx00xrrxxrrrw0xr682+++836xrk3n0njnmUUUVRUVUiiXXXXXiiXXVUVXgjq5770rlr/+9980/9////+4paw383388++3668ky2668622y+8xaHcqTEKKShwCIUVXXXUiggiwwwngXggim0xwnnjmnnnww0000xqa0000+++88686666622222222388////+663302200001111wnx0x33+8/330w0x3xnjXVXXXgiiXiigVXiVXVQLVgXTmnigjgn20377633+++79+/+///+/944444v47+//32akbyZakbq3+866SSk3xqbLSWhhjXigUQRRUVVVgigXmjiiXhnmwwnm0wmnrrqqr033x00039968888777666633226/////+603300003000011110nmnrwnw330wmn0x0wihhmniggiiVgnwgXUVihLTLVUUQTgww010wj0wjnw08//+9++++99+/97445474599+xaSSabkbaWlr33183wjTalmjgnwjUVXVjgXijjXiXVXmmnmmTTTTmwnm00010aNKFSq03310088888888888666688/////86k033333300x0x0000xwnwjmnnw0xwjir0wrjinhmmgimnniiwXUUngXXinrTWhigXgmnjXgXgXXghb6//8++/////79979/++8666xblTTLLSabkxr6333nm11SAL0mgwggXgXjngXUVXVXgggjmrmmrhnnww0w00rkZapyqq3683+83999988866666668////+886636333668000xxw0xxxxxxm0lb03xmbwjwnjnminiXXinigiigViwgVggjiwjWw0gXigiUQQVXgiTEKa0qbkaodpkaq833333338++xqrTWiikyy2x++/+3win11mRnnjjgjjigVUVVVVVggXgXjmmmmjmnww0wwlFNZYNMa2//+////+988888886668+888888863666666++6333333x030y33008yFxwSrwww0wnnwwiUUgigijnnnnwmVUVgn0wIETTVVRUVVVUUXVVgiXjjjnwx0000031nwwwnwwww3kSabJEJLTTaa+833wTniggggXjnmjimmjiXXgXgiiijjwmmmmmnwwmmwwwwraakkkdo8//78///9888888888668888888866666368863333300038++83x3xxx63333xwwnw11wnggginjigiimnjggggiijghXVLXVIhgVQRXjnjjmnnwnwnnnw11wwnqbgmghlm0wxqSTiiVwTLL1jniggiiggjgggingXmwjjigiihjjjiw0nnwwww0wlnnx33w0q003aNZ6+//8+/+9998999+8888888688666666333663336333000330030x0333000xwmn1nmjmwwgjwnnmgXginmniiiiiwnmXU0LLnnjUURVXVVUVUXgXXijwnwwmr5xgUgmnmmgiTELTIEkWWLTjigXXgWWjigimnnmiimigggmjjiijij030wwww00mw088800313333x3036+88"},"c":{"src":"img/shore-clean.jpg","rows":["======------------+++++++++++++********************xxxxxxxxxxxxxxxxxxxx#######################################%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%","==---------+++++++++++++++*********************xxxxxxxxxxxxxxxxxxxxx####x#########################%%###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@@%%%%%%%%%%%%%%###%%%@@@%%%%%%%%%%%%%%%","==---------+++++++*******************xxxxxxxxxxxxxxxxxxxxxxxxxxxxx##################################%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@@@@@@@@@@@@@@@@%%%%%%%%%%%#%%%%@@@@@@@@@@@@@@@@@@%","==-----------++++++++****************xxxxxxxxxxxxxxxxxxx########################################%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@%%%@@@@%%%%%%%%%%%%@@@@@@@@@@@@@@@@@@@@","==-----------+++++++++++************xxxxxxxxxxxxxxxx####################################%%###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@%%%%#%%%@%%%%@@@%%%%@@@@@@@@@@@@@@@@@@@@@@@","=----------++++++++++++*****************xxxxxxxxxxxxxxxxx##############################%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@@@@@@@@@@@@@@%%%%%%%%%%%%%##%%%%%%%%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@","=---------+++++++++********************xxxxxxxxxxxxxxxxxxxx############################%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@@@@@@@@@@@@%%%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%%%@@@","=---------+++++++++******************xxxxxxxxxxxxxxxxxxx##############################%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@%%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%%%%%%%","=---------++++++++******************xxxxxxxxxxxxxxxxx###########################%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%@@@%%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%%%@%%%%","---------+++++++++*****************xxxxxxxxxxxxxxxxxxx#######################%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%%%%%###%%%%%%","--------++++++++++*******************xxxxxxxxxxxxxxxxx######################%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%%%%%%%%%%%%%%%%%%","--------++++++++++++*****************xxxxxxxxxxxxxxxxx####################%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%%%%%%%%%%%%%%%%%%%%%%%%%","--------++++++++++++******************xxxxxxxxxxxxx#########################%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%%%%%%%%%%%%%%%%%%%%#%%%%%%%%","---------++++++++++***************xxxxxxxxxxxxxxxxx###########################%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%%%%%%%%%%%%%%%%##+~=+###x-~·=","=---------+++++++++***************xxxxxxxxxxxxxxxx############################%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%@@@@@@@@@#*~=~~;+++=;+%%%@@@@@%%%#x***##%#x****-=--==~=~=~~===~~~~=;:::.   .~;.. ·..","==--------+++++++++****************xxxxxxxxxxxxxxxx#################################%%%%%%%%%%%%%%%%%%%%##%%%%%%%%%%@@@@@-:::···::::::::::;~~===~~~~~~~~~~~~~~~~~~~~~~~~~~~~;;;:~~~::.·        .·. .:.  ","==---------+++++++++***************xxxxxxxxxxxxxxxxxxx########################*-~;;;~~==--+x#%%%%%##**+=======-------+-=:.·······:::::::·:::;;;~~~;;;;;;;;;;;;~;;;;;;;:·:·····:·;:...                   ","====----------++++++++++*******************xxxxxxxxxxxxxxxxxxxxxxxxxxxxx#xx**=;;;;;;~~~~~~~~==--+-=============~==~~~;....········::::::::::::::::::;:::::::;;:;;;:::·:::····....     . . . .....       ","·············::::::::;;;;;;;;;;;;;;;;~~~~~~~~~~~~~~~================-===--------++++++++*****+*++*************++*++++++++++++**********-++*****xxxxxxxxxxxxxxxxxxxxx**+++++++++++----------======~~~~~~~",".··.····::··::::::::;;;;;;;;;~~~~;~~~~=~~~~=====~=~========-==------+--++++++++++-++-++++++++**+++**+***********x*xxxxxxxxxxxxxxx#########*##xxxx#x########%%#%#%%%%#%%%%%%%%#%%%%%%%#*+++++++=;;~=---=-","..······:···::::;;;::;;;;~~;~;;;;~~~~~~~~~~~==============--=-=---==--------++---+-+++++**++**********xxxxxxx#####xx######xx###x+;#x#xxx#x#xx########%####%%%##%%%%%%%%%%%%%##%%=x#x*~·;+++;=~·+++++++--",":·::·····::;::::::;:;;;;;;;;;;~~~~~~~~~~=~=======~====----==-----+-----++++*++++****++****+******+*+***********++**xxxx**xxxxx#-.+xx########x#####%###%%%%%%%%%%%#%######%%###x*  =·.=+****-++-++++++++-",".······:;::::::·;;;;=~;;;;~~~~~~~~============--==-------+++----==-+++----------=----+++++-+***++++++*+*x*******x**-+x#xxx#x***.~x##*x####%%%%%%%%*~++*x*%%%%######%%%##xxx*+***+. .;*******++++++++++--","·:;:;;;;;;;;;::;:;;~~~;:;~==~~=====~==---=======---=~:;~~===~=~==~~~=====--=~==--=----++*+*+****++********+*x*xx=-~###xx####x+: ~##%####%%%%%%%%%#x%%###xx#######x**++*********-=~~;+x**+*++++-+++++-+--",":::::::::;;~;~~~;~~~;~;;;;;~;;;~~;~;;~~;;~:::;;;;:::+-===~~;~===---+-=-==--;;+--+--++-+=+***********xx#xxxxxxx*-x#xx########x+~;x%xxx#######xx***x##%%%%%##x*++++++***+*******+***+*~+++++++------------","··::::::;.;;:···:;·;:::::;:;;:;:~;;;;;;;;~~=~===~~;;~~~~---=-+-=~~==++---=.=+****+**************=+xxxxx#xx#x##x##xx#x#x##xxxxxxx*x#%x#*#*+**%%%%%%%###xx**+++++++***********--********+++++++++-++++----","...·.······.···  .···::··:··::;;;~=~=~~==~~;;~~====--=-=--==-===-------=-:*-*+*****x****x****x*-xxxxxx***x*****-+++-*****+x*+*-++*xx####x######xx*++++~;+++++;=+************+=-*******++**++++++++++-++-","    . ..·····::·::·::::·;::~~;;:~~~~~;;~~==~~=-=~~~~=-++-==~+---===-+-++++~+*+++++************--++--++++*+++-++*+-~+*x#****xx##xx##xx*+*xxxx+++=-+++++++*****+****************+********+*****+++++++---+","···:··:...::·:::::;::;;;~~~~~;;:;~~~==~=-==----======-+--=--+----=+-+****+**+=-+++*=++******x*++-*+++---++-+*+******xxx########+;~-x-~*++++++++=;-+*****+*******;;=-***********+++++***+++++++-;;-+-----",". .···::·::···:;~;;;;::;~~~~~~~~~~----==~~========----=--*++---++--+++++++--=-*****-=+++*+*****+**++*+++++xx**xxx#####*#####xx-+++=~~**+++++++++*********;;-*++++*~:=****************++++++++++~·:;=----","·::::··:;;;:::;;;;;;;;;;~======~==~~~~~~===---+---------==-=~;=-++-===---++*++*+++*+++*++****++***+++++++*x###########; -++++;-+++++***-*++++++-+********-~-=++++++********+*:;~;=:~=----=-----==-------","::::·;;:··::::;;~::;;;;:;;~~===;~==~=~;;~==~;~===;~;;=--~=~===-=-==~~~===---=-+++*---+*+***+**+-+++++**xx########xx**++=::-+:-+++++++++.~**++**+::~~++++++**+++==-+-++*+++--=~.·  ~;;~~~-=~;~~=~~;~:;;==","··:::;:·::···:·;;~;~;~;;;;~;~~~~~~;~==~~=~~~~~~====~~~~;;~==---======--++***++++---++++*+++*+***xx#########xx*++--+++++++=:;:++++++-+++-++++++++-+~:;~+****+++-+---+++-~;;==~~~==---====;;;·;~~;;;···::;","··:··..··:::;;:;;:;;;:::;;~;·:;:~;:::::;;;~~~~===--====-=-------==---====~;;;;~====--+**xxxxxxxxxxxx***+++-----++++--+++++==-*++++++++++++++++++++-++**++++++---+++-==~;~=~;;~~====--+===-====--=====~==",". .·····. . .....  .···::;~~~~;:::;~~;;:::;:::;;;~~=~==~~~~~;~~~~~==-==-+----+-+**xxxxxxxxxx**++-----------------++-+++++++--***++++++++++++++****++++**++-++++-+-----===~~=+-+++++++---++-+-:  :;=-===~","     ..··....···:;;:;;;:::···:;;;:;;~~~;~;;~~~=====~~~~===~~~~~===--++++*+******+xx****++-----=-----------+++++-------------++++++++-++++++***++++++-++++++++++*****+++++++++.  ;~-+----------~;=-=~~~==","          .........····.··:;;;;~~~~~~;;~===~~~====----=~;==-==--++++************=.:~;=-=------------------------+++++++++++++++++++++++++++++++*+++++++++*++++++++++++++++++++=;-+-------==============~","     .....·····.···::::::;;;:;;;~~~~~~~~~~=====---==---------+++++*******+-++--==;~=----------------------+-+++++++++++++++++++++++++++++*+**+*****++++++++++++++++~------===-~-----===~--------=====~~~","....··.·:::::::::;::;::::::::·:::::···::;~~~~~~=======----+-++++++++++--===~~~===~==------------------+++-+++++++++++++++++++++++++++++********++*+++++++++++++++++=~----------------=~--==--===========","...··.......···.. .  .·.····:~::;;;;;;~~~====-------------+--++---============--------------+----+-+-+++++++++++++++++++++++++++++++*+*++++++++++++++++++++--++++-+==--+------------------=~:~=======~~~",".....  ...    ..... . .:·:. ~x:;;~~~~=====---------------=====~========-----------------------++---+++++++++++++++++++++++++++++++++++++++++++++++++++++--------------------------------==~===~===~~=~~~","            ...··.··::;·   ·==~~~~===================~~~~~~=========------:.·-=------------+++++++------++++++-+++++++-;+++++++++++++++++++++++++++-+++++++--++++----------===---;=----=============~~~~","         ....····::::;;;;;::;~~~~~~=======~~~~;;;~~~~~==~~====~==========~: ··;=-=------------------------+++++-+++++++~  ;-++++++++++++++++++--=---+++++++-++++------------====~  .~===~=============~~","    ........···::::::::;;;;·:~~~~~~~~~~~~;;;;;;;~~~~~~~~~~=:.·..~:~~~~~;;;;:~~~====----------------------------+++++++++=·:;~++++++++++-----+----------+---+-++-----------=---===~·  :======~~~~~~~~~~~~","    ....·····:::::::;;;;:·  .~=~~~;;;;;:;;;;;;;~~~~~~~~;;:· .·:;~~==========-----------------------------------++-------~~+++++++++++---+----------------------------==-=========~;~;========~~~~~~~~~;;"," .....·······::::::::;;;;;;:::;:::::::;;;;;;;~;;~~~~;;;~~~~~~~=============---------------------=--------------===~=-------+--+-=---+--+-=--===---------------------=====~~~;;;;~~~~~~~~~=~~~~~~~~;~;;;;",".....·········:::::::::::·····::::::;;;;;;;;;;;;;~~~~~~~~~~~~~==~============---------=------====-------======------+-+-+-+--;·  :·;-----=---=-------------------======~~~~~~~~~~;~~~~~~~~~;;~~~~;~~;;;;","........············.······:::::::::;;;;;;;;;;;;;;;;;~~~~~~~~~~===================--==----=----===------==----------------==;:·..:==---------=------=----------=--=======~=~~~~~~;;~~~~;;;;;;;;;;;;;;;;;"," ..................·······:::::::::::;;;;;;;;;;;;;;;;~~~~~~~~~~~~=================--==----==---------=====-----------------------=-===-------==-=~~=====================~~~~~~~~~~;;~~;;;:::::;;;;;;;;;:","           .......·······:::::::::::::::;;;;;;;;;;;;;;;;~;~~~~=~~~=====================--------=-=~~========-==-=-----=-------=---======---===-=;~=========~~=========~~~~:;~~~~~~~~;;;;;;;;;;;;;;;;::::","            ......········::::::::::::::::::::;;;;;;;~~~~~~~~~~~~~~~~~~~~==================-==================---===--======~=====-=-=========~===~~~==~==============~~~~~~;;;;;;· ·:;:;;;:::::;;;:;:::","           ........·········:····::::·::::::;;;;;;;;;;;;;;;;~~~~~~~~~~======~~~~~====================================-~~~;~=~~==~~==================~=~=~~~;~~=======~~~~~;;;~;;;;:. ·;::..·::;:::······"],"pal":["#fcebd9","#fae9d6","#f6e8d9","#f4e6d7","#f3e3d0","#efe5da","#eee2d5","#e9e2da","#ecdece","#e6ddd4","#dfddd7","#ded9d4","#e0d4c8","#dfbe97","#dcb68b","#dbb387","#d5d7d3","#d1d3d1","#d0cfce","#c5cecd","#cdc8c3","#c2c7ca","#bbc6c6","#b2c5c3","#d6b692","#d7b287","#bbbfbf","#c2b7ab","#adbdc1","#aab6bd","#9cb9ba","#96b3b8","#d6af83","#d4ac7f","#d0ab81","#d0a97d","#cfa679","#cba479","#caa174","#c99e71","#c3a484","#c59c70","#a9acac","#aaa198","#8eadb4","#8da4a7","#7aa6ac","#709ea6","#c3996c","#bd966d","#bb9166","#b68c61","#a8917c","#92918c","#6c949b","#5a909b","#ae855c","#9e8064","#85807b","#56828e","#8d755f","#816852","#5f6f71","#635a50"],"idx":"ssssfffffffeeeeeeeecccccccccXXXXXXXXXXWWWWWWWWVVVTTTTTTTTTTTTTTRRRRRRRRRRRQQQQQQQQQQQQQQQQQQQKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKHHHHHHHHHHHHHHHHHHHHHHHHHHHHFFFFFFFFFFFFFFFFFFFFFFFFFFGGEEDDGGGGGGGGGGGGIIIIIsfffffeeedddddddcccccccccXXXXXXXXWWWWWWWWWWVVTTTTTTTTTTTTTTTRRRRRRRRRRRRRRRQQQQQLLLLLQQQKKKKKKKLLKJKKKKKKKKKKKKKKKHHHHHHHHHHHHHHHHHHHHHHHHHHHFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFGGGGIIIIEEBDDDGGGGGGGGGGGGGGsffffffeeedddcccccXXXXXXXXWWWWWWWWVVTTTTTTTTTTTTTTTTTTTTRRRRRRRRRRRRRRRQRRQQQQQQLLQLLLKKKKKKKKKKKKKKKKKKKKKKHHHHHHHHHHHHHHHHHHHHHHFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFDDDEIIIIIIIIIEEBBCCDDDDDDDDDDDDDDDssfffffeeeeddddcccccXXWWWWVVVVVVVVVVVTTTTTTTTTTTSRRRRRRRRRRRRQQQQQQQQQQQQQQQQQQQQQLKKKKKKKKKKKKKKKKKHHHHHHHHHHHHHHHHHHHHHHHHFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFCCCDDDCCDDDDDDEEEEEEEEBBBCCCCCCCCCCCCCCCCCsffffffeeeeddddccccccccXXXWWWVVVVVVVTTTTTTSSSSRRRRRRRQQQQQQQQQQQQQQLLLLQQLLLLLKLLKKKKKKKKKKKKKKHHHHHHHHHHHHHHHHHHHHHHHFFFFFFFFFFFFFFFFFFFFFFFFFFFFFCCCCCDDCCCDGIIIIIEBDDDDDBDEEEDBBBBBAACCCCCACCCCCCCCCCsfffffeeddddddccccccccXXXXWWWWWVVVVVVVVTTTTTTSSSSRRRRRRRRRRQQQLLLLLLKKKKLLLLKKKKKKKKKKKKJJKKKKKJHHHHHHHHHHHHHHHFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFCCCDDGGGGGIIIIIIIIIIIIIIIIEEEBBBAAAAAAAAAAAAAAAAAAAAAAAAAAAfffffeedddddccccccXXWWWWWWWWWVWVVVVVVVVTTTTTTTTSSSRRRRRRRRRRQQQQLLLLLLKLLLLLLLLLLLLKKKKKJJJJHHHHHHHHHHHHHHFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFGGGGGGEEGIEEEEEEEEEEEEEDDBBBBAAAAAAAAAAAAAAAAAAAAAAABEIIEBAAfffffeedddddccccccXXWWWWWWVVVVVVVVVVTTTTTTTTTSSSSRRRRRRRRRRQQQQQQQQQLLLLLLLLLLLLLKKKKJJJJJJHHHHHHHHHHHHFFFFFFFFFFFFFFFFFFFFFFFFFFFFFGGGFGGGGGGGGGGGGEEEDDDCBBBBBBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABEEEEIEEEfffffdddddddcccccXXWWWWWWWWVVVVVVVVVTTTTSSSSSSSSRRRRRRRRRQQQQQQLLLLQLLLLLLLLLKKKKJJJJJJHHHHHHHHHHHHFFFFFFFFFFFFFFFFFFFFFFFFFFFFGGGGGGGGGGDDDDDDDDDDCCCBBBBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBEIIEEIIIEffeddddddddcccccXaXWWWWWWVVVVVVVVVVTTTTSSSSSSSSSSSRRRRRQQQQQQQQQQLLLLLLLLLKKJJJJJJJJJHHHHHHHHHHHFFFFFFFFFFFFFFFFFFFFFFFFFFFFFGFFGGDDDDDDDDCCCCCCCCAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBAAABBBBEEIIIIIIIIEEEIIffedddddddddcccccXXWWWWWWWVVVVVVVVVVVTTTTTTTTSSSSSRRRRRRQQQQQQQQLLLLLLLLKKJJJJJJJJJJJJHHGHHHHGHHHGGGFFFFFFFFFFFGGGGGFFFFFFFFDDDDDDDDDDDDCCCCCCAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBEEEEEEEEEIIIIIIIIIIIffedddddddddcccccXXXXWWWWWWWVVVVVVVVVTTSSSSSSSSSSSRRRRQQQQQQLLLLLLLLLKKKKJJJJJJJJJJJJHHHGHHHHHGGHGGGGGGGGGGGGGGGGGGFFFDDDDDDDDDDDDDCCCCCCCCABAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBEEEEEEEEEEEEIIIIIIIIIIIIIIIffedddddddddccccccXXXWWWWWWVVVVVVVVVVVTTTSSSSSSSSRRRRQQQQQLLLLLLLLLLLLKKJJJJJJJJJJJJJJJJGGGGGGHHGGGGGGGGGGGGGGGGGGDDDDDDDDDDDDDDDCCCCCCBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBEEEEEEEEEEEEEEEEEEEEEIIMIEEEEEEEfffddddddddddcccccXXXWWWWWWVVVVVVVTTTTSSSSSSSSSSRRRRRQQQQLLLLLLLLLLLLLLLJJJJJJJJJJJJJJJJJJJJJGGGGGGGGGGGGGGGGGGGDDDDDDDDDDDDCCCCCCBABBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBEBBBEEEEEEEEEEEEIEIIIIIMY00YMMMMY08offffeddddddddccccccXWWWWWWWVVVVVVVTTTTTSSSSSSSSSSRRRQQQQQLLLLLLLLLLLLLLLLLJJJJJJJJJJJJJJJJJJJGGGGGGGGGGGGGGGGDDDDDDDDDDDDCCCCMb1r116bbbr1bEEEBBBBBEEEIUbbbMIEMUbbbbbrbrrr0r0r00rrr0000r06669////16/9/699sffffedddddddcccccXXXWWWWWWWWVVVVVVTTTTSSSSSSSSSSRRRRQQQQQQQQLLLLLLLLLLLLLLLJJJJJLLLJJJJJJJJJJJGGGGGGGGJMJJJGJJIGGGDDCCCCb6666+66666666666600orr111111000000000000000000000001060006898/////////89/989//ssfffeedddddddcccccXXXWWWWWWWVVVVVVTTTTSSSSSSSSSSSSRRRRRRQQQQQQQQLLLLLLLLLLLLLUqt22ttttqqqaULJGHGGJMUadqqttqqqqqqqqqqdqr6+++++666666666666666610001116110616600006116666688888885899////////////////////sssfffffeeddddddcccccccXXXXXWWWWWVVVVVVVVVVTTTTTTTTTTTTSSSSSSSSSSSSSSRRRRSTaVt22vvtttttttttttqdddqqtttttttttqqttqqtt11+++++++666+666666666666666666666666666166616666666688889999/////9/////99999///////7777777733333333333222vvvvvvvvvvvvvvvvuuuuuuuuuuuuuussssssssssssssssfssssfffeeeeddddcccXXXXXXXXcXXXXXXXXXXWWWWccXcccccccccccaaaaaaaaaaaqbaUaaaUUUUUUUUUUUUUUUUUUUUUUUbbYYYYYYYYYYYoiiiiioooopoxxxx00zzz07777737733333333333322v2vvvvvvuvuvvuuuuuuuususuuusussssssssfssfsfeffeeeeeeeeeeeeeeeeececcccceXWcccXXcXXXXXWWWWVWTVTTTTTTTTTTSTSSSRQRQQQQQQUQRRTSSRSQQQQQLLLKKKKLKJKJJJJHHHGGJJJGIIEEIMNYYYYYYYo55xljjjmj777737733777333323333vv22uvvuv2vvvuuuuvuuuuusuuuuuussssssusssssfffssfffefeefeeefeceeecXeXXccWXXXWWWWWWTTTTTTTQQRRQSTRQQRLRTSRQRSa1QTRSSTRRRSRQQQRQQLLKQLLLKJKQLJJJJHJFFGGGGIMIEDrUMNb185YYO0006YZggZZgil3333777733333333333333vvvvvvvvvuuuuuuvvuuuuuuussuuuussffffusffffeefffeeecccXceccWXXWccWXXXcXXWWXXcXcWWXWXWWXWWVccXWTTTSXWTSVRSRq9bSTRRQQLKRRSQLLQKKLLLKJJJJJJJJHJJIMMMMMIIIIMMNN//o++rYOOOOiZiiZggiggZgi77777733333333333vvvuuv3vvvuuuuvuusussussussusfesssfesffeceeefefsseecefffeefffessesefeccceeeWXXceccccWeXTXXXWXXXTWWqaTRTTRRSaaa+1RQQUUQRRKKJJJHJJJUtabUSbJJGJJJJMMMIEIMMMNNNOOONZ9/+6NONOOOOgZZOggZgOPll73v33v22vvvvv33232vvuv232uuuuvuuussuusfefssusuuufeest62uvsssuuussuuuuusssefsusseesfeffecXcXcXXWWccWWXWWWXXcXTVTTrq1QRQTVRQLQUb6+1LLKKLLKKHHJHHHHHMUHJMMMMUMMMMMMIMNNOOOOONNNNNNorr01bMNOOOgPZghhgZghigij33333333323vvuuuvvvvvvvv2vvu32vvvvuv3vu2vv333v222336afssuuv2vuuseeeeesfssfft1efecfeeeeescXXXWXWWXXWWTTRTSSTTSTaqSRSSQQLLQLLLUar1UHSSUMMMLMMMUUUUbUMMIIIIIMMMNYYOOOOOOOOONOOOOOOOOOOOyOOPPPhgjiihihljjilj77333333372237773372333332332333vvvvvvvvvuuuuuuuuv2vtuuusffsseftvuuseceeet+tcXXXXeXWWXXXWWWWXaaaraSUTTSQSSRSRRSRQUSRSQSLLUSUUUUUbUMJMMUMUbbUJIIIIIIMMMMNNYZZZZOOOYYYOONNNNNNooOOOOOOOOOOOPZZZPhhgghhjhij777777777777777+77777337737733v3vuuuuuvsuvu2vvvussssssfsssstfsssfeeefqqtq1VqXcXXXXWVWWWWTWWVVTarUTTUTUVaUUUWaaaqbbbqaUUbbbUbbbobbUUUMMMMMMMMIMMMNNZZZZ00gOOOY10ZNONNOONNNNONZooOOOOOOOOOOOPPPOPPPghhhhhj+77777777773733733733337233vu223vvvvu22uuuuuuufuuuuutedcesttefefssseceecddrdWdccccaaWWWWaVWVaaqqcaqqqaaaaaaqrbbbbo0YbUMUbbUUUMMUMMMMMUbbMMMNYZZriZZZOOZZOOOOOZNNNNNNNNOOOYYYOOOOOOOOOOOOOOOOOOPZghhhjhhh777377377733723323233vv2vuuuuvv3vuuuususfsseesesssstsfdqftfedeeffsdedXXaWXXXdtecccWtdaaaWaWVUaaqqaabbqqqbbbbbbbUbbUUUUMMMMMIMMMb00bUqrYYZZZZZZZo0oOOOOOOYNNNNNNN60roONNNNONOOOOOOOOOOOOPPOPPZZo10lhkkhjk7+77773373377722vvv22332uvvvuuvuvusfffssuussstsssteeffseqaddefecdeecddXXccqqtdaWaaaqtdaaaaaUUUabUUbbbbbbbbMUUUUUMMMMMMbMIMMMMMrYZZor1NYOOZZZZZZOOOOOOOOOY10oOOPOgO05oOOONOOOOOOOOOOOOPPZZPPPPZg0985pjjkl73333773222322222222v22vutsssssuuuuuutuusssffeceefeeeeeftsft12tqdddtttqqqdaaaaaaaaaaaaabaaaaabbbUbbbbbbbbbUMMMMMMMMMMM0/bYYZi1oZZZZYbNObYZOOOOObYYNNNNNOOo0opZOZZOZOOOONOOOPO550608ywkkkhpijlllppkljjkll3233722277773222v32v222322vuttsvvttttt2vttsu2ttstvv22tffttttttqqqqtt11ttrqqqrqbbbaqqqbbbaUUbbbbbbbbbbbUMMMMMMMMMMMUNNYio88oZ6oPPOOOPgZP+0OOOOOOY66t0YOZZZZOOPggppmhhhPPPPhkmxz99/9z4zyyympz4zywyz4z544pn77333227777773722vvuvvv22vv2vutvuu2ttttttttttvttstttttt261ttqqqqttqqrqqbbaabbbbbbrbbbbbbbbbbbbUUMMMMMMMMMMMMUbYYiiigggZZZo616ZPPZZijghhkhPPhggPPkP050xOOOOOOPZlhkmkhPhmzzzwwyyywnhkmnnpwz4484zz44489945477777777722222222222222222v27222v222272222tttttttqqqqttqrqqqqqqqrrqqqrrrr005000rrrrrbbbUUUMMMMMMUUMUUbNYYZiiiiiggggijggggZrrbNYhhgggggZPZZgZZggiigjgPOOPOOgZOiihZPglppx4zwy4zzzwwwnhhhxppmnxwxkmwpwppxwx7++77777++++++++++++777222ttvv22222tt22666166611111rrrr1111000r01rrrqrrrbbbbbbbbbUUUUUUUUUUUUbbYoolljjijjjjiiiijiiihgggghghmkOOOPPPPPgggggZPOOOOOOOPPPOOPOliigZhhkkmkkpmmxzwPigggghhhjkhhhhhl5//54wmnpwz++++++777++++7772222222227+7762126111111111t1rrrrrrr1r1rrr0000rrrrrqbbbbbbbbbUUbbUUUUUUbbooollllllljjjjjjhhggghiiioollkkkkkhgPgPPPPghPPZgZZOOOOgiZZZigZggPPZPOOOOOOOOPPPggggh9/95xjhkkhkhhkmkky5pmwyzzpw+++/++++++++++++++++++++66611111tt111111rrqr1rrrrrqbrbr00rrrrrrbbbbbbbbbUUbbUUUbr+600oolllllkkjjjjjjjjlllliiiiiiiggggZggPgggggZgZZPZZZZZZZOZOOOOOgZPPPPPPOOOOPPPPPZZPPggggghhhm5lhhlkjkllmppwpwxnnnnnpwy+++++++++++++++++6666666611161111111rrrr1rrrrrrbrrrrrrrrqqbbbbbbbbbbbbbbbbbbbooom4ywmlkkkkkkkkkkllljjjiiiigiiigZPPPPPPPZggZgZPZZZPZZZZZPOOOOOOOOOOOOOPZgZZPPPPZZggh0oijhjlmmmmxmkjjkxnnxmkkkmmmmmmnwxyxx++++++++66666666616666666666666666888856011111rrrrrrrrrrbbbbbbbbbbbbbbboooxxxxwwwxpnmmlkkkkjhhjkkjjjjhhghhhgPZZZZZggZPPPPPPPPPZZZZZZZOOOOOOOOOOOPOOOOOOOZZPhPPPZZggo0lmmmmmkkkjjjjkkmxxmmnnmmnnnnppppwww++++++++++++6+699////+++666861666001111rrrrrrrqqbbbbbbbbbbbbbbbbrooopxxwpppnnmmmkkkkkkkkjjjjhhjjhhhhhhhhgggggggggZPggZPPPPZZZZZZZgPOOOOPOPPgOPPOOOPZPPZPgggjjghhhhhppjhhkkjjjhjlkjkkkkmmmmny5ywppwwwxxxy++++++++++////++9///9/95859/rM6111rrrrrrrrrrrqbbbbbbbrrrrrooxxxxxxwppnnmmmlkkkkkkkkkjjjkkjjjhhhhhhhhhgggggggZPgggZPPPZZZZOZZZZZggZPZPZPPPPOPPPPZZZghhhggjkljjijjiiijkjkjjmkkkjjjkklkkmkmnnywnwxwwwyxxyyz////////////989889886616///8rr111rrrrrrrrrrrrrrrrrro0xxxyxxxwwwwpnnnmmmmkk599mnkkkkkkkljjjhhhhhhhhjjjjhhhggghgiggZZZOOi0YZZZZZZZPZZPZgZPZgPgZZZghhhhhghghhhjhggggijjjjjklmmmnmmll5mllmmwpxxpnxwwwwwxxyyy/////////999988866666111116661111rrrrrrrrrr0000zzzzyyxxxyxwwwxxpwpnnnnnppy5/98znmpmmmkkkjjjhkhjjljjjjkjjhhhhgghiggZgZZZ0//5oPPZZPPgggggghhZgghjjmjjjghghgghhhgigijllkjkkkkkmnnnpy//9xnnpxwwwwwxxxxwwxxxy////9999++++666666666666116850111rrrrrr00054444zzzyyyyyyxxx59899x4yxxyzz5554zzywwwnmkkkjjjjjkkkkkkjjjjjljjjjiihhgggghggg0855xgPZgZggggZjkkjhhjhkmkjjijiiiiiiiiiijjkkkllklmmmmmnwwx8//5wpwwwwyyyyyyyxyyyz///+++++666666666666611668//9z0111005555444444zzzzzzzzzz55899944yywwwwwwpnmnmmllkkkkkkkkkkkkkkkkklhhjjkllllljjjhhhjjjjjjxygZZgZgZZgggljjhjjhkmhkjkmliiiijiiiiiiijlkmlpnmnnpwpppwwy4y4wwwwwwwwyyyzzzyzzzz/++++++6666666666666666666666555555544444444zzzzzzzzz4zzyyyyyyxxppwwwwnnmnmmmlkkkkkkllkllkkkkkkmplllllljkkllmmmmppxpmmjjhhhhjjhjpljhhhkhhnmkxppjllmmljjlkkjjijlllllmppnnxxyzz444zyyzzyyyyyyyzyyyzz4z4444+++++++66666666666666666888888855444444444444z44zzzzzzyyyyyyxyxxxxwwppnmpnmnnmmmmlmllmpmllmmmnnmmmmmlmllpwpmmmmllljhhhgjhjhjk59//584kkjjkpmklpjjjjllkkjkklkjjjlllpmpwwxxxyzzzyzyy4zyyyzzzzzzzzzzz4zzz4z4+++++++++666666888899999888855444444444444444z44zz4zzzzzyyyyxxxwwwwwppnppnnnnnnnnnmmnpmlmmmmmmmmpmlllmlmmmmmlkkkkjiijjiijjpx588994wnmmljjkkjknkkllllmlmlmllllllmmlmmnpwwxxxyyyxyy4zzzzz4444444444zz44444+++++++++99999999999999888555545555444444444444z4444zzzzzyxyyyyxxxwwpppppppnnppppnmmmmmmmmnnmmmmmmlmmpmnmnmmmmlljjjjjjkljkkkklmllmmnnnmkkklklnnmpyxwwnnnmnnwwpppppwwpwwwyyxyyyyyzzzzzz4z4485444444444444/////////9999999999999888885555555544444444444444444zzzzy4yxxxxxxxxxxwwwwwwwpnnppppnppmmkmmmmmmnmnxynnnnnnnnmmmmmllmmmnmmllmmmnmmmwnnwwpmkmnnnmw4ywwwwnnwwwyywwxwwwxwxxyyz54zzzzzzzz4z444444444444444444////////999999999999999888885555554544444555555444z44zzzzzzyyyyyxxxxxxyyyxxxwppppppppppnmmnmnwpnnnppnnnnppnnnmmmmmmwmmmmnmppywpnwnmmmnnnnnppnnzwwwyzzwwyywwwwwwwwwwwwxyyyzzzz444448994444444444444444455///////99999999999999999888888888888888885554444444444zz4zzzzzzzyyyyyxxxxxwxyyyxywpppppwppppnpnpppppwwpwwwwwpppppppppmyzzzyyzypwyywwwwnwnnwwwwwwwwwwywywyyyzzywwxxwwxyyyyzzz4z44445999485999844544988889"}};
 
-/* ---- theme ---- */
-let theme=localStorage.getItem('dg-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
-function setTheme(t){theme=t;document.documentElement.dataset.theme=t;localStorage.setItem('dg-theme',t);$('#theme').innerHTML=svg(t==='dark'?'sun':'moon')}
-$('#theme').onclick=()=>setTheme(theme==='dark'?'light':'dark');
-if(location.hash.includes('dark'))theme='dark';setTheme(theme);
-
-/* ---- mock app window (design width 1100×620) ---- */
-const LOGO='<span class="m-logo"><svg viewBox="0 0 24 24"><path d="M2.4 20.6c1.6-5.4 4.6-8.6 8.2-8.6s6.6 3.2 8.2 8.6z"/><path d="M2 20.6h20"/><path d="M10.8 12V3.2"/><path d="M10.8 3.2l6 2.2-6 2.4"/><path d="M7.8 17.2h.01M12.4 16.4h.01M14.4 18.6h.01"/></svg></span>';
-const COL=['#3178aa','#267d69','#926839','#855a99','#aa5360','#526bb2'];
-const ico=(n,i)=>`<span class="m-ico" style="background:${COL[i%6]}">${n[0].toUpperCase()}</span>`;
-const TABN=[['proc','进程','<span class="m-cnt">539</span>'],['disk','磁盘',''],['uninst','软件卸载',''],['startup','启动项管理','']];
-const SYS={cpu:12,mem:63,disk:4};
-function topbar(tab){
-  const meter=(l,v)=>`<div class="m-meter"><span class="l">${l}</span><b data-k="${l}">${v}%</b><span class="bar"><i data-b="${l}" style="width:${v}%"></i></span></div>`;
-  const hint={proc:'搜索进程…',disk:'过滤文件名',uninst:'搜索软件…',startup:'搜索启动项…'}[tab];
-  return `<div class="m-top"><div class="m-brand">${LOGO}DumpingGround</div>
-   <div class="m-tabs">${TABN.map(t=>`<div class="m-tab ${t[0]===tab?'on':''}">${t[1]}${t[2]}</div>`).join('')}</div>
-   <div class="m-meters">${meter('CPU',SYS.cpu)}${meter('内存',SYS.mem)}${meter('磁盘',SYS.disk)}<div class="m-meter"><span class="l">网络</span><span class="net">↓ <b>1.2M</b></span> <span class="net">↑ <b>310K</b></span></div></div>
-   <div class="m-fill"></div><div class="m-search">⌕ ${hint}</div><div class="m-ic">☾</div><div class="m-ic">⚙</div>
-   <div class="m-win"><span>—</span><span>☐</span><span>✕</span></div></div>`;
-}
-const PROCS=[['System','4','0.1%','0.1 MB','0.1 MB','0 B/s','0 B/s','210'],['explorer.exe','5120','1.0%','142 MB','96.4 MB','32.8 KB/s','400 KB/s','64'],['chrome.exe','9100','5.3%','220 MB','150 MB','1.8 KB/s','2.2 MB/s','46'],['chrome.exe','9140','2.6%','310 MB','260 MB','0 B/s','0 B/s','24'],['Code.exe','8800','2.8%','310 MB','251 MB','4.5 KB/s','11.7 MB/s','38'],['WindowsTerminal.exe','10036','0.1%','29.4 MB','52.8 MB','0 B/s','0 B/s','26'],['Docker Desktop.exe','12120','3.1%','260 MB','210 MB','17.2 KB/s','1.2 MB/s','34'],['DumpingGround.exe','12760','1.1%','48.1 MB','31.2 MB','79.6 KB/s','0 B/s','17'],['svchost.exe','880','0.4%','24.5 MB','10.1 MB','1.2 KB/s','300 B/s','14'],['audiodg.exe','151016','0.3%','24.0 MB','19.1 MB','0 B/s','0 B/s','3'],['Spotify.exe','14400','0.5%','150 MB','98 MB','0 B/s','0 B/s','41'],['go.exe','28156','12.4%','64 MB','48 MB','100 MB/s','40 MB/s','9'],['bash.exe','9804','0.0%','4.6 MB','6.8 MB','0 B/s','0 B/s','4'],['AppInsightsPlugin.exe','3280','0.0%','40.7 MB','73.4 MB','3.3 KB/s','0 B/s','14']];
-function bodyProc(){
-  const cols='minmax(200px,1fr) 70px 72px 100px 104px 92px 92px 72px';
-  return `<div class="m-bar"><div class="m-seg"><span class="on">列表</span><span>树形</span></div><span class="m-btn">❚❚ 暂停</span><span class="grow"></span><span style="color:var(--muted)">每 1 s 自动刷新</span></div>
-   <div class="m-tr h" style="grid-template-columns:${cols}"><div>进程 ⌃</div><div class="n">PID</div><div class="n">CPU %</div><div class="n">工作集</div><div class="n">私有字节</div><div class="n">读取/s</div><div class="n">写入/s</div><div class="n">线程</div></div>
-   <div style="flex:1;min-height:0;overflow:hidden">${PROCS.map((r,i)=>`<div class="m-tr ${i===4?'s':''}" style="grid-template-columns:${cols}"><div>${ico(r[0],i)}${r[0]}</div>${r.slice(1).map(c=>`<div class="n">${c}</div>`).join('')}</div>`).join('')}</div>
-   <div class="m-sel"><span class="grow"><b>Code.exe</b>  <span style="color:var(--muted)">PID 8800  D:\\Programs\\VSCode\\Code.exe</span></span><span class="m-btn">打开位置</span><span class="m-btn">复制路径</span><span class="m-btn d">结束进程 ▾</span><span class="m-btn">详情</span></div>`;
-}
-const SQ=(items,w,h)=>{const tot=items.reduce((a,b)=>a+b.v,0),out=[];let x=0,y=0,W=w,H=h;let rest=items.map(i=>({...i,a:i.v/tot*w*h}));
- const worst=(r,s)=>{const sum=r.reduce((a,b)=>a+b.a,0),mx=Math.max(...r.map(q=>q.a)),mn=Math.min(...r.map(q=>q.a));return Math.max(s*s*mx/(sum*sum),sum*sum/(s*s*mn))};
- while(rest.length){const s=Math.min(W,H);let row=[rest[0]],i=1;while(i<rest.length){const nr=row.concat(rest[i]);if(worst(nr,s)<=worst(row,s)){row=nr;i++}else break}
-  const sum=row.reduce((a,b)=>a+b.a,0);
-  if(W>=H){const rw=sum/H;let cy=y;row.forEach(r=>{const rh=r.a/rw;out.push({...r,x,y:cy,w:rw,h:rh});cy+=rh});x+=rw;W-=rw}
-  else{const rh=sum/W;let cx=x;row.forEach(r=>{const rw=r.a/rh;out.push({...r,x:cx,y,w:rw,h:rh});cx+=rw});y+=rh;H-=rh}
-  rest=rest.slice(row.length)}return out};
-function bodyDisk(){
-  const cols='minmax(220px,1fr) 100px 100px 130px';
-  const files=[['Users/','17.0 GB','17.6 GB',45.8],['pagefile.sys','6.3 GB','6.5 GB',16.9],['Program Files/','6.1 GB','6.4 GB',16.5],['hiberfil.sys','3.1 GB','3.3 GB',8.4],['Windows/','3.0 GB','3.1 GB',8.0]];
-  const ext=[['.mp4','2','8.1 GB',0],['.sys','9','10.3 GB',3],['.zip','4','3.3 GB',4],['.dll','9','2.0 GB',1],['.vhdx','1','4.0 GB',5]];
-  const tiles=SQ([{n:'Users/',v:17.6,c:'#65748a'},{n:'pagefile.sys',v:6.5,c:'#3178aa'},{n:'Program Files/',v:6.4,c:'#65748a'},{n:'hiberfil.sys',v:3.3,c:'#526bb2'},{n:'Windows/',v:3.1,c:'#65748a'},{n:'ProgramData/',v:1.4,c:'#65748a'},{n:'swapfile.sys',v:.27,c:'#855a99'}],1100,190);
-  return `<div class="m-bar" style="height:44px"><div class="m-chip on"><b>C:\\</b><i style="--u:68%"></i><span style="color:var(--muted)">126 GB 可用</span></div><div class="m-chip"><b>D:\\</b><i style="--u:45%"></i><span style="color:var(--muted)">512 GB 可用</span></div><div class="m-chip"><b>E:\\</b><i style="--u:35%"></i><span style="color:var(--muted)">1.2 TB 可用</span></div><div class="m-field grow">📁 C:\\</div><span class="m-btn">浏览…</span><span class="m-btn p" style="min-width:84px;justify-content:center">▶ 扫描</span></div>
-   <div class="m-bar" style="border-top:1px solid var(--border)"><span class="m-btn" style="width:28px;padding:0;justify-content:center">↑</span><b class="grow">C:\\</b><span style="color:var(--muted)">占用 <b style="color:var(--text)">38.5 GB</b> · 逻辑 <b style="color:var(--text)">37.0 GB</b></span><div class="m-seg"><span class="on">树形</span><span>平铺</span></div><span class="m-btn">导出 CSV</span></div>
-   <div style="display:flex;height:188px;border-top:1px solid var(--border)"><div style="flex:1;min-width:0;overflow:hidden"><div class="m-tr h" style="grid-template-columns:${cols}"><div>名称</div><div class="n">逻辑大小</div><div class="n">占用空间</div><div>占比</div></div>${files.map((r,i)=>`<div class="m-tr ${i===0?'s':''}" style="grid-template-columns:${cols}"><div><span style="width:8px;height:8px;border-radius:2px;background:${r[0].endsWith('/')?'#65748a':'#3178aa'}"></span>${r[0]}</div><div class="n">${r[1]}</div><div class="n">${r[2]}</div><div><span class="m-pb"><i style="width:${r[3]}%"></i></span><span class="n" style="width:42px">${r[3]}%</span></div></div>`).join('')}</div>
-    <div style="width:270px;border-left:1px solid var(--border);overflow:hidden"><div class="m-tr h" style="grid-template-columns:1fr 56px 80px"><div>文件类型</div><div class="n">文件数</div><div class="n">大小</div></div>${ext.map(r=>`<div class="m-tr" style="grid-template-columns:1fr 56px 80px"><div><span style="width:8px;height:8px;border-radius:2px;background:${COL[r[3]]}"></span>${r[0]}</div><div class="n">${r[1]}</div><div class="n">${r[2]}</div></div>`).join('')}</div></div>
-   <div style="border-top:1px solid var(--border);flex:1;min-height:0;display:flex;flex-direction:column"><div style="height:28px;display:flex;align-items:center;padding:0 12px;gap:10px"><b>空间图</b><span style="color:var(--muted)">点击目录下钻，点击文件在表中定位</span></div><div style="position:relative;flex:1;background:var(--surface)">${tiles.map(t=>`<div class="m-tile" style="left:${t.x}px;top:${t.y}px;width:${t.w}px;height:${t.h}px;background:${t.c}">${t.w>60&&t.h>20?t.n:''}</div>`).join('')}</div></div>`;
-}
-const APPS=[['Adobe Photoshop 2025','Adobe','4.2 GB','2025-03-12'],['Docker Desktop','Docker Inc.','3.9 GB','2025-01-08'],['Microsoft Office 2021','Microsoft','3.1 GB','2024-11-20'],['Visual Studio Build Tools','Microsoft','2.8 GB','2024-09-02'],['Unity Hub','Unity Technologies','1.6 GB','2024-06-17'],['Steam','Valve','1.1 GB','2023-12-01'],['Google Chrome','Google LLC','612 MB','2025-05-30'],['7-Zip','Igor Pavlov','5.4 MB','2023-04-19'],['Spotify','Spotify AB','340 MB','2024-02-11'],['Notepad++','Notepad++ Team','24 MB','2024-08-08']];
-function bodyUninst(){
-  const cols='minmax(240px,1fr) 200px 110px 130px 110px';
-  return `<div class="m-bar"><div class="m-field" style="width:260px">⌕ 在 128 个软件中搜索</div><div class="m-seg"><span class="on">按体积</span><span>按名称</span><span>按安装时间</span></div><span class="grow"></span><span style="color:var(--muted)">共 128 个 · 86.4 GB</span></div>
-   <div class="m-tr h" style="grid-template-columns:${cols}"><div>名称</div><div>发布者</div><div class="n">大小 ⌄</div><div class="n">安装日期</div><div></div></div>
-   <div style="flex:1;min-height:0;overflow:hidden">${APPS.map((r,i)=>`<div class="m-tr ${i===1?'s':''}" style="grid-template-columns:${cols}"><div>${ico(r[0],i)}${r[0]}</div><div style="color:var(--muted)">${r[1]}</div><div class="n">${r[2]}</div><div class="n">${r[3]}</div><div style="justify-content:flex-end"><span class="m-btn" style="height:24px">卸载</span></div></div>`).join('')}</div>
-   <div class="m-sel"><span class="grow"><b>Docker Desktop</b>  <span style="color:var(--muted)">3.9 GB · C:\\Program Files\\Docker</span></span><span class="m-btn">打开安装位置</span><span class="m-btn">在磁盘页查看</span><span class="m-btn d">卸载</span></div>`;
-}
-const STARTS=[['Docker Desktop','注册表','高',1],['Spotify','注册表','中',0],['Steam Client Bootstrapper','启动文件夹','中',0],['OneDrive','注册表','中',1],['Microsoft Teams','注册表','高',0],['Adobe Updater','计划任务','低',0],['Realtek Audio Manager','注册表','低',1],['NVIDIA Display Container','注册表','低',1],['Google Update','计划任务','低',1],['Everything','启动文件夹','低',1]];
-function bodyStartup(){
-  const cols='minmax(240px,1fr) 140px 130px 120px';
-  const b={'高':'h','中':'m','低':''};
-  return `<div class="m-bar"><div class="m-seg"><span class="on">全部</span><span>注册表</span><span>启动文件夹</span><span>计划任务</span></div><span class="grow"></span><span style="color:var(--muted)">开机启动 24 项 · 已启用 17 · 预计拖慢开机 <b style="color:var(--warn)">12 s</b></span></div>
-   <div class="m-tr h" style="grid-template-columns:${cols}"><div>名称</div><div>来源</div><div>启动影响</div><div>启用</div></div>
-   <div style="flex:1;min-height:0;overflow:hidden">${STARTS.map((r,i)=>`<div class="m-tr ${i===0?'s':''}" style="grid-template-columns:${cols}"><div>${ico(r[0],i+2)}${r[0]}</div><div style="color:var(--muted)">${r[1]}</div><div><span class="m-badge ${b[r[2]]}">${r[2]}</span></div><div><span class="m-sw ${r[3]?'on':''}"></span></div></div>`).join('')}</div>
-   <div class="m-sel"><span class="grow"><b>Docker Desktop</b>  <span style="color:var(--muted)">HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run</span></span><span class="m-btn">打开位置</span><span class="m-btn">复制路径</span><span class="m-btn">禁用</span></div>`;
-}
-const BODY={proc:bodyProc,disk:bodyDisk,uninst:bodyUninst,startup:bodyStartup};
-const STATUS={proc:['就绪','F5 刷新 · Enter 详情 · Ctrl+1–4 切换页签'],disk:['扫描完成 · 目录遍历 · 128,430 个文件 · 3.8 s','F5 扫描 · Backspace 上一级 · Ctrl+1–4 切换页签'],uninst:['就绪','F5 刷新 · Ctrl+1–4 切换页签'],startup:['就绪','F5 刷新 · Ctrl+1–4 切换页签']};
-function mount(el,tab){
-  el.innerHTML=`<div class="mwin">${topbar(tab)}<div class="m-body">${BODY[tab]()}</div><div class="m-status"><span>${STATUS[tab][0]}</span><span>${STATUS[tab][1]}</span></div></div>`;
-  fit(el);
-}
-function fit(el){const w=el.querySelector('.mwin');if(w)w.style.transform=`scale(${el.clientWidth/1100})`}
-addEventListener('resize',()=>document.querySelectorAll('.mwrap').forEach(fit));
-
-/* ---- showcase ---- */
-const FEAT={
- proc:{n:'进程',h:'谁在吃你的资源，一目了然',s:'实时的进程列表，比任务管理器更深一层。',li:['CPU、工作集、私有字节、读写速率、线程数实时刷新，可按任意列排序','列表或树形两种视图，一搜即得：名称、PID、路径都行','查看命令行、用户、提权状态，以及模块、线程、句柄和调用栈','结束进程或整棵进程树前先确认，并核对创建时间，防止 PID 被复用误杀']},
- disk:{n:'磁盘',h:'找出是谁占了你的硬盘',s:'选好盘符点一下扫描，目录树、文件类型和空间图联动展示。',li:['盘符一点即选，扫描中实时显示文件数、目录数和已统计容量','随时取消，并保留已经扫到的部分结果','目录树、文件类型统计、空间图（treemap）三合一，点击即可下钻','“占用空间”和“逻辑大小”两种口径，扫描结果可导出 CSV','NTFS 整盘扫描在权限允许时使用 MFT 快速路径']},
- uninst:{n:'软件卸载',h:'装过的软件，一次看全',s:'按体积排序，最占地方的软件排在最前面。',li:['列出全部已安装软件，显示发布者、大小和安装日期','按体积、名称或安装时间排序，搜索即时过滤','卸载前先确认；卸载后可一键跳到磁盘页，检查是否有残留目录','打开安装位置、查看占用，一步到位']},
- startup:{n:'启动项管理',h:'开机慢？先管住启动项',s:'汇总所有自启动来源，开关一点即生效。',li:['汇总注册表、启动文件夹、计划任务里的自启动项','标出启动影响（高 / 中 / 低），影响最大的排在前面','用开关启用或禁用，不删除任何内容，随时可以恢复','直接打开启动项所在位置，看清它到底是什么']}
-};
-let cur='proc';
-function show(t){
-  cur=t;const f=FEAT[t];
-  $('#stabs').innerHTML=Object.keys(FEAT).map(k=>`<button class="stab ${k===t?'on':''}" data-t="${k}">${FEAT[k].n}</button>`).join('');
-  $('#showText').innerHTML=`<h3>${f.h}</h3><p class="sub">${f.s}</p><ul>${f.li.map(x=>`<li>${svg('check')}<span>${x}</span></li>`).join('')}</ul>`;
-  mount($('#showShot'),t);
-}
-$('#stabs').onclick=e=>{const b=e.target.closest('[data-t]');if(b)show(b.dataset.t)};
-
-const OCIMG={"gw":190,"gh":38,"a":{"src":"../img/dumpingground.png","rows":[";;;~~~~~~~=====------------++++++++++++*++***************x**xxxxxxxxxxxxxxxxxxxx###xxxxxxxxxxxxxxx#############################xxxxxx########%%%%%%###########xx***++++++++++++***++++++++++--","~~~~~~~~=======-----------+++++++++***********xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx####################################################%%############xxx######x*******++++++++*****++++**++++---","~~~~~=======-------------+++++++++**********xxxxxxxxxxxxxxxxxxxx*xxx####################################################################################xxxxxxxx****************++++++++------","~~~~~=======---------+++++++++++***************xxxxxxxxxxxxxxxxx-;xx####################################################################################xxxxxxxxxx*************+++++++++------","~~~========--------++++++++++************xxxxxxxxxxxxxxxxxxxxx*-~·-xx####################################################################################xxxxxxxxxx************+++++++++++++++","========----------+++++++++************xxxxxxxxxxxxxxxxxxx*+-~+~~~·*x##################################################################################xxxxxxxxxxxxx***************+++++-==-+-","=======---------++++++++++************xxxxxxxxxxxxxxxxxxxx~;;~=-~=·;x##################################################################################xxxxxxxxxxxxxxxxxxxx*****++---=~;···;;·","=======---------++++++++++*************xxxxxxxxxxxxxxxxx*+;;~~;~+-=·~xx###############################################################xx**************xxxxx***++++---==-------~~~====:········","========--------++++++++++*************xxxxxxxxxxxxxxxxxxx+;;~~;~~=;·=xx######################################################x*++++++---+++---------------------------==~~~;;;;;;;;;::::·····","~=======---------+++++++++++****************xxxxxxxxxxxxxx-;;;;;;~=+~;*xxxx#################################################x+++++++++++--++-+----------------------===~~~~~;;:::::···..·.....",";;;;;;;~~~~~~~~~===============-----------------------++++~·;;~-=~=--;;++++++++++++++++++++++++++++++**+******************++++++++*++***************************++++-==~~;;:;::::·····....·...","······::::::::::::;;;;;;;;;;;;;~;~~~~~~~~;~;;~~~~~~~~~~~==~=====-~~~==:=----======-+++++----=--+++++++++***********x*****xx*x***********x***********+++---=====~=~~~~~~;;~~;~;:;;::;:··:·:··:·","·········:::::::;;;;;:;;;:::;;;;;;;~~~=====~---++----+++*+++*-+*-~~===~:+xx*xxxxxxxxxxx*******++**++***+++**+++************************+*xx****x****+---===~~~~~~~~;~=~~~;;::;~;;;;;;··;::;:::","······::::·:;;;;;:;;~========-=-=---------+--*****x*xx********~-:;===~==;+****+*++-++++++++++++++++++++++++++*+***++++++**+********+-*x*x****xxxxxxx*+----==~;;~~~~;;~;~=~=;;;;;;;;::::;::::··",";;;~;;~~~~=======-==---+--+------------====~================---;··~-----=;+-+++-+++++++++++++++++-++++-++****+*+******+++++++++++*x**xx*****xxxxx**+---=~;;~~~==~;;:;;~·;=;:·;;;;:::::;;·~:...",";;~~~~~~~~~~=~==;;;~~~~~;~~;;;~~=~~~~~~~~~========-=---=----+-+-~-++++-++~~---++---+-++-+++++++---++----++++++++++*****+++-+***xxx*+++***xxxx*++-====~~~~=~~;;;~~~~~~;;;;;;;=~:~=::···:;:·::::","··········::::::;;;;;;;;;;~~~~~~~~~~========--==================-=----+--+:-+--+---++++++=-=-+---======---++**+++*+++****+*xx*+****xxxx**+-===~--=~~~=~;;~~=~~~=~;~;:=~:;;;~~=;;;:::;;;;;:·;::","::::;;;;;;;;;;;;~~~~~~;~~~~~~;~~=======~=~~;;~~~~~===~~~~=--+--==========-=;-=-=======~~~~~=---=------++-++++**x+++********xxxxx**---====;:;~~~=~~=~;:;;~;;;;;~~:;;:~=;~;~~;;:.··:::;;;;;;;;=;","::::::;;;;;~~~~~~~~~~~~~~~~~~~~~==~~~~~~====~==~=--===--=======----=-==---~~~=~====~~=====---+++--=-+++***+*xxxxxxxxxxx*+++------~~;==-=:=~;=====-~~;;=---===-=~~=~~~;~~:····...··.....:~;~-;·",":::::::::::::;::;;;::;;;:::;;~~~~~~;;;::···::;;~~~==========~==~~~;;~=---+*x~+-==~=~;;~~:~-*+++++**xxxxxxxxxxxxxx*++-=-=;~==~~=;==~~;==~~==~;~::~:·:;~=-~~===++-~=~~···.···....·····.·····::::","·····::::::;:::::··········:::::;;;;;;;~~~~~==~============~=*x*--+=+~===---;:=~;:;:....··;-xxxx*xxxxxx**xx***++-+-=~;~=~~~~~~==+~~~~===~~;:·····:::;;~~=~;;~;~;;:;::~~;;=;;~~;;;::;;;;;::::::","······::······:::·:::::;;;;;~;~~~;;;;;;:;;:::::;:::;;~~=-+=-+++*+*+--~=-~~;;;·:~;::··..·.~-=*x**+++++*++~=-----~~;;:~~:;:::;;;~=====~~~;;;~~;~:;=+==~=;~~:~;··::;;~~=+=~;~;~;~;;~;::;;::::::::","······:::::::;;;;;;;;;:;;;;::::·····:··::::;:;;~~;~~==~~--===;;:;;:;;:·:::;~~==~~;:.·:.·~-~;~+*xx++*+++*-==~--=--;;;==~~~=~~==--=~~==--~~~===-;;~==;==--~~=~~~;;··:·:;;;~~:;;;;;;;;;:;;;::::::","::::::::::::·············::::;;;~;;;;~~~~~==~===~=-=-=;::;;~~+-=·.::~==+--=~~===---;~~=---=+--=-*x++*-~~+*~=;-~;~~=-==-++==~~===~~~;;;~~:~:;;~:;;~~~----=~;;:;:·····;:::~--;~;;~:;;::···::::::",".··········.·····::::·::::;;;;~~~~~~~~~~~~~===--++-+-:::=+===***+~=--=~~;~~~-;=-~=-++-+*xxx+~~;;~=-==+*-;+-----=~=---+-~:::··=-~···::·;~+=;~;::;~~~==~;;~====-===~~;;;~;;~~~~~:;;;:·...··:::::","....···:··::::::;;;;;;;~;;;;;;;;;;~=========-----::.:::::·:;=*********=~+-~~+***+**-=----+*xx+-~;~~=-++*+=+x#++*+==----*+-~:;;;=-~-~;;:;::::;;=+===~;~~~~~=-===~~=~==~~~;;;;;;;~~;;:;::::·::··","······:;:::::;;;;;;;;;;;~~~~~~=--====---+++++=~:·. ......;-==---=-++*+:==~==-==++---;:;-=--+-++*+:;;~;~-+*-=-x-~~;;+~~~===+-;~=~;~~~~~;;~~+*=====-=--===--=====~;~:···..·~~;;:;;~;;:;:::::::::","····:::::::::::;;~~~~=~=--==-=+++-++++-+++-+-·.........:~==;~===::~-*~;~;=~;:=-+---~+:·~;~:~~;;=*-:;:;=-+--;~~--=~:··..·····:~;;=========;~;;~~==-=--====+++-=~~;:···.··::·:;;:;;:;;;;:;:·:::·","··:·:;;;~~=~;;;;~~=====--==-+++++-++-====~~~;........ ·~~~==::::····.····:::·;:::;;~=:··~-~;;=*+==;::;~=~=-+*+;:=~::;;~==~;;;;::;;:;~==~;~;·····:;;;:;~=-~;:::·::::;::;:··.·:::·:;··::::::::··","·::::;~~~=~=;;~=~=----====--====;;;;;;~~~~==~.. ..    ·:;~~;··;=-=:··:.··:··.···:::~~··:::~:;;~=~~··:::;;;=****+====;~+~:;=;··:·:·:;;::::::·:;:···::::······:::;~~;;;;::··:::·...........····:",";;;;;~~~~~=-=~===~~~~;~;;;;:··..··:·:;;;~;;=~·.....  .:;~:···:;;~=:.:··~;;::········:··;·:··;;:··.··:·:;~==+**+--~~~;~=;==;:-~;;:::·.·.·····;·;;·:·····.::;·:··:···~=;::···...·:::::···::·:::·",";;;;;;~;;;;;;::::::::::·.·.......... .·;;;~~:... ...··;;;;;=:;~:::;;;;;=-~=~~~~~::;;;~;::··.·.   .·:::··.·:;~~=-*=::;~~=;;;;~;::::::....······:::·...·~--;·..·::.:;:·······;;;····:::·········",":::···········::::··:::·..   ... .···;;::;;;···..·.··:;:;:=~~~;:·~=;;==;:;~=+++*--+=~==:·    .......·::·.;;;~-*=+-·~=~~;:~=~=~·····;;·:=--~;==;::···..:····..:--·.·;~:.·.·····...;~~;::·······","..··········::·:·.·:·..  ..·.·;:··::···:;:···.:~;;-::...........~~;;:::;::=~===-==~~~:· ...  ...... ..···:;:~=-~;;~+-;:··:;-=~~=~~~=;;;~~==~:;-*-::············::;::·:::·...   ..·:··········.","····.......·.............····::::::;;~~~;;:..:~~~=-~~;·..     .:::;;;;···::;:··;~;;~~:.  ·     .    .····.·::;;=*=·~=~~~:;::·:;=~;~;~==~~:···::;:::;;::;;:::::::;;;;:;:·:········.···········.",".····.··. ..··....··.··::::···::::::·····;~:·:;;::;;;·.       ···:·:·::·:::······:;;;·   ..  ......···..·...·;+==-··:;·:.·:;;·;-:··;::··:·..··:·:;;~=;:;~;::;;;:::::::·:;:·:::::········....··"," .···:  ......   ·:·::·:;~;;::·:·.·.::···::.:;:::··:.           .·.·.·::::·..·.··.··:··...·...  ...     .·..·=-~;:...:··:··:;;~~~~~~~~;:::~~~~;;==~~=;;;:::·;::··:;:;:::::::::············....","     .... ..··.········..···.::··....·.. .:··::··..·..       ... .···..······...····..:::···.           .·.·:;;;:;;·.:::::·..···::::::···:::;;;;:::::;;;;~:::;::·.·::::::···:::·············.."],"pal":["#e0d3ce","#ddd0cb","#dbcdc9","#d7ccc9","#d7c8c4","#d1c5c3","#ccbfbc","#c5bcbc","#c4b6b4","#bcb3b4","#b7acac","#b3a8a6","#b1a29d","#a8a0a2","#a49b99","#a39591","#9a9698","#969194","#968d8b","#8d8b8e","#928077","#868589","#837e7e","#7a7e81","#77797c","#80726c","#757375","#6c7174","#79685f","#6c6765","#63686c","#606466","#6b5e56","#5f5e5d","#63574f","#5f5047","#545f5f","#52585a","#535251","#455153","#524a43","#40494a","#4b423a","#3e4141","#433a33","#3b3733","#353f40","#353635","#293839","#332f2b","#2c2c2a","#252d2f","#252524","#1a292b","#191f21","#101619"],"idx":"lkkkffeeebbaYXXWVVVVVTTTTTTRQQOONOONNNNNNNNNLLKKKKKKKKJJJJJJJJJJJJJIIHHHHGGGGGGFFFFFFHHHHHHHHHHGGGFEEEEDCCBBBBCCDDCDDDDCBBBBCDFGGGGGFEEEECBAAAAAAAAAABBBBBBBCEGIKLMNOOOOPPOPPPOMMMMMMOPPMMPPSSkffeeeebbbaYYXXWVVVTTTTTRRQQQONNNNNNLLKKKKKJJJJJJJJJHHHHHHHHHHHHHHHHHHHHHHHGGGGGFFFFFFFFFFFFEEDDDDDDDCCCCCCCCCCDDDCCCDDEECBBBABBAAAAAAAAAABBBCBCCCEFGGEEEEEFIKKLLLMMMOOOOOOMLKLLMMMMMMMMPPSSSSeeebbbbYYYXXXVVVVTTTTTTTRRQQQONNNNNLLLKKKKJJJJJJJJJIIHHHHHGGGGGGKHFFFFFFFFFFEEEEEDDDDDDDDEEFFFFFFFFFFFEDDCBBBAAAAABBDDDDDCCBBAAAABBBBBAAAAAABBCCEEEEEEEEGGGGIIIIJKKKKLLLLKLLLMMMOOPPPPPSSSSUUUfeeebbbbaYXXVVVTTTTRRRRQQQQQONNNNNLLLLKKKKKJJJJJJJIIHHHHHHHHHHHHThHFFFFEDDDDDDDDDDDDDDDDDDDDDCCCCBBBAAAAAAAAAAAAAAABBBBBBAAAAAAAAAAAAAABBAAABBCCEEEEEEFFGGGGGIIIIIKKKKKLLLLLMMMMOOOPPPPSSSSSSSebbbbbaYYXXXVVVTTTRRQQQQQONNNNNLLLKKKKKJJJJJIIIHHHHHHGGGGGGGGGKSfzTGFFFEDDDDDDDDDCCCBBBBBBBAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBCCDDDDDEEEEEEECCCCEEEEEEEEEEEEFGGGGIIIIIKKKKKLLLLMMMMMOOOPPPPPPPPPPbbaYYYXXXVVVVTTTTRRQQQOONNNNNLLLKKKKKJJJJJIIHHHHHHGGGGGGGGKQUdQbeewKFFFEDDDDDCCBBBBBBBBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBCCCCCDDDDDDCDEEEECEEEEEEEEFFFGGGGGIIIIIIIJKKKKKKLLLMMMMMMMOPPUZUSPSbaYYXXXVVVVTTTTRRQQQQONNNNNNLLLKKKKKJJJJJJIIHHHHHHHGGGGGGHeiidaTbYwpIFFEDDDDDDDCCCBBBBBBBBBBBBBBBBBAAAAAAAAAAAAAAAAAAAAAAABBBBBBBBBCCCCCCCCCCEEEEEEEEFFFGGGGGGGGIIIIIIIIIIIIKKKLOPSUUZhhvzvoovbbaYYXXVVVVTTTRRRQQQQOONNNNNLLLKKKKKJJJJJJIIIHHHHHHGGGGGLOniggoeQTbzfGFFFEEDDDDDDDDDDDCCCCBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBCCCCDFEEFHJLNNNNLLLLLLKKIIIIJKLMOOQQSVWWWWVVSVVWbfdYYaarvvvvvvvvbbbYYYXXVVVVTTTRRRQQQOONNNNNLLLLKKKKKJJJJJJIIIHHHHHHHHGGGGOiigclkfanwWGFFFFFFEEDDDDDDDDDDDDDDCCDCCCCCCCCCCCCCCBBBBBCCCCCCCCCCDGKNQRRRRRRRRRRRRRTTTTTVTTTTTTVVVVWVWWWWWWaaddflmmomllomorrrvvvvzebbbaYYXXVVVVTTTRRRQQQOONNNNNNLLLLLKKKKKJJJJJJJIIIIIHHHHHHSoiijolfaPhmNGFFFFFFFFFFFFEEEEEDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDEJOQRRRRRRRRRRRRRRRRTTTTTTTTRRTTTTTTVVVVVWaaddhhhhorrrtvzz111z11112nlllkkkkffeeeeebbbbbaYYYYYYXXXXXXXXVVVVVVVVVTTTTTTTRRRRRRRdtoidWadaSSohOQQQQQQQQQQOOONOOOOOONNNNNNNNNNNNNNLNNNNNNNNNLLLLLNNNOONNNNNNNNLNLLLKKKKKKKKKKKJKKLKLLLLMOOPPUUZdgimooqqstvxvy02002y222wwwwwwuuuuuuupppppnnnnlnnlnnllkkkkefefffkkkkkeeefeeeefeebYebaYXXVdddZZraXXVVXXXXYbTQOONOVVVVXVRRQNRONNONNLKLKKLLKKKJLLJKJIJKJKKLKKKKJKLLJKJLKJKKKKMMMPSSSUWWWZZdZggggcgiigcigiqiorrmrvvrvrxytxwwwwwwwwwuuppprpnnnnnpnnnnppnlnnnlkeeebYYYXbXVTRRTTTVQOQNNONLVQKTdgZZZcoOIJKJHJHHHHHHIJJKLLLKLNNLLOOLKLQOONLQRQNKLLKLJKLKKLKKKKLKKLKLLLONIIKKKJIKKKKPSUUUZZccgdgdghhhWdddhmpoidijjjiovtjqqoqqqzwwwwuuuuuupnlnnnpnlfbYXXXXXXVXXXTVTVTTVTVRTXNLNJJJJJJKKNJKKJKfTplZZZdZaoNKNLNNNNQRNORQQNOOONQRQOOOOQOONOOONNMOMMMNNOMPOMMOMLLLLKKLOVLIKJKLKJIIIGGGIMPUUUUZcgmigcddimhmhWfdhioiiomioosqosqqtvvlllfklkebebbbbbYXXXXVTTRTTRTTRTTTTTVTVVYbYYbaYXXXYXYYXYbYYaYVTVnzwhWVTRRaoQRQRQRQQRQNOOQQOOQQQRQQSQONOSOONLMLNMNLLLLLLOOOOOOSRQONKJKJIILMMLKIIIGGIMOSUUZcjmigcZcciiooigwmYhuvmmomotqqqiitho232kkebfefeffebYbabklnkffkklkfklnkebeeekfffebYYaaXYXXVXVVVXTRVRRTQVeTRRQRTRRddTTRRRRTTRRQQTQOOQQOQTVSOOSSTSQQQOORONNOLLKKLMPPSNKKKJHJLOPMMLKIIIIKPPUZZUZcgghadgmmjccgdhdklmllhlagohaoryytqjqtqqqquwwwwwwwwuuruuppnnlnnllllkeefbefeeebbbbaYYXXXVYabYYYYYXYXXXXYYYYVYXTTRRTTQoVRTTRSVTQQRQOQXWWSQSVWYabYbbWWTROLMOOOLNQNLKKKNJHHLMLLLKIIIIKMPUUUZgUUZdhhddhiddcggcZdihoradpimmgcZiojoqojjijiqtoqsupupnnnnnlllllkkkkffeekfbbfeklffbaabaYYebeflkfeefbaYbbefbXXTRTVYaYXXXXXXXWamTYWYXYYaWYbehhbYVTTWVWWVTVRRSONQONKINSNLKLLLKKJIIGIIKMUUUUUZZipldhddkdZgmppmdlnllnfkpnmqcZmiicgiou11wprqjjjijjjoamppuuppnlkkkfffffkfkkkkeekkfffeefbXeeeeeebbbbbbabYXXYXXVVXXYbYYYWVVWYVXWTVWbddbeYYYaeebYbaYWSSRPRSSYSPPOLLNNLIIIIGGIHGGILMPPSUUUUUccjZZUZqZgiZZcZZUggmkZUUUcZbWbhgddigicgqz111121ww22121pdodWmzupppruurupurpnrpnlnpnnnnpppnlkffeefklnpuwwuuplkkeebYbbYYYaaabbbeffklfbXVTRKHdOTZZcZcmmdhpdVLOOQSQNNJIHHIHIIHIGGGILPPUZUZiiZZccciZWhhmebhdZZhiiqogrzwneaSkbaYaSRVdZhkvw11zwz0222zzzzz0yvzwvtoqtwuwzwuuprrpnppuuruwwwwzzzwwuruupnlllkkkkfkkbabebYXXYYXYababbaLHNWVRWReXbXVRToqZgjsjq32211wmTJHJIKIIJHIHMJGHJKMMPUPUcgigcchddddZWPdcgcZcZgflsvwyxxsqsmnhebbmlemhoirpwuidjicjidgijjoooooooooqqsqwwwwwwuuwwwwwwrpuuurunnnnnnkflkffklnllnpnnpprupnpurnlffbROUSOPPMPLQTXeYXhhmjjvqgjooxy20z0eTXNIJKOQQROKOPcUUUUUUcdmmphfoortojjjgZZZZcgggoilhhoirnYPUZcZmhdogoxxtojigcZPZgicigjgiigoqqjoqqqossqq1zzwwwuuurpppnnlllllllpnnnnppruuwuwwuuvuurpppnlhfkfbbbebVSZYZjjoomwnnuwwwpkdfYWddmr0yr0vdVemgOKIIRSMPPPKSaYhVWbXWhlmZagicUcccUUUcggcZUUcggZZZWiicZciZZSSccccggomvyqttjjjgcqijooiiijormmjoooqosuuuuuuuuuupuwwwwwwzzzzzzwupupnnlkkkkkffffeXYbaYYbWVWTXnppiihdNSav1uufZXRTTYeeaaaSSVlfdWTSWWRWWWVMIPPLSggPKkYlWdigccUZUUPPUZcgcWaekknnnhcohqmigtomdccUUUUZcioriqvtxyunprneTThdiigojjsuzzvqqqsqq1zzzzzzzzzz1zwwwwuuuuuurpnnlllkheeeeefhfeeeaYXWTRNRQVpprYRWYXKLKQdYVVaekndhcPgZUgZSRORRLIGGNffnnfaUadSKSmPSUUUUZcZUUUPUgrpvzzbSez1wpuwngPWigiqojgcccZcijgccZUUZZccgoojgjjchddhtoijqt0220tqoqss1211zzwuwuuupppplkkllllhllklllknmheaYYaaYbbYWTVTRpr1pprrr1qhYNLKKJLLKLYeQVfdQLKLMLLUaTTTVQKHHOWknfkeUSSMPZPIEPPMScZUUUUMPUgommiZSfXhmnrorpvrhoUOUZcgjgcccgZUUUZcgcgZZgcdiijjjijggojojqsqqtsstyzzwwuuunppnppnlmnnlllmlkeefefbbWWWWYWRTRONNOQXfnz23222212lRXYTVVXTNOLOpbaeXbWZZMSUSUirkTXVTRVQQNQpplkmcUPMSbVJUiklmSggdaZZPUidWdodhgcgijicPMZZccUUZUUZUZUUUZUZZcigqyxy02yggjjqjigjjojoqqqqqoqqwwwuurupruuupppnlhfheaeYVVaYWYQQOTQQQQTQONTRVv221333222nbXXnhaaaprhVNfhbnadhpWTSUSScSrvknfrffklaMWrpriZUPUUmekSUcgtyy02zz0yyrhjiZZaZaXYWZigpmkdZZUZUSWYYXPOPUZmlpuzvy0ytqqxsijqoooojoooostssstzwuvunnlffbfllllheXXXaaTVYXTQQOQRTRQTWZZZcggi332233233zfefXbprruzz1z1yzzzrrtvoqrrijcZttsdVellWMOZcoqunhZgcUOLNhrZgstmlbYadojoourojohebbflenw1w11wlnnpkfaXfnoosxtsqqooqoqxx0yssosqotvtqstqqssttwrrupleeeaeblheYeYVWVVaaaaVTWaZZijjiiiggcgccc233333333urkffnwznWVXuwzr2zvrzz20yyqqqgczxsrphrmmcZggzvvwroiiZKKLKMZccaidQhpiZjyvuvuwwnnupuuwpwunp1wwuuuw1111wwrsqjggjjijoqxytsst033002122000yyyslnlllkeffeYVYeaaaeeefhhhiioqtt00ytqvujjigjjZfz12233330pnfrvv1umhfap1pvvelmprvvvvxttxrxyjtrwzmnrv00zzsvtogUUPKMPUUghfmhambbprVgopuup11111www1nzlnwwz1ww11uunwu1wryyvhWiqrzyx000ttqqoqxxtsstssstlnlnmlflllnlmprrssssqqsy00220033332333ymomfbp0233322yunllnmarmdrprmmonnYVbbebbddrplmmhmprz13033332vrrovx2ysjccUULduriheblpnnknwwuupu1121111w11prpz2321bVVkz21zpr0smrwvyvxyxijjtyxxsqqttttxtyyyruuvvyxxxxxtttssqsyyuuuz1233320332vvxjioslllvzw21z1zvnkpppafbkhuzbahneenpleYNQNNVSMahZZrx33332122211yosy0mmicUMcPUvfWhhnufbkbly1wwviivpbVWhkYahprvz111uz1ww22rVVy0ymdo2y0yxtty000mfdnrrxxxxxxy000yyxxttvtvruvuv1zuz223330z2zmrttsqyxtqjuzzy1rknkXpu1z022300222hhmmuuunuuYfXYXWWUccgqx302333233223332ztttoocZUciifOTlu11wlVYkfaeebYlnmddaWhrpTKWrtyzzwwzxtxtyxpqoqstqssx02333332xstvxvyxtxxy0yxxy0020220z1223220022300vvxtqsqssojiiggjjp00rdfeXThflz0233333zrqoimmmwzwupnuwwmgiocgq233y33333333330ytxx0xqsijZLdzhWdhhuppuwukadmhodWbfhrtvvroopuoooqooprssqqssoojjojqssxyxxttty0xxxxyyyxxty00yzzz0zz2331ww2322yt0yxsqostzvtqtststtyyykeryoomwwlmlz33333333zzvrvrvuttvvwwzwzytsiim033303333332200zz02y222tiPZZUvzuovv0zrmmylTuvymrtyxsx00ytttoiigcjqogjoqojjoqqqoqstqoqysssssxyyyyyyy0000xy32yvvu33332333333yotsstqmhhoqqytv0v0orv1znp0uluruzyu2333333333332z1z0zsqqsx23z0yx0yvt0y022t22233322333333y21zZUdis002ox0txxsiigddgdcdciqssgddgjoZZgccijjqqstoqsttsooooqsqqqqqsttttttxyyyyy0000333333333320xx0xxyyyxy0000xx0rpvy221111230ryzuwzz00z233333333333330xy000xxyyz000yxxx11uuuzyy2333333333332x2uphjotimy0sqssss20yytqqqqssxyxqqsmmhossooqoiiigqqqjssx0xssqssstxttsstxxxxtxxyyyyy00"},"b":{"src":"../img/dumpingground 2.png","rows":[":::::;;;;;;;;;~~~~~~~===================-------------++++++++++++++++++++++++*****************************************x***********************+++++++++++++++------------===========~~~~~~~;;;","::::;;;;;;;;~~~~~~~~~~=============---------------++++++++++++++++++**************************************************************************++++++++++++++++++-----------=========~~~~~~~~~;",":::;;;;;;;;;;~~~~~~~~~~=========---------------++++++++++++++++++++*****************************************************************************+++++++++++++++++------------=========~~~~~~~~","::;;;;;;;;;~~~~~~~~~~============-------------+++++++++++++++++++*************************************************************************************+++++++++-------=======~;·:~~;::·;:::::·",":;;;;;;;;;~~~~~~~~~============--------------+++++++++++++++++++*************************************************************==~;::::::·:~~===~~~;;:;~~;::::··············....  .....     . . ",":;;;;;;;;~~~~~~~~~~===========---------------++++++++++++++++++++****************************+=~;;;;~~~=-+++-==~;;;;;;;;;;;:····································...·.·..............          ",":::::::::::;;;;;;;;;;;;;~~~~~~~~~~~~~~~~~=============================-------------------------------------+++++++++------==----------------------;---=-=-;===~~~;;;;;;;;::::::·········.·..·.","······::::::::::::;;;;;;;;;;;;;;;;;;;~~~~~~~~~~~~~==~===================----------------------------++-+-+++++++++++++++++.:+++++++++++++++++++--==~~~=;;~=~~;;~~~~~~~~~~;;;;;;;;;:;::;:;;::::","··::::::::::::::;;;:;;;;;;;~;;;;~~~;~~~~~~~~~~~~~~~====~~=============-=--=----------------------------+++++++++++++++++*- .·-*++++++++-+++-=~~~~~=;:·:~~;:~=~~~~~~;;;;~~~~~~~~~~:·:;;:::::::·","····::::::::::::;;;;;;;;;;;;;;;~~~~~~~~~~~~~~~~~~==~~==~~=~===========---=-------------+-+-+++----+++++++++++++++++++++++~··.·=+-+++++--=~;;;;~~---+=;;:·;::;==~;~~~;;~~;;;;;;~~~~~~;;;;;:;:·.","···::::::::::::;;;;;;;;;;;;;;;;;;;;~~~~~~~~~~~~~~~~~~==============--=-=----==----------+++++++++++-+++++++++++++++++----=+*=:·-*++======~;~=-~;~;~-~===-==-==~~==;~;;~;~;;::~~~~;;~;;;;;;;;;;","·::::::::::::::::::;;;;;;;;;;~~;~~~~~~~~~~~~~~~~~~~~================------=----+------------++++++++++----+++----===-=~--=*x*;:·-==;;~~====-;·····~~=;-===--+=~~==~~~~;~~~~~~:~;~~:::;;;;;;;;:","··::::::::::::::::;;;;:;;;;;;;;;;~~~;~~~~~~~~~~~==================---==-=-------=---------------------=-=~-==~~~=-++***++=*x*=:·++~;~=~~~=;:.·;;·.~~;:;~=========~;;~;;;;;;;:;~;:;;;;~;;;~~;:;","·::::··::::::::::;;;;;;;~~;;~~~~~~~~~~~~~~~~=====~~~~~~=~=~==~===-=====---------=------==----====-=========~==+*x*+**++=~~~====~+*======~~~~=~==~~~-=====---==========~~~;~~;~~;::~;·~~::::;;:","::::::::::::::::;;;;;;;;~~~;;;;;~~~~;~~~~~~~~~~====~===============-=-=-====---=-======================~~-++****++--====~~~;~==--+--==-==--------====----=====---====;.....:;;~;;~~;::;;;:::::",":::::::::::::;;:;;;;;;;:;;;;;;;;;;;;~~~~~~=~~~~~~==~~========~~================~=~~=~~=========~~~~~=---++++--======;;~;;~~=------====+--=-++++---+++--------+=~------===-===~~~;;::;;;:;~~~::","::::::::::::::::::::::;;;;~~~~~~~;;;~~~~~~~~~~~~~~~~~~~~~~~~~==~~~~~~~;;;;;;;~~~====~==~~;;~=~~==--+++++-=======--==~~~~~=------====+++++++++--++------===--=~. ;~=;;~::;~--+-==~;~;~~;;~~~;;:","·:·::::::::::;;;;;;;::;;;;;;;;;;;;;;~~~~~~~~~~~;;;;~~~~~~~~~~;;;;~;;;;;;;;~~~~;;;;~~~~~==-=----++++-=~~========~~~~~~=-=-+-----+-+-====-+++--++--=-+--++--===-===~+-~;;;;;~~;~;;:;;;~~;~~;;~~;","···:::::::::::::::;;;;;;;;;;;;;;;;;;;;;;;;;;;;;~;;;;;;;;;;;;:;;;;;;;;;;;;;;;~~~~~======-+-+++++-====~~~==-===;~;~~==++=~---------+=----==---+-++-++++===+++----------=-===~~~~;=:::::;;;;;;;;:","·:::::::::::::::::::::;:::::;::::;;;;;;;;;;;;:::::;:::;;;:;;;;;;;;;;~;;;;;;~~~====----++++--==~~~~~~~=-==~===~=-*-#####-+++=~~--+-=-==--+--=+*+-~~==*=-+--~;~+=:;;:;;~=~~~~==~~=~~;;;;;;:;:::;","·······::::::::::··::::::;::::::;:::::;;:::::::::::::::;;:;;;;;;;;:;;;;~~~==---+++++++--========~·:;;-=-=~===---+=~=~=*=~=-----+##x***--++-++-=---===--~~;;~~;~:;=~;;:-==~;=-=~;;;;;:;===-~;;.","·········:·····:::::::::···::::::::::::·::::::::;:;:::;;:;;:;;;;~~~-~~------++++----======--==~:;;~==-*x*====~;-~;x*=;****-++-+-~--+*+=----=~==-==--=--+----=~;;;;-~~==;=-==~=;;:;::;::;;~;::·","···...················:::::::::::::::::::::::::::··::::::::;~==~~==-------=---==~~~~=~===;;~~~~====--x++~--:···:=***x*--~~~==-+-+-=;=-*-;=+-----=--+--=-+-====~-==~~~~;~=~==~~~;;;;;;;;:;;;;;:","..·················:::··::······:::::::··.......····::·:::~====------===~~~~~~~~~~~-=;=:::;==+-----+++==+~~~=-==-+=~~;=+~===+·:;~--:··~~=;=-==--==-=====--==-----=-====--~=~=~~;;;:;~;~;;;;;:;","···································.·.....··::::;;;~==============;;;;;;;;;;~~~~~~;~;~~~==-++-=-=+**x+~~;;;=xx*---;:::~-~+-++=.·.·:····.;~;--~===~~=-======---=====+-==~~~~~~~;::::;;;;~;;;:;:","...···...··.···.········.......... .·····:::;;;;~~~=======~~~~~;:::~~~~;~~~~;:::~~=~~=-----=--++=:;-*=.....·-=-***x-=;--==-+-=-:··:::;=;-+;:~==-------=~~=-==~;======--~~~;;;=~:;~;:;·.::;·:;;","...........................········:::::;;;~~~~~~~~~~~~~~~~;:·...·:;;~~~~~=~~;;;~;~~~~===~=~==~=~·.:-+.    .~++-~:·;=-**-=-==~=-=;·;;;:;~*-;:;=--~=-===---~~~========~~~~~~~~~;~~~;::···;;::..","          ..........············:::::;;;~~~~~~~~~~~~~~~;;;;;;;;;;;;~=-===~~~;~=;:;:;~===~~~;~=;::·.::;~:::::~~~~;:::;~;~==-+*+===··:;::·;-==·;~=+++++----==~~====~~~~;;~:::;;;::::···;~··.·:::","    ..........·.···········:::::;;;;;;;~~~~~;;;;;;;;:::;:::::;;~~~=~=~~~~=~~==--~~=-==;=-=~==;:·.··;--==~~::;;;:;;·:.·:;:·;-+-++-:··::····=:·::-:;-+-===--=~~;~===~~=~;;;;;;:·;;;;;;;;::;:·.··","..  ........·········::::::::;;;;;;;;;;;;;;;:::::::::;;;;::;;~~~~=~~===~~;::·:;~--=~~;;--+-==:··.:;=-=-;~;:·;+;··:::·::-~;~=;====:···:::·. ·::·~:;:·::·~~~==~;~~~~~~;;~~~~;;;:::;;;:;;::::::··",".........·.·········::::::;;;;;;;;;;;;;:::::·:::::~-;;;;;;:·::::~~~~==;;~;::;~==~;~=~==;::::·;=:·::·... .···=-+~~:·:·;~;==;===:....···:..·. .:=~   ... ·;~~=~~;:;;=~~;:::;;:·::::::··::::·::··","..........·::··::::::::::::::::;;;;;;;;::::::·;:::.·::····.··.··::~~;;~~===~~~~~=~=~~~::···:·==::·..··  ...·;~--=;··.....···~~.  ...·.·..·:~;·=+~;::;;:·:===~~~~~~~~:··:::;;;:··:··:::::;·····",".......········::::::::·..   .·:::::::::::;::·::···...··::;·;:;;;~~=~==~=~;~~~~~~~~~~=~~;;····;;: ...:·      ·:=:···.... ·.·;:···..··:..;=-~;-++=~:-+~~~~~=~~~;:;;;~~~;;:::;;;;:;:::·:::;~:···","........········:··.     .········::::···:;::::·..··:::::;;;~~~~~;~~~:;~~~~~==-~~~=;;;;;:::··:···.  ..       .·······.. .·~=~;;~~=~:.···~;;:;;-=~;;~~~~~==~~~~~~~~;;~;~~~~::;;·:::;;~=~:······",".............·...    ..;:·····:·::::··:::;;;;:;:::;;;·::;~;~:;;;;;;~:;~=~;~~~;~==~~~~;;:;;~~~~;;;          .........··.::;-====~~;:····:::~-*::;;;~~~~~;~~~~~~~~~;;::;;~;;:::::::;~~~;~:···..·","..............     ...······..··:::::::;::::·~:·:;~:;::;;;;;~~~;;~;;;~;:;~~~;;:=~:;~~~~~===~~~~--~·;;;~;;;~;.········. ;;;=~~;~;:;..  .:;;·:~~;;;;~;;~~=~~~~~~~~~~;;;;;;::::::;-=~=-=;   .    ","..........·.........·..··....········....·:··~~·~:·::::::::;~~~~;;;;;;:;~~~~;:;==~==~=-~~==~;;;;;;;;;::;::···:;;;;:;;;:;~~==-=~~==.·::;=;;~~~~~;;;~~;;;;~~~~;;;;::;;:;:::;;:::::~~::;~~.  ..  ","......................·····.·······:·:·····::····::::;;::;;;:;~;:;;;~~;;;:;;;;;:;;~~;-~;;~==~~~~~~~~;;;::·::::·:~~~;:;;;;--=~-=~=-=;;;~~~~~;;~;;:;;;;;~~~;;;;;;;:·:::::::;::·..::····:;:··...."],"pal":["#adb5b9","#a5b0b6","#a4aaad","#98a7b1","#a7998c","#969da1","#8d9aa2","#8596a1","#a58b74","#9f8267","#8d8e8d","#918377","#7f8d96","#7c858b","#72838e","#977a61","#8a796a","#8b725b","#876b54","#7d746d","#7e6a5b","#7c644f","#6d7b85","#6a757e","#6e6b6a","#6f625a","#5f717e","#5d6871","#516672","#745e4b","#725845","#6a5a4d","#695241","#615854","#605147","#5e4b3e","#4f5c68","#4f545b","#534b47","#53463e","#445665","#434c57","#3d4b57","#334955","#534136","#4a3f39","#3f4046","#33404c","#463831","#37373b","#3d2d2b","#283b46","#28313a","#25282e","#1f1f25","#11131a"],"idx":"rrrqqooooookkcccccaaaaaaaaaaaaWWWWWOOOOOOOOOMMMMHHHHHHHHHHGGGGGGGGDDDDDDDDDDDDDDDDDDDDDDDDDDDDBBBBBBBBBBBBBBBBBBBBAAAAAAAAAAAAAAABBABCCCCCCCCDFFFFFFFGGGGGGHHHMMMMMNNNNNNOWWWWWXXXXXabbbbbkkkkrrrqqoooookkccccccaaaaaaXWWWWWWOOOOOOOMMMMMMMMMHHHHHHHHGGGGGDDDDDDDDDDDDDDDDDDDDDDBBBBBBBBBBBBBBBBBBBBAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBCCCCCCCCCDDFFFFFFFFGGGGGGHHHMMMMMMNNNNNWWWWXXXXabbbbbbkkkrrqqooooookkccccccaaaaaaaaWWWOOOOOOOMMMMMMMHHHHHHHHHHGGGGGGGDDDDDDDDDDDDDDDDDDDDBBBBBBBBBBBBBBBBBBBBBBBBBBBBBAAAAABAABBBBBBBBBBBBBBBBCCCCCCCCCDDDDDFFFFFFFFGGGGGHHMMMMMMMNNNNOWWWWXXXXaabbbbbbqqoooooookkccccccaaaaaaaaWWWWOOOOOOOMMMMMMMHHHHHHHHHGGGGGGDDDDDDDDDDDDDDDDDDDDDDBBBBBBBBBBBBBBBBBBBBBBAAAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBCBCCCCCCCCCDDDDDFFFFGFGHMMMNMMNWWWXXXblzqbckqv0pqvqqz0qqooooookccccccaaaaaaaaWWWWOOOOOOOOMMMMMMHHHHHHHHHHGGGGGGDDDDDDDDDDDDDDDDDDDDDBBBBBBBBBBBBBBBBBBBBBBBAAAAAAAAAAABBBABBBAAAABCWXYluvxxpu0vbbXWXbbbkpplkblpuqvxx00000000011123233331332333333333qqoooookcccccccaaaaaaaWWWWOOOOOOOOOMMMMMHHHHHHHHHHHGGGGGGGDDDDDDDDDDDDDDDDDDDDDBDDBBBBBBBBBBDGWcooooccaWMGHHMWacoooooooookoqx000x0xxxx000000xxx000x000000x000111111111222222222222233333333333zvvvrrrrrqqooooooooookkccccccccccccaaaaaaaaaaaWWWWWWWOOOOWWOWWOOWOOOOOOOOOOOOOOOMOMMMMMMMMMMMMMMMMMMMMMMMMMHHHHHGGGGHNMNNNYWNNNNNNNNNNNNNNMKKKKKKKfKKKTKTKfTTTZfffiimmmmmnnntwwyyyyyyyy12122y2zzzzzzvvvrrrrrrqqqqqqooooooookkkkkkkkcccccccccaaaaaaaaaaaaWWWWWWWWWWWOOOOOOOONNNNMMNMMNMMMMMMMMMMMMMHGHHMGGGGGGGGGGFFFFFFFygFFFFFFFFFFFFFFFFFFFKNTQSUYThidUZZhifdVdVddVddffifjfiiinmtnnnnnttttzzzzzvvvrrrrrrqqooqqoooooookkkkoccckccccccccbaaaaaaaaaaaaXWWWWXWWWWWWWOONNONNNNNNNNNNMNMMMMMNMMMMMMMMNMHGGGGGGGFFFFFFFFFDKyysECFFFFFFFFKKKKKTYZZfdUitxxYhluZQfZZZZZffgjdVdedddffdmxuninnnwwwtwzzzzvvvrrrrrrrrqqqqoooooooooookcccccccccccacbaabcaaaaaaaaaaXXaXWWWXWWWOOOONNMNMMMMMMMMMHMHMHGHMMMNHGGGFFFFFFFFFFFFFFFFFFFTysysLFKFFFFFKKTZihiiVULLLEUimt0mxuhUUfffYZhfZfffffiffdffdVfiiiinmtx1zzzvvvzvvvvrqqqoqqoooooooookookokkkcccccckcccbbccbaaaaXWWWWOOWOOWOWOOWNONNMMOONMMMMMMMMHHGHGFGGGGHGMGFGGFGFGGGFFGFGGGHHMKTCALggICFKTYTULUZfUUNbhZdhKhQPPPPSLUTfUTUhZiifjfffnsdVdffffiifijjiiijzzzvvvrrrrqrrvvvrrqoooooooookcckkccbbacbcbbcbaabaabcaXWXWXXXWWWWWWWWONNNNNONNMMHMMMMMMMMMMMMHHHGHHGHGGMMMMGGHMMNNWNNNWYNKTAACeggIQQiiZZUSSQNly111xhhThLPRRJIERUVUUdfZViUVZUZfnZiZZnttjiijnjjntzzvvrvvvvrrrrrqvqqqoooqoooopkkkkkkbckccckkccbbaaaaaXWWWXXWWOOOWOWWNNOOOOWNNNNMNNNNNNMMMMNMMMMMMMMNMNNNWNXXNNWYYYTKKFCCCFFTCAAQggEIZfdSUddRfv2yhhy2hZnthUQUSSRQSSSdjiUffffjgfnihmtjgggfgiiZfinnzvvvvzzvzvrrqqqrqqpooookkckokkcbbbcbbccccbbaaaXaabbabbaaaabXaaXXWOWWWWWNNNNMMNNNWNNNNNNWWNNNNWONNNWONNNWXXYYTTKCACFCCFETVVUQQQRREAQRSRRRSVVVSVSRSSSJRRPPRPJPRRRPRSSQQUdddjdfifhlntfiwZUnntnijnvvvvrrvvrvvrqqqqpooooookkckkkkkkccccobbccbbbbaaaXXXaXWWXXXWWWWWXXWWNONONWWWWNNNNNWWWWXWNNWWWWWWXWNNWWWWYhLEECCCCKKKLQQUQedUfdRRJJEJPSRPPPJIPJJIIJRPPPJPJJRRURPJJPPQURi12322sijfjiZfinsiijnttnsrrrvvvvvvrqqqqppppppoopqpkkklkkkkllkcbbbbbXaabbbbXabaXXWWXXXXbbXXWWXXWWXXXWXXXXXXbbXXXXXXXXXXWXbYYhZTKLKKFFFKLQTRQQUfhZieUdQIJJIIJRRRPIIJPJIIEIIJJIIIIIIJJJJJIRVJJIJJJRRPPPPQUdZllqrigjwiZYZntvvvvvvvqqqqvvqqqqvrqqqpokkckkkkkkkkkccccckkbbbbbbbbbabbabbbbbXXbbbbbbbkpllllkbbbXWXXbXXbbkhhYYYTLLKEEEEKKTUUUQQQQLQRUUUUVSPIIIIJRRSPIIIEEIIIIIJIIIJJJJJPRRJIPU13hZThifwthZLLELUUVjdgdfifddegjnzzzvvvvvvrqqqpppppppqppllllkkklllolkbkcbbbbbbkkkllkbbkkbbbbbbkllkkklkllllkbbbbklkkbhZYYTTLQLLKKKEFKKTUZUQQQQQRQZZZfdVRJPJIJPIJJIJIJPRRRJIEIJJIIIJPJIIIIIJJPPPJPPRUELfjfjmiZUgUijniffddffdgfddjzzzzvvvvvvvvvvvvqqppookoppllppllkkkkllllpplkkkkckkkkllllppppppllllpkkkklkkkkbbbYYYTTLQLLEKEFFFKLLTUUZhZQQQQQQfffZdUQEIPeJPPJIIIJJIPJJJJPRJJJIIIIJIEEEQSPIIIIIIJJJJJJJPJPPRVVUVmUnnttnjjiigjjjwzvvvvvvvvvqqqqqqqqvqqppqqqqqppqqqplplllllkklpuquqpppppplpplkllllllkkkllllllhhZTTTQLLKKEEEKKLTTYZZZYZfQLQUUSPRURLCKAAAAAPEKHacaIIEIPJRPJIIIPPICEIfZUQEQIELLZmUEQnfiniifRddeVRSdVUUdjjijinnnnntj00zzzzzvvvvvvvvvvzvvvvvvqppqvvqppqqqqqppquuuquuuuqqppqpllplpplllllpmhmhZYZTLLLKEEEEEEELLQPQQQPQTVwsjfJQJRVTYYMOKFbYTZTCRZWMMOMKEAAACCAIIIIJIIIRJIPRPPPJUdfgVVfdsjTZfisLTUVgQLSdgggggniTTTKYhl200000zzzzvzzzzzvvvvqvvvvz0zvvvvvvqqqvvvzvvuqqppplppppppppppppllhhZZLZZLLLLKKEEEEKLLJPPPPQQPPPRdsjiUQPPCACaaabbhIUmACYeECEELEELEIZKKEEEPJJIJRSSPPSRPJPJIIIJJIPSeggfLhZTWjULTYYYimtjnnjttjihmntw001111100000100000000zvvvvvvvvrvvvvqqqqqqvppuvuuuxxuuuxuummmZTTZZTTLLLLKKKQLLLQPUdUVUUQQUfiffddRRSPJJAFFbLJuz0ygLCCAACJLZfdUQLIIEETlYKALmREJJPJJPJIIIIPJIJPRSRSPPSeUVfidSSRRVVdjjjgeggjsjjjjjs1110000000zzzz0zzzzvuvzvpvvzzzzzvvvvqvvx0122221111xxwtywsnZTTQLLLLLLLLTYUUZffZZZhUUQUgQswtgSRIJJJJIEEEUUEffZLLTULKUcorbKZTQTE1umZLKw1zYccpUJRRJIPRPPRPRPJJPPIJJJPPPRRSRJPSSSRSdjggseVgegggjjsj000000000000000000xx0xxzzzzzz00000011232211xuuummihZTYYTTTTTTTTTTYhllmiiihhhZZbYfZfViddVRPJIIJPPRKACAEeZmmmTAAAKNNlzzzbKYEKEET2111xz00x2roqWQVRRSVeSPPRRRRPJJJSRPPPELQRVVdVVVdgnntmiijgfggjnjn111111111111111100000001112222222332110xxuumihhhZYYTTTTTYYYYYYYhutnffffiZZZZipttfVUUdRJPJJJRPJIETulNAT122220NXWDCCALVmNKTTLELTLn1ywttmQjJEhzobPJJJJJJIPUUTIPSVeSRPRRQLLSVdggjUUnmYlmm12tmiysij221222111111223233222222211111100xxxutnnmihhZZZZYYYYYYYYYYhhm1222ynmifZZUUUVfijgdjedVeSPPVSSPTYacz2uLE233332YFFKhv0nRJCCJQLTTYYKXpynjitidEIixrbQPVRJPRPPJJdddRPRRSRPSVSVdVdVedgddegnsyy1mlpu1133333333333332221111111000xxxxxxxtttnihhhZZZhZYZYZZZZZhhhimmmimmmfffUPRRRVVfidRithngeSRSVVVjUUorz12tulkvuzzxhZdVjswwlcocXQLICKXNWz0xntw1hJPSyrlbEIIEEJJJJRPVVRSPRdeVVggVjssjjftssswywiZxx2ywww333333322222111111110xxxxxxxtttnmihhhhhhZZZhhhhhhimmnnmmmnnntmifdUUVUVUUVSVUURLLVUSLSSjQLRVPQhzz101hLLQUdVuuhhingjxx2zrorrpLELEEKnyywtw1x1UsysjQugLEQTQRJJPSeiVSSRVVSVgggjgjswjgjjgjgfssjw12yy333333221222101110xxxuxxtmnnnmiihhhhhhhlllmmmuutttttnmmimnnmifddURVUSRUdVgwtwsgVLLSVVeeLKFLTYzz02upTLTLiVgswhFl0xvxw1pzNblYThTTQTty1wtwn013ywwyZnjtwwtyVVVRSVedddVVdggdVVdjjjsswjjjsgjsstssswy222222221111xxxxxxxxuutttmmmmmihhhhimmmmuuuxxxxttthLfiffiitxmmusdUVdSRgfUfssjVRSegeSSSSirzzzzoXuwgj122331ywxTKKbkz0wymZmTTmYTNm122211yt12x232sQU3333323yfVdRSVjsggSeegntwjjsysswwssyywsswywwyy2222112121xuuxxxuttttuuuuuummmummmmmmmmntntttwnntt1ywtyxy11yy2yytsfejfVVPRSVdeVVSSSSSdqzz00zzQUns112x1333320obKKYiyy2y2231yxhh133232121220rbmyQEUjwsnnnxnPPRSVVVVSddn10xnnfgjsyytwywnntsjwwyyy233222211yxxxxxxuuuttttx233332xuutwttnntsnnnwytt1013221ytnhyjtgjjVVSSSSSSeeVVVddeeVVSSddgi000xjit3322w13333330qTsy1y22223x11mux00220xx32mXOciLEEQUnLISVVVVSdddgsjjeVdegjttsjjgjsjnswwwtnmYtyyy2222212111110xxxxx12333332yywyxxywwwwwyyysnsttty33yysnttwjffdddVeeedejeeVVVdRQLVeSQgjgjgswwy1tywy33323333333330zzzzzz1333xYYZhlbhYZt31yyYhmtniLQUfgVVdddRSVVdVdddVgjdgUUdUjsjiywntmhYYZtywywyw22122221111111112333332mxyywyywwwwwwwywtsjjgjnjwtnjejystgejZsjeegjgesgVReedddgZQRUVdVgjwggVeddejn3333333333222112222002mniLTTTTYZmnwyyywswVLCnwgjjeVVVejeVVddVdddgitnjiZigjssswwsmYYhlYmy1y22y2222221111111233333221111yy122ywwtttttnntttnyZnwwnfngssgjgggVSejgeggeVesgVVdjgwUUnjVdeddPPRVddVLKZyhhhhllmhl2yyyyyyy123hhhQeVfhmum2333ysejwsVVgggeegeeVSVVVSVddddejjjggjnssswsiKXYWNNh33333333222222221112222222211111y1222yyyyyywy1222ytyyYhwhtwwswsswwsgVdddggeggjsjdSVVgsjQQVRQVSPdVSRdeegggjgjjssjsswwyjjgjnsjjjwiZYTJJPZZQT2yssgRjeVeeddgjgdejggedeVdgjggwsjjnjsssijswwssZZnthbY23323332222222232222222222111111yy11yy11yywwwyywyywtwyyywwtsjjssjggsgdjsjjeVeejgjgggggsjgUfjLdggSRRSVSSSdVeggjsswssss0udSVjjjjgjLLUUIUZULUjgeddeUVggeggsgeejgdddgjgeegesywsssswwjsty22wwyyyywmtyy2223"}};
-/* ---- ascii -> photo ocean scene: one continuous per-cell growth ---- */
+/* theme */
 (function(){
-const cv=$('#ocv'),ctx=cv.getContext('2d');
-const GW=OCIMG.gw,GH=OCIMG.gh;
-const RAMP=' .·:;~=-+*x#%@',last=RAMP.length-1;
+  const b=$('#theme');
+  b.onclick=()=>{const t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;try{localStorage.setItem('dg-theme',t)}catch(e){}};
+})();
+
+/* ascii -> photo scenes: every cell walks the same path (empty -> mono glyph -> colored glyph -> pixels) */
+(function(){
+const GW=OCIMG.gw,GH=OCIMG.gh,CW=8,CH=13;
+const RAMP=' .·:;~=-+*x#%@',LAST=RAMP.length-1;
 const ALPHA='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-const MONO='#7dd3a0',GROUND='#141418';
-const CW=8,CH=13;             // offscreen cell size (char ~1:1.6)
-const CYC=12000;              // one pass, photo is the end state
-const clamp01=v=>v<0?0:v>1?1:v,ease=v=>v*v*(3-2*v);
+const MONO='#7dd3a0',GROUND='#0d0d0f',CYC=12000;
+const clamp01=v=>v<0?0:v>1?1:v;
+const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+const dbg=(location.search.match(/[?&]p=(\d+)/)||[])[1];
 function hash(x,y,s){
   let h=Math.imul(x,374761393)^Math.imul(y,668265263)^Math.imul(s,1274126177);
   h=Math.imul(h^(h>>>13),1274126177);
   return ((h^(h>>>16))>>>0)/4294967296;
 }
-const state={v:'a',manual:-1,L:null,ready:false};
-// every cell walks the same path: empty -> mono char -> colored char -> pixels.
-// staggered start, dense/bright areas go first — the same mode from start to finish
-const gate=new Float32Array(GW*GH);
-function buildGates(d){
+function sheet(d,ink){
+  const c=document.createElement('canvas');c.width=GW*CW;c.height=GH*CH;
+  const x2=c.getContext('2d');
+  x2.fillStyle=GROUND;x2.fillRect(0,0,c.width,c.height);
+  x2.font='13px "Cascadia Mono",Consolas,Menlo,monospace';x2.textBaseline='top';
   for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
-    const i=y*GW+x,ink=Math.max(0,RAMP.indexOf(d.rows[y][x]))/last;
-    gate[i]=hash(x,y,1000)*.55+(1-ink)*.45;
+    const ch=d.rows[y][x];if(ch===' ')continue;
+    x2.fillStyle=ink||d.pal[ALPHA.indexOf(d.idx[y*GW+x])];
+    x2.fillText(ch,x*CW+1,y*CH);
   }
+  return c;
 }
-function buildLayers(d){
-  const mono=document.createElement('canvas'),col=document.createElement('canvas');
-  mono.width=col.width=GW*CW;mono.height=col.height=GH*CH;
-  for(const[c,ink]of[[mono,MONO],[col,null]]){
-    const x2=c.getContext('2d');
-    x2.fillStyle=GROUND;x2.fillRect(0,0,c.width,c.height);
-    x2.font='13px "Cascadia Mono",Consolas,monospace';x2.textBaseline='top';
-    for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
-      const ch=d.rows[y][x];if(ch===' ')continue;
-      x2.fillStyle=ink||d.pal[ALPHA.indexOf(d.idx[y*GW+x])];
-      x2.fillText(ch,x*CW+1,y*CH);
+function Scene(fig){
+  const d=OCIMG[fig.dataset.k];
+  const stage=$('.stage',fig),cv=$('canvas',stage),img=$('img',stage);
+  const sl=$('input[type=range]',fig),pct=$('.pct',fig);
+  cv.width=GW*CW;cv.height=GH*CH;
+  const ctx=cv.getContext('2d');
+  const gate=new Float32Array(GW*GH);
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+    const ink=Math.max(0,RAMP.indexOf(d.rows[y][x]))/LAST;
+    gate[y*GW+x]=hash(x,y,1000)*.55+(1-ink)*.45;
+  }
+  const mono=sheet(d,MONO),col=sheet(d,null);
+  let photo=null;
+  const prev=new Uint8Array(GW*GH).fill(255);
+  function loadPhoto(){
+    if(!img.naturalWidth)return;
+    photo=document.createElement('canvas');photo.width=GW*CW;photo.height=GH*CH;
+    photo.getContext('2d').drawImage(img,0,0,photo.width,photo.height);
+    prev.fill(255);dirty=true;
+  }
+  let dirty=true,started=false,manual=-1,t0=0,p=-1;
+  img.complete?loadPhoto():img.addEventListener('load',loadPhoto);
+  function paint(x,y,lv){
+    const dx=x*CW,dy=y*CH;
+    ctx.globalAlpha=1;ctx.fillStyle=GROUND;ctx.fillRect(dx,dy,CW,CH);
+    if(lv<=0)return;
+    if(lv<.35){ctx.globalAlpha=lv/.35;ctx.drawImage(mono,dx,dy,CW,CH,dx,dy,CW,CH)}
+    else if(lv<.62){ctx.drawImage(mono,dx,dy,CW,CH,dx,dy,CW,CH);ctx.globalAlpha=(lv-.35)/.27;ctx.drawImage(col,dx,dy,CW,CH,dx,dy,CW,CH)}
+    else{
+      if(lv<1||!photo)ctx.drawImage(col,dx,dy,CW,CH,dx,dy,CW,CH);
+      if(photo){ctx.globalAlpha=lv>=1?1:(lv-.62)/.38;ctx.drawImage(photo,dx,dy,CW,CH,dx,dy,CW,CH)}
     }
   }
-  const L={mono,col,photo:null};
-  const im=new Image();
-  im.onload=()=>{
-    const p=document.createElement('canvas');p.width=GW*CW;p.height=GH*CH;
-    p.getContext('2d').drawImage(im,0,0,p.width,p.height);
-    L.photo=p;state.ready=true;
-  };
-  im.src=d.src;
-  return L;
-}
-function setV(v){
-  state.v=v;state.ready=false;
-  buildGates(OCIMG[v]);state.L=buildLayers(OCIMG[v]);
-  document.querySelectorAll('.vsw button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
-}
-document.querySelector('.vsw').onclick=e=>{const b=e.target.closest('[data-v]');if(b&&b.dataset.v!==state.v)setV(b.dataset.v)};
-const sl=$('#clarity'),au=$('#clauto');
-sl.oninput=()=>{state.manual=+sl.value;au.classList.remove('on');au.textContent='自动 Ⅱ'};
-au.onclick=()=>{state.manual=-1;state.t0=performance.now();au.classList.add('on');au.textContent='自动 ▶'};
-const dbg=+((location.search.match(/[?&]p=(\d+)/)||[])[1]||-1);
-if(dbg>=0){state.manual=dbg;au.classList.remove('on');au.textContent='自动 Ⅱ';sl.value=dbg}
-setInterval(()=>{if(state.manual<0&&state.rp0!=null)sl.value=Math.round(state.rp0*100)},300);
-state.t0=performance.now();
-let lastTs=0;
-function draw(ts){
-  requestAnimationFrame(draw);
-  if(ts-lastTs<50)return;lastTs=ts;
-  const W=cv.clientWidth,H=cv.clientHeight;
-  if(!W||!H)return;
-  const dpr=Math.min(2,devicePixelRatio||1);
-  if(cv.width!==(W*dpr|0)){cv.width=W*dpr|0;cv.height=H*dpr|0}
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  const cw=W/GW,ch=H/GH;
-  const p=state.manual>=0?state.manual/100:Math.min((ts-state.t0)/CYC,1);
-  state.rp0=p;
-  ctx.fillStyle=GROUND;ctx.fillRect(0,0,W,H);
-  const L=state.L;
-  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
-    const i=y*GW+x;
-    const lv=clamp01((p-gate[i]*.70)/.30);          // this cell's own progress 0..1
-    if(lv<=0)continue;
-    const dx=x*cw,dy=y*ch,sx=x*CW,sy=y*CH;
-    if(lv<.35){                                     // mono char fades in
-      ctx.globalAlpha=lv/.35;
-      ctx.drawImage(L.mono,sx,sy,CW,CH,dx,dy,cw+.4,ch+.4);
-    }else if(lv<.62){                               // color seeps through the char
-      ctx.drawImage(L.mono,sx,sy,CW,CH,dx,dy,cw+.4,ch+.4);
-      ctx.globalAlpha=(lv-.35)/.27;
-      ctx.drawImage(L.col,sx,sy,CW,CH,dx,dy,cw+.4,ch+.4);
-    }else if(L.photo&&lv<1){                        // char resolves into pixels
-      ctx.drawImage(L.col,sx,sy,CW,CH,dx,dy,cw+.4,ch+.4);
-      ctx.globalAlpha=(lv-.62)/.38;
-      ctx.drawImage(L.photo,sx,sy,CW,CH,dx,dy,cw+.4,ch+.4);
-    }else{
-      ctx.drawImage(L.photo||L.col,sx,sy,CW,CH,dx,dy,cw+.4,ch+.4);
-      continue;
+  function render(){
+    for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+      const i=y*GW+x,lv=clamp01((p-gate[i]*.70)/.30),q=lv>=1?41:Math.round(lv*40);
+      if(prev[i]===q)continue;prev[i]=q;paint(x,y,lv);
     }
     ctx.globalAlpha=1;
+    stage.classList.toggle('done',p>=1&&!!photo);
   }
+  function tick(ts){
+    requestAnimationFrame(tick);
+    if(!started)return;
+    const np=manual>=0?manual:clamp01((ts-t0)/CYC);
+    if(np===p&&!dirty)return;
+    p=np;dirty=false;render();
+    pct.textContent=String(Math.round(p*100)).padStart(3,'0');
+    if(manual<0)sl.value=Math.round(p*100);
+  }
+  function start(){if(started)return;started=true;t0=performance.now();if(reduce)manual=1}
+  sl.oninput=()=>{started=true;manual=+sl.value/100;dirty=true};
+  $('.replay',fig).onclick=()=>{started=true;manual=-1;t0=performance.now();p=-1;prev.fill(255);dirty=true;stage.classList.remove('done')};
+  requestAnimationFrame(tick);
+  if(dbg!==undefined){started=true;manual=+dbg/100;sl.value=+dbg}
+  else if(fig.dataset.start==='load')start();
+  else if('IntersectionObserver' in window){
+    const io=new IntersectionObserver(es=>{if(es.some(e=>e.isIntersecting)){start();io.disconnect()}},{threshold:.3});
+    io.observe(fig);
+  }else start();
 }
-requestAnimationFrame(draw);
-setV((location.hash+location.search).includes('v=b')?'b':'a');
+document.querySelectorAll('.scene').forEach(Scene);
 })();
 
-/* ---- init ---- */
-show((location.hash.match(/t=(\w+)/)||[])[1]||'proc');
-setInterval(()=>{
-  SYS.cpu=Math.max(2,Math.min(60,SYS.cpu+(Math.random()-.5)*8))|0;SYS.mem=Math.max(55,Math.min(70,SYS.mem+(Math.random()-.5)*2))|0;SYS.disk=Math.max(0,Math.min(40,SYS.disk+(Math.random()-.5)*8))|0;
-  const m={CPU:SYS.cpu,'内存':SYS.mem,'磁盘':SYS.disk};
-  document.querySelectorAll('.mwin').forEach(w=>Object.entries(m).forEach(([k,v])=>{const b=w.querySelector(`[data-k="${k}"]`),i=w.querySelector(`[data-b="${k}"]`);if(b)b.textContent=v+'%';if(i)i.style.width=v+'%'}));
-},1500);
+/* song + MV slots: fill SONG_SRC / MV_SRC when the files exist */
+(function(){
+  const SONG_SRC='';           // e.g. 'audio/dumpingground.mp3'
+  const MV_SRC='';             // e.g. 'video/dumpingground.mp4'
+  const au=$('#song'),pb=$('#play'),snd=$('#snd'),wave=$('#wave'),tm=$('#ptime'),st=$('#pstate'),pl=$('#player');
+  const BARS='▁▂▃▄▅▆▇█',N=44;
+  let seed=7;const rnd=()=>(seed=(seed*1103515245+12345)%2147483648)/2147483648;
+  const base=Array.from({length:N},()=>rnd());
+  const draw=t=>{wave.textContent=base.map((b,i)=>BARS[Math.max(0,Math.min(7,Math.round((au.paused?.08+.12*b:.15+.85*Math.abs(Math.sin(t*2+i*.55+b*6)*(.4+.6*b)))*7)))]).join('')};
+  draw(0);
+  const fmt=s=>isFinite(s)?Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0'):'--:--';
+  if(MV_SRC){const v=document.createElement('video');v.src=MV_SRC;v.controls=true;v.playsInline=true;v.preload='metadata';const s=$('#mvSlot');s.textContent='';s.appendChild(v)}
+  if(!SONG_SRC)return;
+  au.src=SONG_SRC;pb.disabled=false;snd.disabled=false;st.textContent='同名歌曲';
+  const sync=()=>{const on=!au.paused;pb.textContent=on?'❚❚':'▶';snd.textContent=on?'♪ 声音 · 开':'♪ 声音 · 关';pl.classList.toggle('on',on)};
+  const toggle=()=>au.paused?au.play().then(sync,()=>{}):(au.pause(),sync());
+  pb.onclick=snd.onclick=toggle;
+  au.ontimeupdate=()=>{tm.textContent=fmt(au.currentTime)+' / '+fmt(au.duration)};
+  au.onloadedmetadata=au.ontimeupdate;
+  setInterval(()=>{if(!au.paused)draw(performance.now()/1000)},120);
+  sync();
+  au.play().then(sync).catch(()=>{
+    snd.textContent='♪ 点击任意处开启声音';
+    const go=()=>{au.play().then(sync,()=>{});removeEventListener('pointerdown',go);removeEventListener('keydown',go)};
+    addEventListener('pointerdown',go);addEventListener('keydown',go);
+  });
+})();
 </script>
 </body>
 </html>

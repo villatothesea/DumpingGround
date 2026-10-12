@@ -21,8 +21,8 @@ import (
 const retainDays = 30
 
 var (
-	mu     sync.Mutex
-	dir    string
+	mu      sync.Mutex
+	dir     string
 	testDir string // set by tests to redirect output
 )
 

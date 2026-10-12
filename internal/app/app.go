@@ -235,6 +235,12 @@ type Model struct {
 	sweepRmDone                     int // removal progress: items finished…
 	sweepRmTotal                    int // …out of this many
 	sweepRmPath                     string
+	rustRmDone                      int // rust delete progress, same contract
+	rustRmTotal                     int
+	rustRmPath                      string
+	junkRmDone                      int // junk delete progress, same contract
+	junkRmTotal                     int
+	junkRmPath                      string
 	sweepDoneMsg                    string // result text of the confirm-close alert
 	orphanScanning                  bool   // leftover scan for already-removed apps in flight
 	events                          chan func()
