@@ -109,6 +109,33 @@ pretending to pass.
   is Confirmed (evidence) or Likely (name match, never pre-checked).
 - Registry removals are backed up; filesystem items go to the Recycle Bin.
 
+### Startup
+
+Everything that starts by itself, in one list with an on/off switch each:
+
+- **Apps** — the `Run` keys (current user, all users, 32-bit) and both
+  Startup folders.
+- **Services** — automatic and delayed-start services, and ones switched off.
+- **Scheduled tasks** — tasks that fire at sign-in or at boot.
+
+Each row shows the publisher (from the program's own version resource),
+whether it is running right now, and the exact command. Selecting a row
+says where it is configured and what switching it does.
+
+Nothing is deleted, and every switch can be undone:
+
+- Apps use the `StartupApproved` flags — the mechanism Task Manager uses —
+  so the `Run` value or shortcut stays exactly where it is.
+- Tasks are enabled or disabled through Task Scheduler itself.
+- Services have their start type changed; the original (automatic, and
+  whether delayed) is remembered and restored on switching back on.
+  Turning a service off asks first, and a running service keeps running
+  until the next boot.
+- Windows' own services and tasks are hidden by default and read-only when
+  shown, decided by who made the program rather than where it sits —
+  vendor driver services under `System32\DriverStore` stay switchable.
+- Every change is written to the app log.
+
 ## Building
 
 Go 1.27+, MyGo pinned to v0.3.5. No Bun, WebView2, or C toolchain.

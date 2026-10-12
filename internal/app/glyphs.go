@@ -40,6 +40,7 @@ var glyphs = map[string]*ui.SVG{
 	"caret-r": glyph(`<path d="M9 5l7 7-7 7z" fill="currentColor" stroke="none"/>`),
 	"caret-d": glyph(`<path d="M5 9h14l-7 7z" fill="currentColor" stroke="none"/>`),
 	"warn":    glyph(`<path d="M12 3l10 18H2z"/><path d="M12 10v5"/><path d="M12 18.5h.01"/>`),
+	"lock":    glyph(`<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>`),
 	"left":    glyph(`<path d="M19 12H5M12 19l-7-7 7-7"/>`),
 	"gpu":     glyph(`<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M6 18v2M18 18v2M6 9h2"/>`),
 	"wifi":    glyph(`<path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/>`),

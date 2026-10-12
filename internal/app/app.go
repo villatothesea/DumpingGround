@@ -116,6 +116,8 @@ type Model struct {
 	reservedQuery                   string
 	sys                             systemUsage
 	hw                              computerState
+	st                              startupState
+	postHook                        func(func()) // tests only: stands in for Window.Update
 	status                          string
 	diskScanner                     disk.Scanner
 	diskPath, diskDrive             string
@@ -283,6 +285,8 @@ func (m *Model) Run() error {
 			m.page = diskPage
 		case "processes":
 			m.page = processPage
+		case "startup":
+			m.page = startupPage
 		default:
 			m.page = computerPage
 		}
@@ -351,6 +355,10 @@ func (m *Model) Run() error {
 // Window.Update's queue is unbounded — workers can never stall behind a
 // busy UI the way the old buffered events channel could.
 func (m *Model) post(fn func()) {
+	if m.postHook != nil {
+		m.postHook(fn) // tests run the callback on their own goroutine
+		return
+	}
 	if w := m.window; w != nil {
 		w.Update(fn)
 	}
@@ -470,6 +478,8 @@ func (m *Model) view(c *ui.Context) {
 			m.refreshOnce()
 		} else if m.page == diskPage {
 			m.startScan()
+		} else if m.page == startupPage {
+			m.reloadStartup()
 		}
 	}
 	if m.page == diskPage && m.diskSnapshot != nil && m.diskRoot != m.diskSnapshot.Root {
@@ -541,7 +551,7 @@ func (m *Model) view(c *ui.Context) {
 		case uninstallPage:
 			m.uninstallView(c, t)
 		case startupPage:
-			m.reservedView(c, "zap", "Startup items", "Manages programs that start with Windows, with enable and disable controls. Tab position, shortcut and the shared search box are reserved.")
+			m.startupView(c, t)
 		}
 		m.statusBar(c, t)
 	})
@@ -614,6 +624,8 @@ func (m *Model) topBar(c *ui.Context, t *ui.Theme) {
 			ui.SearchField(c, &m.diskQuery).Label("Filter files").Placeholder("Filter files").Width(190).Disabled(m.diskSnapshot == nil)
 		case uninstallPage:
 			ui.SearchField(c, &m.uninstQuery).Label("Filter apps").Placeholder("Filter apps").Width(190)
+		case startupPage:
+			ui.SearchField(c, &m.st.query).Label("Filter startup items").Placeholder("Name, publisher or command").Width(190)
 		default:
 			ui.SearchField(c, &m.reservedQuery).Label("Search").Placeholder("Not available on this page").Width(190).Disabled(true)
 		}
@@ -687,6 +699,9 @@ func (m *Model) setPage(pg page) {
 	}
 	if pg == diskPage {
 		m.maybeRefreshVolumes()
+	}
+	if pg == startupPage && time.Since(m.st.loadedAt) > 20*time.Second {
+		m.reloadStartup() // the list may have changed since it was last read
 	}
 }
 
@@ -899,7 +914,12 @@ func (m *Model) statusBar(c *ui.Context, t *ui.Theme) {
 			}
 		case computerPage:
 			text = "Live · sampled every second"
-		case uninstallPage, startupPage:
+		case startupPage:
+			text = m.st.msg
+			if m.st.loading && m.st.msg == "" {
+				text = "Reading startup items…"
+			}
+		case uninstallPage:
 			text = "Reserved"
 		}
 		if text == "" {

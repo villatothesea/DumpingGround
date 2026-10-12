@@ -142,3 +142,13 @@ func parseLinkTargetFile(path string) string {
 	}
 	return parseLinkTarget(data)
 }
+
+// ResolveShortcut returns the raw target a .lnk points at ("" when the
+// shell cannot resolve it). The startup page uses it to show what a
+// Startup-folder shortcut actually launches.
+func ResolveShortcut(path string) string {
+	r := newLinkResolver()
+	defer r.close()
+	target, _, _ := r.resolve(path)
+	return target
+}
