@@ -5,3 +5,9 @@ build/
 *.test
 shots/
 *~
+
+# Runtime state — logs, uninstall history and registry backups live
+# under %LOCALAPPDATA% but must never be committed if they land here
+*.log
+uninstalled.json
+backups/

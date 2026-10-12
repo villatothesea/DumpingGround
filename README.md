@@ -44,7 +44,7 @@ go build -tags mygo_noinspector -trimpath -ldflags "-s -w -H=windowsgui" -o buil
 
 ```powershell
 .\build\DumpingGround.exe --page=disk
-.\build\DumpingGround.exe --scan="D:\MyWords"
+.\build\DumpingGround.exe --scan="D:\Games"
 .\build\DumpingGround.exe --capture-dir="build\captures" --close-after=8s
 ```
 
@@ -72,3 +72,7 @@ go build -tags mygo_noinspector -trimpath -ldflags "-s -w -H=windowsgui" -o buil
 - [MFT 严格验证记录](docs/mft-validation.md)
 
 使用 `type(scope): imperative summary` 提交消息。一项功能或修复一个提交；构建产物不入库。
+
+## License
+
+MIT — see [LICENSE](LICENSE). The license may move to Apache-2.0 in the future; contributions are accepted on those terms, see [CONTRIBUTING.md](CONTRIBUTING.md).

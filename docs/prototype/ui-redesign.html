@@ -460,11 +460,11 @@ const PD=[
  [8800,5120,'Code.exe','D:\\Programs\\VSCode\\Code.exe',2.4,310,251,5200,12000,38],[8840,8800,'Code.exe','D:\\Programs\\VSCode\\Code.exe',0.6,95,61,300,0,18],[8900,8800,'Code.exe','D:\\Programs\\VSCode\\Code.exe',1.1,180,122,800,3200,22],
  [9100,5120,'chrome.exe','C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',1.8,220,150,6400,2300,46],[9140,9100,'chrome.exe','C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',3.2,310,260,0,0,24],[9180,9100,'chrome.exe','C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',0.4,88,60,0,0,16],
  [10036,5120,'WindowsTerminal.exe','C:\\Program Files\\WindowsApps\\WindowsTerminal.exe',0.1,29.4,52.8,0,0,26],[9804,10036,'bash.exe','C:\\Program Files\\Git\\usr\\bin\\bash.exe',0,4.6,6.8,0,0,4],[28156,9804,'go.exe','C:\\Program Files\\Go\\bin\\go.exe',12.4,64,48,102400,40960,9],
- [12760,5120,'DumpingGround.exe','D:\\MyWords\\VibeCoding\\DumpingGround\\build\\DumpingGround.exe',1.2,48.1,31.2,0,0,17],
+ [12760,5120,'DumpingGround.exe','D:\\Projects\\DumpingGround\\build\\DumpingGround.exe',1.2,48.1,31.2,0,0,17],
  [13560,720,'aihost.exe','C:\\Program Files\\AI\\aihost.exe',0,10.3,12.5,0,0,4],[167168,720,'aimgr.exe','C:\\Program Files\\AI\\aimgr.exe',0,13,5,0,0,3],[169040,5120,'ai.exe','C:\\Program Files\\AI\\ai.exe',0,7.2,25.3,0,0,20],
  [151016,720,'audiodg.exe','C:\\Windows\\System32\\audiodg.exe',0.3,24,19.1,0,0,3],[4528,720,'AppActions.exe','C:\\Windows\\SystemApps\\AppActions.exe',0,14.8,12.8,0,0,7],
  [23680,720,'AppProvisioningPlugin.exe','',-1,0,0,0,0,12],[12120,5120,'Docker Desktop.exe','C:\\Program Files\\Docker\\Docker Desktop.exe',2.9,260,210,800,1200,34],
- [14400,5120,'Spotify.exe','C:\\Users\\tx_vi\\AppData\\Roaming\\Spotify\\Spotify.exe',0.5,150,98,0,0,41]
+ [14400,5120,'Spotify.exe','C:\\Users\\dev\\AppData\\Roaming\\Spotify\\Spotify.exe',0.5,150,98,0,0,41]
 ].map(r=>({pid:r[0],ppid:r[1],name:r[2],path:r[3],cpu:r[4]<0?0:r[4],ws:r[5]*MB,priv:r[6]*MB,rd:r[7]*1024,wr:r[8]*1024,th:r[9],na:r[4]<0}));
 let P=PD.slice();
 PD.forEach(p=>p.base=p.cpu);
@@ -533,7 +533,7 @@ function renderProcDetails(){
   const tb=(cols,rows,tpl)=>`<div class="thead" style="grid-template-columns:${tpl};height:28px">${cols.map((c,i)=>`<div class="th ${i>=cols.length-1&&c[0]==='>'?'num':''}">${c.replace('>','')}</div>`).join('')}</div>`+rows.map(r=>`<div class="tr" style="grid-template-columns:${tpl};height:28px">${r.map(c=>`<div class="td ell mono">${esc(c)}</div>`).join('')}</div>`).join('');
   let body='';
   const dll=['ntdll.dll','kernel32.dll','KERNELBASE.dll','user32.dll','gdi32.dll','msvcrt.dll','combase.dll','shell32.dll'];
-  if(S.proc.dtab==='props')body=`<div class="kv"><span class="k">用户</span><span class="v">DESKTOP\\tx_vi</span><span class="k">提权</span><span class="v">否</span><span class="k">句柄数</span><span class="v">412</span><span class="k">优先级类</span><span class="v">0x20 (Normal)</span><span class="k">路径</span><span class="v mono ell">${esc(p.path||'—')}</span><span class="k">命令行</span><span class="v mono"><span class="ell">"${esc(p.path||p.name)}" --type=renderer --lang=zh-CN</span><button class="btn sq" data-act="copycmd" title="复制命令行">${ic('copy')}</button></span></div>`;
+  if(S.proc.dtab==='props')body=`<div class="kv"><span class="k">用户</span><span class="v">DESKTOP\\dev</span><span class="k">提权</span><span class="v">否</span><span class="k">句柄数</span><span class="v">412</span><span class="k">优先级类</span><span class="v">0x20 (Normal)</span><span class="k">路径</span><span class="v mono ell">${esc(p.path||'—')}</span><span class="k">命令行</span><span class="v mono"><span class="ell">"${esc(p.path||p.name)}" --type=renderer --lang=zh-CN</span><button class="btn sq" data-act="copycmd" title="复制命令行">${ic('copy')}</button></span></div>`;
   if(S.proc.dtab==='mods')body=tb(['模块','>映像大小','路径'],dll.map((d,i)=>[d,fmtB((i+3)*190000),'C:\\Windows\\System32\\'+d]),'200px 110px 1fr');
   if(S.proc.dtab==='thr')body=tb(['线程 ID','所属 PID','>基础优先级'],[0,1,2,3,4,5].map(i=>[String(p.pid*3+i*4),String(p.pid),String(8-(i>3?2:0))]),'160px 160px 1fr');
   if(S.proc.dtab==='hdl')body=`<div class="toolbar" style="height:36px"><div class="field" style="width:260px">${ic('search')}<input placeholder="按类型或名称过滤，Enter 搜索"></div><button class="btn" data-act="noop">搜索句柄</button><span class="muted">0 个结果</span></div>`+tb(['句柄','类型','名称','>访问'],[['0x4','Event',''],['0x8','File','\\Device\\HarddiskVolume3\\Windows'],['0x2c','Key','\\REGISTRY\\MACHINE\\SOFTWARE'],['0x40','Section','\\Sessions\\1\\BaseNamedObjects']].map(r=>[...r,'0x1fffff']),'90px 120px 1fr 100px');
@@ -589,7 +589,7 @@ const SPEC=`Windows/
     simsun.ttc 15
     segoeui.ttf 2
 Users/
-  tx_vi/
+  dev/
     Downloads/
       installer.exe 260
       dataset.zip 1840
@@ -753,7 +753,7 @@ function diskMount(){
 function navDisk(n){if(!n||!n.d)return;const D=S.disk;D.root=n;D.sel=null;D.ext=null;D.open=new Set();renderPage()}
 /* fake scan */
 let scanTimer=null;
-const SCAN_PATHS=['Windows\\System32\\DriverStore','Windows\\WinSxS','Users\\tx_vi\\AppData\\Local\\Temp','Program Files\\Docker','ProgramData\\Package Cache','Users\\tx_vi\\Videos','Windows\\SoftwareDistribution\\Download'];
+const SCAN_PATHS=['Windows\\System32\\DriverStore','Windows\\WinSxS','Users\\dev\\AppData\\Local\\Temp','Program Files\\Docker','ProgramData\\Package Cache','Users\\dev\\Videos','Windows\\SoftwareDistribution\\Download'];
 function startScan(){
   const D=S.disk;if(D.state==='scanning')return;
   D.state='scanning';D.partial=false;D.root=null;D.sel=null;D.query='';D.ext=null;D.open=new Set();D.scan={t0:performance.now(),files:0,dirs:0,bytes:0,cur:''};
@@ -875,7 +875,7 @@ function act(a,v,el,e){
    case 'killmenu':{const r=el.getBoundingClientRect();e.stopPropagation();showMenu(r.right-170,r.top-64,[{id:'kill',t:'结束进程…',danger:1},{id:'killtree',t:'结束进程树…',danger:1}]);break}
    case 'noop':break;
    case 'drive':D.drive=v;D.path=v;renderPage();break;
-   case 'browse':D.path='C:\\Users\\tx_vi\\Downloads';D.drive='';renderPage();setStatus('已选择文件夹（原型：模拟对话框）');break;
+   case 'browse':D.path='C:\\Users\\dev\\Downloads';D.drive='';renderPage();setStatus('已选择文件夹（原型：模拟对话框）');break;
    case 'scan':{D.path=($('#pathIn')||{}).value||D.path;D.state==='scanning'?finishScan(true):(D.path.trim()?startScan():setStatus('请先选择盘符或文件夹'));break}
    case 'goto':navDisk(NODES[+v]);break;
    case 'up':navDisk(D.root.parent);break;
