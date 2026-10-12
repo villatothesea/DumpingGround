@@ -319,7 +319,7 @@ func (m *Model) rustDelete(jobs []disk.RustDir) {
 		deleted := map[string]uint64{}
 		for i, j := range jobs {
 			path := j.Path
-			m.postProg(func() { m.rustRmDone, m.rustRmPath = i, path })
+			m.post(func() { m.rustRmDone, m.rustRmPath = i, path })
 			if err := disk.SafeRustEntry(j.Path, j.Base, j.File); err != nil {
 				failed++
 				if firstErr == nil {

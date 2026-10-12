@@ -244,7 +244,7 @@ type Model struct {
 	junkRmPath                      string
 	sweepDoneMsg                    string // result text of the confirm-close alert
 	orphanScanning                  bool   // leftover scan for already-removed apps in flight
-	events                          chan func()
+
 	// CaptureDir writes only this application's frames during explicit diagnostics.
 	CaptureDir  string
 	InitialPage string
@@ -257,7 +257,7 @@ func New() *Model {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Model{processSvc: process.NewService(), processByPID: map[uint32]process.Info{}, processSelected: -1, uninstSelected: -1,
 		processSort: ui.SortOrder{Column: "name"}, processInterval: "1 s", processTreeMode: true, ctx: ctx, close: cancel,
-		processUpdates: make(chan processResult, 1), refresh: make(chan struct{}, 1), inspection: make(chan inspectionResult, 1), events: make(chan func(), 8),
+		processUpdates: make(chan processResult, 1), refresh: make(chan struct{}, 1), inspection: make(chan inspectionResult, 1),
 		iconCache:   make(map[string]*ui.Bitmap),
 		iconPending: make(map[string]bool), iconRequests: make(chan string, 32),
 		diskStatus: "Choose a drive or folder to scan", diskMode: "Tree", diskMetric: "Allocated", diskSelected: -1, diskNode: -1, extensionSelected: -1, mapRoot: -1, diskSplit: 300, animateMap: true, detailTab: "Properties", memRelease: "Automatic", tabStyle: "Pill",
@@ -333,33 +333,13 @@ func (m *Model) Run() error {
 	})
 	return mygo.App.Run()
 }
-func (m *Model) post(fn func()) {
-	start := time.Now()
-	select {
-	case m.events <- fn:
-		if m.window != nil {
-			m.window.Invalidate()
-		}
-	case <-m.ctx.Done():
-	}
-	// A queued event starving behind a stalled UI is worth knowing
-	// about in the field log — severe stalls only, so this stays quiet.
-	if d := time.Since(start); d > 500*time.Millisecond {
-		applog.Logf("post waited %v for the event queue", d)
-	}
-}
 
-// postProg reports progress — a stale counter is worthless once a newer
-// one exists, so it drops instead of blocking the worker when the UI is
-// behind. Anything the worker must land stays on post.
-func (m *Model) postProg(fn func()) {
-	select {
-	case m.events <- fn:
-		if m.window != nil {
-			m.window.Invalidate()
-		}
-	case <-m.ctx.Done():
-	default:
+// post runs fn on the main thread, where the view builds, and redraws.
+// Window.Update's queue is unbounded — workers can never stall behind a
+// busy UI the way the old buffered events channel could.
+func (m *Model) post(fn func()) {
+	if w := m.window; w != nil {
+		w.Update(fn)
 	}
 }
 func (m *Model) sampleProcesses() {
@@ -405,15 +385,6 @@ func (m *Model) refreshOnce() {
 	}
 }
 func (m *Model) drain() {
-	for {
-		select {
-		case fn := <-m.events:
-			fn()
-		default:
-			goto eventsDone
-		}
-	}
-eventsDone:
 	select {
 	case r := <-m.processUpdates:
 		if r.err != nil {
@@ -463,7 +434,7 @@ func (m *Model) view(c *ui.Context) {
 	m.drain()
 	if dbgFrames {
 		if d := time.Since(frameStart); d > 150*time.Millisecond {
-			dbgLog("drain took %v (events backlog)", d)
+			dbgLog("drain took %v (update backlog)", d)
 		}
 	}
 	if c.Shortcut(ui.Ctrl, ui.Key1) {

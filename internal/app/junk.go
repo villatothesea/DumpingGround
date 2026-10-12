@@ -261,7 +261,7 @@ func (m *Model) junkDelete(jobs []*disk.JunkDir) {
 		var firstErr error
 		for i, d := range jobs {
 			path := d.Path
-			m.postProg(func() { m.junkRmDone, m.junkRmPath = i, path })
+			m.post(func() { m.junkRmDone, m.junkRmPath = i, path })
 			f, rm, sk, err := disk.JunkClean(*d, func(name string) bool {
 				return running != nil && running[name]
 			})
