@@ -173,6 +173,9 @@ type DiskSample struct {
 	// Computer page is on screen. nil when the drive does not pass its
 	// health log through (SATA, a USB bridge, NVMe behind a RAID driver).
 	Health *DiskHealth
+	// SATA is the ATA SMART attribute table for a SATA/ATA drive; NVMe
+	// drives carry Health instead and leave this nil.
+	SATA *SATAHealth
 }
 
 type NICSample struct {

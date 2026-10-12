@@ -80,9 +80,14 @@ The page the app opens on (Ctrl+1; Ctrl+2–5 are the other tabs).
   0x02): temperature, endurance used and spare blocks, data written and
   read, power-on time, power cycles, unsafe shutdowns and media errors.
   The verdict — Good, Caution or Replace — is the NVMe spec's own and
-  always shows its reasons; there is no invented health score. A drive
-  that does not pass its health log through (SATA, a USB bridge, NVMe
-  behind Intel RST/VMD) says so instead of guessing.
+  always shows its reasons; there is no invented health score. SATA drives
+  report ATA SMART attributes instead (reallocated, pending and
+  uncorrectable sectors, temperature, power-on time, and wear where the
+  drive provides it). Because those attribute numbers are vendor-defined,
+  only the readings that mean the same thing everywhere drive the verdict;
+  the rest is shown as the drive reports it. A drive that answers neither —
+  a USB bridge, or NVMe behind Intel RST/VMD — says so instead of
+  guessing.
 - More of what each part reports: a hybrid CPU's performance/efficiency
   core split, each disk's serial number, firmware revision and partition
   table (GPT/MBR), a network adapter's error and dropped-packet counters,

@@ -179,7 +179,12 @@ func hwCards(info *hwmon.Info, h []hwmon.Sample) []hwCard {
 			ds := last.Disks[i]
 			c.value = fmt.Sprintf("%.0f%%", ds.Active)
 			c.stats = []string{"R " + format.Rate(ds.ReadRate), "W " + format.Rate(ds.WriteRate)}
-			c.health, _ = hwmon.JudgeHealth(ds.Health)
+			switch {
+			case ds.Health != nil:
+				c.health, _ = hwmon.JudgeHealth(ds.Health)
+			case ds.SATA != nil:
+				c.health, _ = hwmon.JudgeSATAHealth(ds.SATA)
+			}
 		}
 		cards = append(cards, c)
 	}

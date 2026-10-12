@@ -29,6 +29,9 @@ type diskHandle struct {
 	ok     bool
 	nvme   bool
 	health *DiskHealth
+	sata   bool
+	smarth syscall.Handle // separate read/write handle the SMART IOCTL needs
+	smart  *SATAHealth
 }
 
 type diskPerf struct {
@@ -84,6 +87,13 @@ func (p *platform) loadDisks(info *Info) {
 		if d.Bus == "NVMe" {
 			dh.nvme = true
 			dh.health = readNVMeHealth(h) // read now; refreshed while the page is visible
+		}
+		if d.Bus == "SATA" || d.Bus == "ATA" {
+			dh.sata = true
+			if sh, err := openReadWrite(fmt.Sprintf(`\\.\PhysicalDrive%d`, i)); err == nil {
+				dh.smarth = sh
+				dh.smart = readSATASmart(sh)
+			}
 		}
 		p.disks = append(p.disks, dh)
 	}
@@ -212,6 +222,7 @@ func (p *platform) sampleDisks(s *Sample, info *Info) {
 		}
 		ds := &s.Disks[i]
 		ds.Health = d.health
+		ds.SATA = d.smart
 		ds.Queue, ds.ReadBytes, ds.WriteBytes = cur.queueDepth, cur.bytesRead, cur.bytesWritten
 		if d.ok && cur.queryTime > d.prev.queryTime {
 			dt := float64(cur.queryTime - d.prev.queryTime) // 100 ns units
@@ -249,6 +260,9 @@ func (p *platform) sampleHealth() {
 	for _, d := range p.disks {
 		if d.nvme {
 			d.health = readNVMeHealth(d.h)
+		}
+		if d.sata && d.smarth != 0 {
+			d.smart = readSATASmart(d.smarth)
 		}
 	}
 }

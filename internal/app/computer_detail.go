@@ -407,15 +407,20 @@ func (m *Model) hwDiskDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist 
 	d := info.Disks[i]
 	last := lastSample(hist)
 	var health *hwmon.DiskHealth
+	var sata *hwmon.SATAHealth
 	if last != nil && i < len(last.Disks) {
 		health = last.Disks[i].Health
+		sata = last.Disks[i].SATA
 	}
-	// Health is read from the NVMe log, so only SSDs have it (and not even
-	// all of them, when a bridge hides it).
-	if d.Kind == "SSD" {
-		m.hwHealthPanel(c, t, health)
+	// Health is read from the drive itself: the NVMe log or the ATA SMART
+	// table. Only SSDs (and only those that answer) get a panel.
+	if d.Kind == "SSD" || health != nil || sata != nil {
+		m.hwHealthPanel(c, t, health, sata)
 		if health != nil {
 			m.hwStatGrid(c, t, healthStats(health))
+		}
+		if sata != nil {
+			m.hwStatGrid(c, t, sataStats(sata))
 		}
 	}
 	active := hwLine{col: hwDiskCol, fill: true, val: func(s *hwmon.Sample) (float64, bool) {
@@ -497,34 +502,85 @@ func (m *Model) hwDiskDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist 
 }
 
 // hwHealthPanel is the disk detail's verdict panel: what the drive's own
-// NVMe SMART/health log says, with nothing invented on top of it.
-func (m *Model) hwHealthPanel(c *ui.Context, t *ui.Theme, h *hwmon.DiskHealth) {
+// health log or SMART table says, with nothing invented on top of it.
+func (m *Model) hwHealthPanel(c *ui.Context, t *ui.Theme, health *hwmon.DiskHealth, sata *hwmon.SATAHealth) {
 	m.hwPanel(c, t, func() {
 		ui.Row(c).Gap(14).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, "Health").Bold().FontSize(13)
 			ui.Spacer(c)
-			ui.Text(c, "NVMe SMART / health log").FontSize(11).TextColor(t.TextMuted)
+			source := "NVMe SMART / health log"
+			if health == nil && sata != nil {
+				source = "ATA SMART attributes"
+			}
+			ui.Text(c, source).FontSize(11).TextColor(t.TextMuted)
 		})
-		if h == nil {
+		switch {
+		case health == nil && sata == nil:
 			ui.Text(c, "Health information is not available for this drive.").TextColor(t.TextMuted)
 			ui.Text(c, "USB bridges and NVMe drives behind a RAID driver (Intel RST/VMD) do not pass the drive's health log through. Nothing is assumed about the drive's condition.").FontSize(12).TextColor(t.TextMuted)
-			return
-		}
-		status, reasons := hwmon.JudgeHealth(h)
-		col := hwHealthColor(status, t)
-		ui.Row(c).Gap(9).AlignItems(ui.Center).Children(func() {
-			ui.Box(c).Size(10, 10).Radius(5).Background(col)
-			ui.Text(c, status).FontSize(16).Bold().TextColor(col)
-			ui.Text(c, "judged from the drive's own counters").FontSize(11).TextColor(t.TextMuted)
-		})
-		if len(reasons) == 0 {
-			ui.Text(c, "No faults reported: spare blocks are above the threshold, endurance is not near its limit, and no media errors are recorded.").FontSize(12).TextColor(t.TextMuted)
-		} else {
-			for _, r := range reasons {
-				ui.Text(c, "• "+r).FontSize(12).TextColor(col)
-			}
+		case health != nil:
+			status, reasons := hwmon.JudgeHealth(health)
+			m.hwVerdict(c, t, status, reasons)
+		default:
+			status, reasons := hwmon.JudgeSATAHealth(sata)
+			m.hwVerdict(c, t, status, reasons)
 		}
 	})
+}
+
+func (m *Model) hwVerdict(c *ui.Context, t *ui.Theme, status string, reasons []string) {
+	col := hwHealthColor(status, t)
+	ui.Row(c).Gap(9).AlignItems(ui.Center).Children(func() {
+		ui.Box(c).Size(10, 10).Radius(5).Background(col)
+		ui.Text(c, status).FontSize(16).Bold().TextColor(col)
+		ui.Text(c, "judged from the drive's own counters").FontSize(11).TextColor(t.TextMuted)
+	})
+	if len(reasons) == 0 {
+		ui.Text(c, "No faults reported by the drive's own counters.").FontSize(12).TextColor(t.TextMuted)
+	} else {
+		for _, r := range reasons {
+			ui.Text(c, "• "+r).FontSize(12).TextColor(col)
+		}
+	}
+}
+
+// sataStats lays out the ATA SMART readings. Wear attributes are shown as
+// the drive reports them; their meaning is not standardized.
+func sataStats(h *hwmon.SATAHealth) [][2]string {
+	items := [][2]string{
+		{"Reallocated sectors", format.Int(h.Reallocated)},
+		{"Pending sectors", format.Int(h.Pending)},
+		{"Uncorrectable sectors", format.Int(h.OfflineUncorrect)},
+		{"Reported uncorrectable", format.Int(h.ReportedUncorrect)},
+	}
+	add := func(k, v string) {
+		if v != "" {
+			items = append(items, [2]string{k, v})
+		}
+	}
+	if h.Temperature > 0 {
+		add("Temperature", fmt.Sprintf("%d °C", h.Temperature))
+	}
+	if h.PowerOnHours > 0 {
+		add("Power-on time", durHM(time.Duration(h.PowerOnHours)*time.Hour))
+	}
+	if h.PowerCycles > 0 {
+		add("Power cycles", format.Int(h.PowerCycles))
+	}
+	add("Interface CRC errors", format.Int(h.UDMACRC))
+	if h.LifeLeft > 0 {
+		add("Life left", fmt.Sprintf("%d%%", h.LifeLeft))
+	}
+	if h.Wearout > 0 {
+		add("Endurance remaining", fmt.Sprintf("%d%%", h.Wearout))
+	}
+	if h.TotalWritten > 0 {
+		add("Total written", format.Int(h.TotalWritten)+" sectors")
+	}
+	if h.TotalRead > 0 {
+		add("Total read", format.Int(h.TotalRead)+" sectors")
+	}
+	return items
 }
 
 // healthStats are the raw figures behind the verdict. The counters the NVMe

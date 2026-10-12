@@ -27,6 +27,7 @@ func fakeMachine(m *Model) {
 		Disks: []hwmon.DiskInfo{
 			{Index: 0, Model: "Samsung 990 PRO 2TB", Serial: "S6Z1NJ0T123456", Firmware: "4B2QJXD7", PartitionStyle: "GPT", Bus: "NVMe", Kind: "SSD", Size: 2000 << 30, Letters: []string{"C:"}},
 			{Index: 1, Model: "Crucial MX500 4TB", Serial: "2201E5A0B1C2", Firmware: "M3CR045", PartitionStyle: "MBR", Bus: "SATA", Kind: "SSD", Size: 4000 << 30, Letters: []string{"D:"}},
+			{Index: 2, Model: "SanDisk Extreme 1TB", Serial: "SDX12345678", Firmware: "1.00", PartitionStyle: "GPT", Bus: "USB", Kind: "SSD", Size: 1000 << 30, Letters: []string{"E:"}},
 		},
 		NICs:    []hwmon.NICInfo{{Index: 10, Name: "WLAN", Description: "Intel Wi-Fi 7 BE211", Kind: "Wi-Fi", MAC: "E0-C9-32-AD-FF-B1", MTU: 1500, IPs: []string{"192.168.1.20", "2001:db8::1"}}},
 		Battery: true,
@@ -57,7 +58,9 @@ func fakeMachine(m *Model) {
 				{Active: 10 + 8*math.Sin(f), ReadRate: uint64(30e6 * (1 + math.Sin(f))), WriteRate: 5e6, RespMs: 0.4, Queue: 1,
 					Health: &hwmon.DiskHealth{OK: true, TempC: 41, AvailableSpare: 100, AvailableSpareThreshold: 5, PercentageUsed: 3, DataRead: 6 << 40, DataWritten: 12 << 40,
 						PowerOnHours: 5000, PowerCycles: 120, UnsafeShutdowns: 4, ErrorLogEntries: 2}},
-				{Active: 3},
+				{Active: 3, SATA: &hwmon.SATAHealth{OK: true, Reallocated: 0, Pending: 0, OfflineUncorrect: 0, PowerOnHours: 12000, PowerCycles: 900,
+					Temperature: 34, UDMACRC: 0, LifeLeft: 96, Wearout: 94, TotalWritten: 250000000}},
+				{Active: 0},
 			},
 			NICs:    []hwmon.NICSample{{Index: 10, Up: true, InRate: uint64(2e6 * (1.2 + math.Sin(f/2))), OutRate: 200e3, InTotal: 3 << 30, OutTotal: 1 << 30, LinkBps: 865e6}},
 			Battery: &hwmon.BatterySample{Percent: 87, OnAC: true, Charging: true},
@@ -141,39 +144,35 @@ func TestNewHardwareCards(t *testing.T) {
 	click("Devices", "Present devices", "USB xHCI Compliant Host Controller", "Network")
 }
 
-// TestDiskHealthPanel checks the NVMe verdict panel: a readable drive shows
-// its figures, and a drive whose health log cannot be read says so instead
-// of claiming to be healthy.
+// TestDiskHealthPanel checks the health panel's three states: an NVMe log,
+// an ATA SMART table, and a drive that answers neither (which must say so
+// rather than claim to be healthy).
 func TestDiskHealthPanel(t *testing.T) {
 	m := New()
 	m.page = computerPage
 	fakeMachine(m)
-	tt := ui.NewTester(m.view, 1180, 760)
+	tt := ui.NewTester(m.view, 1180, 1500)
 	tt.SetTitleBar(ui.TitleBar{Height: 40, Right: 138})
 	tt.Frame()
-	if err := tt.Click("Disk 0 (C:)"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	for _, want := range []string{"Health", "Good", "Endurance used", "Data written", "Media errors"} {
-		if !tt.HasText(want) {
-			t.Errorf("disk health panel is missing %q", want)
+	open := func(name string, wants ...string) {
+		t.Helper()
+		if err := tt.Click(name); err != nil {
+			t.Fatal(err)
 		}
+		tt.Frame()
+		for _, w := range wants {
+			if !tt.HasText(w) {
+				t.Errorf("clicking %q: missing %q", name, w)
+			}
+		}
+		if err := tt.Click("Back"); err != nil {
+			t.Fatal(err)
+		}
+		tt.Frame()
 	}
-	if err := tt.Click("Back"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	if err := tt.Click("Disk 1 (D:)"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	if !tt.HasText("Health information is not available for this drive.") {
-		t.Error("a drive without a health log did not say so")
-	}
-	if tt.HasText("judged from the drive's own counters") {
-		t.Error("a drive without a health log showed a verdict")
-	}
+	open("Disk 0 (C:)", "NVMe SMART / health log", "Good", "Endurance used", "Data written", "Media errors")
+	open("Disk 1 (D:)", "ATA SMART attributes", "Good", "Life left", "96%", "Power-on time", "Reallocated sectors")
+	open("Disk 2 (E:)", "Health information is not available for this drive.")
 }
 
 // TestComputerPageOverviewAndDetail
