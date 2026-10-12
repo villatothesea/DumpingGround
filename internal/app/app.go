@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"slices"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -117,7 +118,8 @@ type Model struct {
 	sys                             systemUsage
 	hw                              computerState
 	st                              startupState
-	postHook                        func(func()) // tests only: stands in for Window.Update
+	postedMu                        sync.Mutex
+	posted                          []func() // worker callbacks queued for the view thread, like Window.Update's queue
 	status                          string
 	diskScanner                     disk.Scanner
 	diskPath, diskDrive             string
@@ -353,15 +355,18 @@ func (m *Model) Run() error {
 
 // post runs fn on the main thread, where the view builds, and redraws.
 // Window.Update's queue is unbounded — workers can never stall behind a
-// busy UI the way the old buffered events channel could.
+// busy UI the way the old buffered events channel could. With no window —
+// early startup or a headless test — the callback waits in m.posted and the
+// next frame drains it, so callbacks never mutate state mid-render from a
+// worker goroutine.
 func (m *Model) post(fn func()) {
-	if m.postHook != nil {
-		m.postHook(fn) // tests run the callback on their own goroutine
-		return
-	}
 	if w := m.window; w != nil {
 		w.Update(fn)
+		return
 	}
+	m.postedMu.Lock()
+	m.posted = append(m.posted, fn)
+	m.postedMu.Unlock()
 }
 func (m *Model) sampleProcesses() {
 	force := true
@@ -406,6 +411,13 @@ func (m *Model) refreshOnce() {
 	}
 }
 func (m *Model) drain() {
+	m.postedMu.Lock()
+	posted := m.posted
+	m.posted = nil
+	m.postedMu.Unlock()
+	for _, fn := range posted {
+		fn()
+	}
 	select {
 	case r := <-m.processUpdates:
 		if r.err != nil {

@@ -64,7 +64,6 @@ func startupFixture(t *testing.T) (*Model, *switchLog) {
 		log.add(it.Key + "=" + map[bool]string{true: "on", false: "off"}[on])
 		return nil
 	}
-	m.postHook = func(fn func()) { fn() }
 	m.st.items = fakeStartupItems()
 	m.st.loaded, m.st.loadedAt = true, time.Now()
 	return m, log
@@ -124,11 +123,14 @@ func TestStartupPageSwitches(t *testing.T) {
 	if err := tt.Click("Steam"); err != nil {
 		t.Fatal(err)
 	}
-	tt.Frame()
+	// The switch runs on a worker; pump frames until its completion lands.
+	for deadline := time.Now().Add(2 * time.Second); m.st.busy != "" && time.Now().Before(deadline); {
+		tt.Frame()
+		time.Sleep(10 * time.Millisecond)
+	}
 	if got := log.get(); len(got) != 1 || got[0] != "run|HKCU|Run|Steam=off" {
 		t.Fatalf("after clicking Steam's switch: calls=%v selKey=%q", got, m.st.selKey)
 	}
-	tt.Frame()
 	if m.st.busy != "" {
 		t.Error("busy flag was not cleared when the switch finished")
 	}
@@ -163,7 +165,10 @@ func TestStartupServiceAsksFirst(t *testing.T) {
 	if err := tt.Click("Turn off"); err != nil {
 		t.Fatal(err)
 	}
-	tt.Frame()
+	for deadline := time.Now().Add(2 * time.Second); m.st.busy != "" && time.Now().Before(deadline); {
+		tt.Frame()
+		time.Sleep(10 * time.Millisecond)
+	}
 	if got := log.get(); len(got) != 1 || got[0] != "service|TPHKLOAD=off" {
 		t.Fatalf("after confirming: calls=%v", got)
 	}
@@ -231,10 +236,12 @@ func TestStartupEmptyAndLoading(t *testing.T) {
 
 func TestStartupFailureIsShown(t *testing.T) {
 	m, _ := startupFixture(t)
+	tt := ui.NewTester(m.view, 1180, 760)
 	startupSet = func(it startup.Item, on bool) error { return os.ErrPermission }
 	m.applyStartup(m.st.items[0], false)
 	deadline := time.Now().Add(2 * time.Second)
 	for m.st.busy != "" && time.Now().Before(deadline) {
+		tt.Frame()
 		time.Sleep(10 * time.Millisecond)
 	}
 	if !strings.Contains(m.st.msg, "Could not switch") || !strings.Contains(m.st.msg, "Steam") {
