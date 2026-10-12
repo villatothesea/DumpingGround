@@ -1,78 +1,101 @@
 # DumpingGround
 
-Windows 原生进程查看器与磁盘空间分析工具，使用 Go + [MyGo](https://github.com/egoist/mygo) native UI。以 Process Explorer / WizTree 的常用工作流为目标，仍有功能差距，详见下方。
+[中文](README.zh-CN.md)
 
-## 运行
+A Windows-native maintenance utility in Go + [MyGo](https://github.com/egoist/mygo)
+native UI — process inspection, disk-usage analysis, and *safe* cleanup
+(Rust build artifacts, Windows junk, full uninstall with leftover review).
+Aims at the everyday Process Explorer / WizTree workflows; remaining gaps are
+listed below.
 
-双击 `build/DumpingGround.exe`。默认显示真实进程列表；顶部 Processes / Disk usage 切换页面。再次启动会激活已有窗口。
+## Safety model
 
-### 进程
+This app deletes things, so the rules come first:
 
-- 默认平铺全部进程，勾选 Tree 切换父子树；进程数始终显示在顶部。
-- 搜索名称、PID 或路径；点击表头排序。
-- CPU、工作集、私有提交量、读写速率和线程数；无法访问的进程显示不可用状态。
-- Pause 暂停采样，刷新间隔可选 1/2/5 秒，F5 手动刷新。
-- 选中进程后 Details 或右键 Properties：查看命令行、用户、提权状态、句柄数、模块列表和线程列表。
-- 打开位置、复制路径；结束进程/进程树先在应用内确认，并核对创建时间以防 PID 被复用。
+- **Reversible by default.** Everything that can go to the Recycle Bin does.
+  If Windows would silently bypass the bin (over-capacity item, disabled bin,
+  non-recyclable drive), the item is left in place with an error — never
+  downgraded to permanent delete.
+- **Explicit confirmation.** Clean asks once, then asks again. Registry
+  leftovers are exported to a `.reg` backup (UTF-16, type-faithful) before
+  removal; no valid backup, no delete.
+- **No silent scope.** Guards are re-checked at delete time: running
+  processes, reparse points, paths claimed by another installed app, the
+  active Rust toolchain, Windows servicing in progress.
+- **Visible reasoning.** Every leftover shows the path and *why* it was
+  flagged; guesses are never pre-selected.
 
-### 磁盘
+## Running
 
-1. 下拉选择盘符并点 Scan drive；也可以点盘符卡片上的扫描按钮。
-2. Browse… 选择目录，或在路径框输入目录后点 Scan。
-3. 扫描时显示当前路径、已发现文件/目录数、统计容量、耗时和跳过数。普通目录遍历不知道最终文件总数，因此使用活动进度条，不伪造百分比。
-4. Cancel 请求停止；等扫描工作线程结束后显示已收集的部分结果，可以重新扫描。
-5. 结果上半部分是目录树/文件表与扩展名统计，下半部分是按目录分组的空间图，分割条可拖动。
-6. Enter/双击目录下钻，Up/Root 返回；点击空间图文件定位其目录并选中文件。点击扩展名筛选对应文件，Clear type filter 清除。
-7. Allocated / Logical 切换空间图口径。Export CSV 导出本次扫描结果；Clear index 清除内存索引。
+Download `DumpingGround.exe` from Releases, or build below. Double-click —
+no installer, no admin required for normal use. Relaunching focuses the
+existing window.
 
-整盘 NTFS 扫描会尝试只读 MFT 路径；缺少权限或不支持的元数据布局自动回退目录遍历，并显示原因。严格对照验证使用单独的 `DumpingGround-verify.exe`，失败会标为 `INCONCLUSIVE`。**本机未获管理员权限，严格 MFT 实测为 INCONCLUSIVE；普通用户扫描仍可用。**
+### Processes
 
-## 构建
+- Flat list by default, Tree checkbox for parent/child view.
+- Search by name, PID or path; click headers to sort.
+- CPU, working set, private commit, I/O rates, threads; inaccessible
+  processes show as unavailable.
+- Pause sampling (1/2/5 s intervals), F5 manual refresh.
+- Details / right-click Properties: command line, user, elevation, handles,
+  modules, threads.
+- Open file location, copy path; kill confirms in-app and checks creation
+  time to guard against PID reuse.
 
-Go 1.27.1，MyGo 固定为 v0.3.5。无需 Bun、WebView2 或 C 工具链。
+### Disk usage
+
+1. Pick a drive and Scan drive, or Browse… / type a path and Scan.
+2. Live counters during scan; Cancel keeps partial results.
+3. Tree/file table plus extension stats on top, a per-directory treemap
+   below, draggable splitter.
+4. Enter/double-click drills down, Up/Root goes back; clicking a treemap
+   file locates it in the table.
+5. Allocated / Logical toggle; Export CSV; Clear index frees the index.
+
+Whole-drive NTFS scans try the read-only MFT path and fall back to plain
+traversal with the reason shown. Strict verification uses a separate
+`DumpingGround-verify.exe` and reports `INCONCLUSIVE` rather than
+pretending to pass.
+
+### Cleanup
+
+- Rust build artifacts (per-preset: target dirs, cargo caches; the active
+  toolchain and projects referenced by settings/overrides are protected).
+- Windows junk (temp files, caches, Downloads on request) with age and
+  in-use checks; browser caches skipped while the browser runs.
+- The Recycle Bin itself is never part of a preset.
+
+### Uninstall
+
+- Launches the app's own uninstaller (elevated when required), then watches
+  the registry entry — leftover review opens only when the entry is truly
+  gone, so cancelling the uninstaller is a no-op.
+- Leftover scan covers files, startup entries, and registry keys; each item
+  is Confirmed (evidence) or Likely (name match, never pre-checked).
+- Registry removals are backed up; filesystem items go to the Recycle Bin.
+
+## Building
+
+Go 1.27+, MyGo pinned to v0.3.5. No Bun, WebView2, or C toolchain.
 
 ```powershell
 go test ./...
-go vet ./...
 $env:CGO_ENABLED = "0"
 go build -tags mygo_noinspector -trimpath -ldflags "-s -w -H=windowsgui" -o build/DumpingGround.exe ./cmd/dumpingground
 ```
 
-默认使用 MyGo CPU 原生绘制；`--renderer=gpu` 可切换 D3D11。UI 组件与自绘空间图都使用 MyGo 公共 API。
+CPU rendering by default; `--renderer=gpu` switches to D3D11.
 
-诊断参数（可选，不影响普通双击启动）：
+## Docs
 
-```powershell
-.\build\DumpingGround.exe --page=disk
-.\build\DumpingGround.exe --scan="D:\Games"
-.\build\DumpingGround.exe --capture-dir="build\captures" --close-after=8s
-```
-
-截图参数只捕获本应用窗口。普通启动不会扫描磁盘、写截图或导出日志。
-
-## 诊断能力
-
-进程详情新增 `Handles` 和 `Stack`。MFT 严格验证命令和权限要求见 [diagnostics.md](diagnostics.md)。当前非管理员实测 MFT 返回 `INCONCLUSIVE`，不会冒充通过。
-
-- PE 深度能力的边界：全局句柄搜索和地址调用栈已实现；符号服务器、WOW64/ARM64 栈、句柄追踪和内核驱动能力尚未完成。
-- 模块/线程详情按选择加载；受保护进程仍受 Windows 权限限制。
-- NTFS 快速扫描是实验性路径，复杂属性列表可能回退。扫描活动文件系统不是一致性快照。
-- 重解析点和离线/云占位文件跳过，避免循环和触发下载；硬链接分配空间每次扫描计一次。
-- 统计默认数据流；备用数据流、NTFS 元数据、卷影副本等会导致与卷已用空间不同。
-- 空间图按显示预算合并很小的项目为可下钻目录块；文件表保留所有扫描条目。
-- 不提供自动删除；可以定位到资源管理器自行处理。
-- 低内存仍是目标；十分钟基线发现增长，性能优化已按当前优先级暂停，不能声称长期占用已达标。
-
-## 文档
-
-- [开发设计与提交规则](docs/development.md)
-- [实际功能验收](docs/acceptance.md)
-- [历史性能记录](docs/performance.md)
-- [诊断能力：MFT 验证、句柄搜索、线程调用栈](docs/diagnostics.md)
-- [MFT 严格验证记录](docs/mft-validation.md)
-
-使用 `type(scope): imperative summary` 提交消息。一项功能或修复一个提交；构建产物不入库。
+- [Development notes](docs/development.md)
+- [Acceptance checklist](docs/acceptance.md)
+- [Diagnostics: MFT validation, handle search, stacks](docs/diagnostics.md)
+- [MFT validation log](docs/mft-validation.md)
 
 ## License
 
-MIT — see [LICENSE](LICENSE). The license may move to Apache-2.0 in the future; contributions are accepted on those terms, see [CONTRIBUTING.md](CONTRIBUTING.md).
+MIT — see [LICENSE](LICENSE). The license may move to Apache-2.0 in the
+future; contributions are accepted on those terms, see
+[CONTRIBUTING.md](CONTRIBUTING.md).
