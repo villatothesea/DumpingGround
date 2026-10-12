@@ -1078,6 +1078,15 @@ func (m *Model) diskMap(c *ui.Context) {
 				}
 			}
 		}
+		// Same menu as the file table rows — the hit test runs on the
+		// rects laid out for this frame.
+		canvas.ContextMenu(func(menu *ui.Menu) {
+			if x, y, ok := canvas.PointerPosition(); ok {
+				if id, hit := treemap.Hit(m.diskRects, x, y); hit && id >= 0 {
+					m.diskMenu(menu, id)
+				}
+			}
+		})
 		m.prepareMap()
 		canvas.Tooltip(m.mapHover).Draw(func(p *ui.Painter, r ui.Rect) {
 			if r.W <= 0 || r.H <= 0 {
