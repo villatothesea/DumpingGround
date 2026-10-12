@@ -44,6 +44,27 @@ killing one would blue-screen the machine, and an `lsass` memory-read
 handle is what credential-dumping tools look like. The kernel's
 boundary is the feature, not a limitation.
 
+### Computer
+
+The page the app opens on (Ctrl+1; Ctrl+2–5 are the other tabs).
+
+- A header with the machine's identity — name, make and model, Windows
+  edition and build, processor, memory, graphics, storage, network,
+  motherboard and BIOS — read from SMBIOS, the registry and DXGI.
+- One live card per piece of hardware: CPU, memory, each GPU, each disk,
+  each connected network adapter, and the battery on a laptop. Each shows
+  the current figure and a rolling 60-second chart.
+- Click a card for its detail page: a large chart, live figures and the
+  full specification — per-core CPU charts and cache sizes, memory modules
+  (slot, size, type, speed, part number), GPU engines and VRAM, disk
+  active time, throughput and volumes, adapter addresses and link speed.
+  Back, Esc, Backspace or the mouse's back button returns; so does
+  clicking the Computer tab again.
+- No driver is installed and nothing is written: sources are SMBIOS,
+  `NtQuerySystemInformation`, performance counters (PDH), the disk
+  performance IOCTL and the IP helper API. Temperatures and fan speeds
+  are not shown — Windows only exposes them through vendor drivers.
+
 ### Processes
 
 - Flat list by default, Tree checkbox for parent/child view.

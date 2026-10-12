@@ -32,7 +32,7 @@ type page uint8
 const (
 	processPage page = iota
 	diskPage
-	hardwarePage
+	computerPage
 	uninstallPage
 	startupPage
 )
@@ -115,6 +115,7 @@ type Model struct {
 	diskInfoOpen                    bool
 	reservedQuery                   string
 	sys                             systemUsage
+	hw                              computerState
 	status                          string
 	diskScanner                     disk.Scanner
 	diskPath, diskDrive             string
@@ -277,9 +278,15 @@ func (m *Model) Run() error {
 		}
 	}
 	mygo.App.WhenReady(func() {
-		if m.InitialPage == "disk" {
+		switch m.InitialPage {
+		case "disk":
 			m.page = diskPage
+		case "processes":
+			m.page = processPage
+		default:
+			m.page = computerPage
 		}
+		m.startHardware()
 		m.iconCache[""] = systemIcon("")
 		// SHGetFileInfoW takes 5–50ms per icon; four workers keep a
 		// full app list's icons from queueing behind each other.
@@ -291,9 +298,10 @@ func (m *Model) Run() error {
 			log.Print("window icon:", err)
 		}
 		mygo.App.OnSecondInstance(func(_ []string, _ string) { m.window.Restore(); m.window.Show(); m.window.Focus() })
-		m.window.OnMinimize(func() { m.minimized = true; m.samplerActive.Store(false) })
+		m.window.OnMinimize(func() { m.minimized = true; m.samplerActive.Store(false); m.hw.running.Store(false) })
 		m.window.OnRestore(func() {
 			m.minimized = false
+			m.hw.running.Store(true)
 			m.samplerActive.Store(m.page == processPage)
 			m.window.Invalidate()
 		})
@@ -443,13 +451,13 @@ func (m *Model) view(c *ui.Context) {
 		}
 	}
 	if c.Shortcut(ui.Ctrl, ui.Key1) {
-		m.setPage(processPage)
+		m.setPage(computerPage)
 	}
 	if c.Shortcut(ui.Ctrl, ui.Key2) {
-		m.setPage(diskPage)
+		m.setPage(processPage)
 	}
 	if c.Shortcut(ui.Ctrl, ui.Key3) {
-		m.setPage(hardwarePage)
+		m.setPage(diskPage)
 	}
 	if c.Shortcut(ui.Ctrl, ui.Key4) {
 		m.setPage(uninstallPage)
@@ -470,6 +478,12 @@ func (m *Model) view(c *ui.Context) {
 		}
 	}
 	m.samplerActive.Store(m.page == processPage && !m.minimized)
+	m.hw.visible.Store(m.page == computerPage && !m.minimized)
+	if m.page == computerPage && m.hw.detail != "" && !m.settingsOpen && !m.diskInfoOpen && !m.terminateOpen {
+		if c.Shortcut(0, ui.KeyEscape) || c.Shortcut(0, ui.KeyBackspace) || c.Shortcut(0, ui.KeyBack) {
+			m.hw.detail = ""
+		}
+	}
 	if m.diskCancel != nil {
 		c.After(100 * time.Millisecond)
 	}
@@ -518,12 +532,12 @@ func (m *Model) view(c *ui.Context) {
 	ui.Column(c).Fill().AlignItems(ui.Stretch).Font("Segoe UI").FontSize(12).Background(t.Background).Children(func() {
 		m.topBar(c, t)
 		switch m.page {
+		case computerPage:
+			m.computerView(c, t)
 		case processPage:
 			m.processView(c)
 		case diskPage:
 			m.diskView(c)
-		case hardwarePage:
-			m.reservedView(c, "cpu", "Hardware", "Monitors CPU, memory, GPU, disk and network utilization with live charts. Tab position, shortcut and the shared search box are reserved.")
 		case uninstallPage:
 			m.uninstallView(c, t)
 		case startupPage:
@@ -584,9 +598,9 @@ func (m *Model) topBar(c *ui.Context, t *ui.Theme) {
 			ui.Text(c, "DumpingGround").FontSize(14).Bold().SingleLine()
 		})
 		ui.Row(c).Gap(2).Shrink(0).Children(func() {
+			m.pageTab(c, t, computerPage, "Computer")
 			m.pageTab(c, t, processPage, "Processes")
 			m.pageTab(c, t, diskPage, "Disk Usage")
-			m.pageTab(c, t, hardwarePage, "Hardware")
 			m.pageTab(c, t, uninstallPage, "Uninstall")
 			m.pageTab(c, t, startupPage, "Startup")
 		})
@@ -662,6 +676,9 @@ func (m *Model) pageTab(c *ui.Context, t *ui.Theme, pg page, label string) {
 // one sample so the table is never a stale frame behind.
 func (m *Model) setPage(pg page) {
 	if m.page == pg {
+		if pg == computerPage {
+			m.hw.detail = "" // clicking the active tab goes back to the overview
+		}
 		return
 	}
 	m.page = pg
@@ -880,6 +897,8 @@ func (m *Model) statusBar(c *ui.Context, t *ui.Theme) {
 			if m.diskSnapshot == nil {
 				text = m.diskStatus
 			}
+		case computerPage:
+			text = "Live · sampled every second"
 		case uninstallPage, startupPage:
 			text = "Reserved"
 		}
@@ -913,8 +932,13 @@ func (m *Model) statusBar(c *ui.Context, t *ui.Theme) {
 		m.rateMeter(c, t, "net", "NET", fmt.Sprintf("Network  down %s  ·  up %s", format.Rate(m.sys.netInRate), format.Rate(m.sys.netOutRate)), m.sys.netInRate, m.sys.netOutRate)
 		ui.Spacer(c)
 		hint := "F5 refresh · Ctrl+1–5 pages"
-		if m.page == diskPage {
+		switch {
+		case m.page == diskPage:
 			hint = "F5 scan · Backspace up · Ctrl+1–5 pages"
+		case m.page == computerPage && m.hw.detail != "":
+			hint = "Esc back · Ctrl+1–5 pages"
+		case m.page == computerPage:
+			hint = "Click a card for details · Ctrl+1–5 pages"
 		}
 		ui.Text(c, hint).FontSize(11).TextColor(t.TextMuted).Shrink(0)
 		if m.page == diskPage {

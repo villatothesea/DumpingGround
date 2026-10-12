@@ -40,6 +40,13 @@ var glyphs = map[string]*ui.SVG{
 	"caret-r": glyph(`<path d="M9 5l7 7-7 7z" fill="currentColor" stroke="none"/>`),
 	"caret-d": glyph(`<path d="M5 9h14l-7 7z" fill="currentColor" stroke="none"/>`),
 	"warn":    glyph(`<path d="M12 3l10 18H2z"/><path d="M12 10v5"/><path d="M12 18.5h.01"/>`),
+	"left":    glyph(`<path d="M19 12H5M12 19l-7-7 7-7"/>`),
+	"gpu":     glyph(`<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M6 18v2M18 18v2M6 9h2"/>`),
+	"wifi":    glyph(`<path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/>`),
+	"globe":   glyph(`<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>`),
+	"battery": glyph(`<rect x="2" y="7" width="16" height="10" rx="2"/><path d="M22 11v2M6 11v2"/>`),
+	"laptop":  glyph(`<path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9"/><path d="M2 20h20"/><path d="M4 16h16l1 4H3z"/>`),
+	"monitor": glyph(`<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>`),
 	"net":     glyph(`<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>`),
 	"end":     glyph(`<path d="M18.4 6.6a8 8 0 1 0 0 10.8"/><path d="M12 8v4"/>`),
 }

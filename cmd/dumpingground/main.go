@@ -22,7 +22,7 @@ func main() {
 		os.Setenv("MYGO_GPU", "0")
 	}
 	renderer := flag.String("renderer", "", "cpu or gpu; default is cpu")
-	page := flag.String("page", "processes", "initial page: processes or disk")
+	page := flag.String("page", "computer", "initial page: computer, processes or disk")
 	scan := flag.String("scan", "", "scan a folder or drive on startup")
 	capture := flag.String("capture-dir", "", "write application-only diagnostic frames")
 	closeAfter := flag.Duration("close-after", 0*time.Second, "close automatically after a diagnostic run")
