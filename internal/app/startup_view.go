@@ -264,7 +264,7 @@ func (m *Model) startupTable(c *ui.Context, t *ui.Theme, rows []*startup.Item) {
 			cell.Children(func() {
 				switch col {
 				case 0:
-					m.startupSwitch(c, t, it)
+					m.startupSwitch(c, t, it, sel)
 				case 1:
 					if bmp := m.processIcon(it.Exe); bmp != nil && it.Exe != "" {
 						ui.Image(c, bmp).Size(16, 16).Shrink(0)
@@ -301,21 +301,51 @@ func (m *Model) startupTable(c *ui.Context, t *ui.Theme, rows []*startup.Item) {
 // startupSwitch is a row's on/off switch. It is drawn from the item's real
 // state every frame — a switch that was clicked but whose change failed, or
 // is waiting for a confirmation, simply snaps back.
-func (m *Model) startupSwitch(c *ui.Context, t *ui.Theme, it *startup.Item) {
+//
+// It is drawn by hand rather than with ui.Switch: on the selected row the
+// table paints the whole row in the accent color, and an accent-colored
+// track vanishes into it. There the colors invert — a white track with an
+// accent knob stays readable in both states.
+func (m *Model) startupSwitch(c *ui.Context, t *ui.Theme, it *startup.Item, selected bool) {
 	on := it.Enabled
-	sw := ui.Switch(c, &on).Label(it.Name)
+	locked := it.Locked != ""
+	disabled := locked || m.st.busy != ""
+	sw := ui.Row(c).Size(34, 18).Radius(9).Shrink(0).Label(it.Name)
+	sw.Draw(func(p *ui.Painter, r ui.Rect) {
+		track, knob := t.TextMuted.Alpha(0.35), ui.RGB(255, 255, 255)
+		switch {
+		case selected && on:
+			track, knob = t.AccentText, t.Accent
+		case selected:
+			track = t.AccentText.Alpha(0.35)
+		case on:
+			track = t.Accent
+		}
+		if disabled {
+			track, knob = track.Alpha(0.45), knob.Alpha(0.7)
+		}
+		p.Fill(r, track, 9)
+		kx := r.X + 2
+		if on {
+			kx = r.X + r.W - 16
+		}
+		p.Fill(ui.Rect{X: kx, Y: r.Y + 2, W: 14, H: 14}, knob, 7)
+	})
 	switch {
-	case it.Locked != "":
+	case locked:
 		sw = sw.Disabled(true).Tooltip(it.Locked)
-	case m.st.busy != "":
+	case disabled:
 		sw = sw.Disabled(true)
-	case it.Enabled:
-		sw = sw.Tooltip("Starts with Windows — switch off to stop it")
 	default:
-		sw = sw.Tooltip("Does not start — switch on to start it again")
+		sw = sw.Cursor(ui.CursorPointer)
+		if on {
+			sw = sw.Tooltip("Starts with Windows — switch off to stop it")
+		} else {
+			sw = sw.Tooltip("Does not start — switch on to start it again")
+		}
 	}
-	if sw.Changed() {
-		m.startupToggle(*it, on)
+	if sw.Clicked() && !disabled {
+		m.startupToggle(*it, !on)
 	}
 }
 
