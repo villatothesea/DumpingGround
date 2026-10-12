@@ -13,6 +13,7 @@ import (
 const (
 	ioctlDiskPerformance   = 0x70020 // IOCTL_DISK_PERFORMANCE
 	ioctlDiskGeometryEx    = 0x700A0 // IOCTL_DISK_GET_DRIVE_GEOMETRY_EX
+	ioctlDiskGetLayoutEx   = 0x70050 // IOCTL_DISK_GET_DRIVE_LAYOUT_EX
 	ioctlStorageQueryProp  = 0x2D1400
 	ioctlStorageDeviceNum  = 0x2D1080 // IOCTL_STORAGE_GET_DEVICE_NUMBER
 	storageDeviceProperty  = 0
@@ -74,8 +75,9 @@ func (p *platform) loadDisks(info *Info) {
 			syscall.CloseHandle(h) // empty card reader
 			continue
 		}
-		d.Model, d.Bus = storageDescriptor(h)
+		d.Model, d.Bus, d.Firmware, d.Serial = storageDescriptor(h)
 		d.Kind = diskKind(h, d.Bus)
+		d.PartitionStyle = diskPartitionStyle(h)
 		byNumber[uint32(i)] = len(info.Disks)
 		info.Disks = append(info.Disks, d)
 		dh := &diskHandle{h: h}
@@ -105,13 +107,14 @@ func (p *platform) loadDisks(info *Info) {
 	}
 }
 
-// storageDescriptor returns "Vendor Product" and the bus name.
-func storageDescriptor(h syscall.Handle) (model, bus string) {
+// storageDescriptor returns "Vendor Product", the bus name, and the
+// firmware revision and serial number the drive reports.
+func storageDescriptor(h syscall.Handle) (model, bus, firmware, serial string) {
 	var q [12]byte // STORAGE_PROPERTY_QUERY: PropertyId, QueryType, 1 spare byte
 	out := make([]byte, 1024)
 	n, err := ioctl(h, ioctlStorageQueryProp, q[:], out)
 	if err != nil || n < 32 {
-		return "", ""
+		return "", "", "", ""
 	}
 	str := func(off uint32) string {
 		if off == 0 || int(off) >= len(out) {
@@ -124,6 +127,8 @@ func storageDescriptor(h syscall.Handle) (model, bus string) {
 		return strings.Join(strings.Fields(string(out[off:end])), " ")
 	}
 	model = strings.TrimSpace(str(le32(out[12:])) + " " + str(le32(out[16:])))
+	firmware = str(le32(out[20:]))
+	serial = str(le32(out[24:]))
 	switch le32(out[28:]) {
 	case 1:
 		bus = "SCSI"
@@ -146,7 +151,25 @@ func storageDescriptor(h syscall.Handle) (model, bus string) {
 	case 17:
 		bus = "NVMe"
 	}
-	return model, bus
+	return model, bus, firmware, serial
+}
+
+// diskPartitionStyle reads the drive's partition table kind from the
+// layout IOCTL's first field.
+func diskPartitionStyle(h syscall.Handle) string {
+	out := make([]byte, 4096)
+	if _, err := ioctl(h, ioctlDiskGetLayoutEx, nil, out); err != nil {
+		return ""
+	}
+	switch le32(out[0:]) { // DRIVE_LAYOUT_INFORMATION_EX.PartitionStyle
+	case 0:
+		return "MBR"
+	case 1:
+		return "GPT"
+	case 2:
+		return "RAW"
+	}
+	return ""
 }
 
 func diskKind(h syscall.Handle, bus string) string {

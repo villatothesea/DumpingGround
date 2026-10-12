@@ -87,6 +87,10 @@ func loadCPU(info *Info) {
 	if r, _, _ := procGetLogicalProcInfoEx.Call(0xFFFF, uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&size))); r == 0 {
 		return
 	}
+	// EfficiencyClass groups hybrid cores: 0 is a performance core, a
+	// higher class is an efficiency core. A uniform CPU reports one class,
+	// in which case PerfCores/EffCores stay 0 and Cores is the whole story.
+	coreClasses := map[byte]int{}
 	for off := 0; off+8 <= int(size); {
 		rel, rec := le32(buf[off:]), int(le32(buf[off+4:]))
 		if rec < 8 || off+rec > int(size) {
@@ -96,6 +100,11 @@ func loadCPU(info *Info) {
 		switch rel {
 		case 0:
 			info.CPU.Cores++
+			if rec > 9 {
+				coreClasses[r[9]]++
+			} else {
+				coreClasses[0]++
+			}
 		case 3:
 			info.CPU.Sockets++
 		case 2:
@@ -112,6 +121,14 @@ func loadCPU(info *Info) {
 			}
 		}
 		off += rec
+	}
+	if len(coreClasses) > 1 {
+		info.CPU.PerfCores = coreClasses[0]
+		for class, n := range coreClasses {
+			if class > 0 {
+				info.CPU.EffCores += n
+			}
+		}
 	}
 }
 

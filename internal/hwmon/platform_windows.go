@@ -17,6 +17,7 @@ var (
 	iphlpapi = syscall.NewLazyDLL("iphlpapi.dll")
 	pdhDLL   = syscall.NewLazyDLL("pdh.dll")
 	dxgiDLL  = syscall.NewLazyDLL("dxgi.dll")
+	setupapi = syscall.NewLazyDLL("setupapi.dll")
 
 	procGetSystemFirmwareTable   = k32.NewProc("GetSystemFirmwareTable")
 	procGetLogicalProcInfoEx     = k32.NewProc("GetLogicalProcessorInformationEx")
@@ -31,6 +32,11 @@ var (
 	procGetIfEntry2              = iphlpapi.NewProc("GetIfEntry2")
 	procFreeMibTable             = iphlpapi.NewProc("FreeMibTable")
 	procGlobalMemoryStatusEx     = k32.NewProc("GlobalMemoryStatusEx")
+
+	procSetupDiGetClassDevs          = setupapi.NewProc("SetupDiGetClassDevsW")
+	procSetupDiEnumDeviceInterfaces  = setupapi.NewProc("SetupDiEnumDeviceInterfaces")
+	procSetupDiGetDeviceInterfaceDet = setupapi.NewProc("SetupDiGetDeviceInterfaceDetailW")
+	procSetupDiDestroyDeviceInfoList = setupapi.NewProc("SetupDiDestroyDeviceInfoList")
 )
 
 // platform holds what Sample needs to turn cumulative counters into rates.
@@ -53,6 +59,9 @@ func (p *platform) load(info *Info) {
 	p.loadDisks(info)
 	p.loadNICs(info)
 	info.Battery = batteryPresent()
+	if info.Battery {
+		info.Batt = readBatteryInfo()
+	}
 }
 
 func le64(b []byte) uint64 { return binary.LittleEndian.Uint64(b) }

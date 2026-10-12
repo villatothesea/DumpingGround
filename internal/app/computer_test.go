@@ -18,15 +18,19 @@ func fakeMachine(m *Model) {
 		Host: "DESKTOP-TEST", User: "dev", OS: "Windows 11 Pro", OSVersion: "24H2", OSBuild: "26100.4061", Arch: "64-bit (x64)",
 		Manufacturer: "Acme", Model: "Laptop 9000",
 		BIOSVendor: "Acme", BIOSVersion: "1.07", BIOSDate: "04/28/2026", BoardVendor: "Acme", BoardProduct: "Laptop 9000",
-		CPU: hwmon.CPUInfo{Name: "Intel(R) Core(TM) Ultra X9 388H", Vendor: "GenuineIntel", Sockets: 1, Cores: 16, Threads: 16, BaseMHz: 3994, L1: 1 << 20, L2: 24 << 20, L3: 18 << 20},
+		CPU: hwmon.CPUInfo{Name: "Intel(R) Core(TM) Ultra X9 388H", Vendor: "GenuineIntel", Sockets: 1, Cores: 16, Threads: 16, BaseMHz: 3994, PerfCores: 8, EffCores: 8, L1: 1 << 20, L2: 24 << 20, L3: 18 << 20},
 		Mem: hwmon.MemInfo{Total: 64 << 30, Slots: 2, MaxCapacity: 128 << 30, Modules: []hwmon.DIMM{
 			{Slot: "DIMM A", Size: 32 << 30, Type: "DDR5", SpeedMTs: 5600, ConfigMTs: 5200, Manufacturer: "Samsung", PartNo: "M425R4GA3BB0"},
 			{Slot: "DIMM B", Size: 32 << 30, Type: "DDR5", SpeedMTs: 5600, ConfigMTs: 5200, Manufacturer: "Samsung", PartNo: "M425R4GA3BB0"},
 		}},
-		GPUs:    []hwmon.GPUInfo{{Name: "NVIDIA GeForce RTX 4070", Vendor: "NVIDIA", DedicatedBytes: 12 << 30, SharedBytes: 32 << 30, Driver: "32.0.15.6094", DriverDate: "2024-10-01"}},
-		Disks:   []hwmon.DiskInfo{{Index: 0, Model: "Samsung 990 PRO 2TB", Bus: "NVMe", Kind: "SSD", Size: 2000 << 30, Letters: []string{"C:"}}, {Index: 1, Model: "Crucial MX500 4TB", Bus: "SATA", Kind: "SSD", Size: 4000 << 30, Letters: []string{"D:"}}},
+		GPUs: []hwmon.GPUInfo{{Name: "NVIDIA GeForce RTX 4070", Vendor: "NVIDIA", DedicatedBytes: 12 << 30, SharedBytes: 32 << 30, Driver: "32.0.15.6094", DriverDate: "2024-10-01"}},
+		Disks: []hwmon.DiskInfo{
+			{Index: 0, Model: "Samsung 990 PRO 2TB", Serial: "S6Z1NJ0T123456", Firmware: "4B2QJXD7", PartitionStyle: "GPT", Bus: "NVMe", Kind: "SSD", Size: 2000 << 30, Letters: []string{"C:"}},
+			{Index: 1, Model: "Crucial MX500 4TB", Serial: "2201E5A0B1C2", Firmware: "M3CR045", PartitionStyle: "MBR", Bus: "SATA", Kind: "SSD", Size: 4000 << 30, Letters: []string{"D:"}},
+		},
 		NICs:    []hwmon.NICInfo{{Index: 10, Name: "WLAN", Description: "Intel Wi-Fi 7 BE211", Kind: "Wi-Fi", MAC: "E0-C9-32-AD-FF-B1", MTU: 1500, IPs: []string{"192.168.1.20", "2001:db8::1"}}},
 		Battery: true,
+		Batt:    &hwmon.BatteryInfo{DesignCapacity: 75000, FullCapacity: 73000, CycleCount: 120, Chemistry: "LION"},
 	}
 	m.hw.info.Store(info)
 	now := time.Now()
@@ -52,6 +56,40 @@ func fakeMachine(m *Model) {
 		}
 		m.hw.hist = append(m.hw.hist, s)
 	}
+}
+
+// TestNewInventoryFields checks the item-one additions: hybrid core split,
+// disk identity/partition table, NIC error counters and battery wear.
+func TestNewInventoryFields(t *testing.T) {
+	m := New()
+	m.page = computerPage
+	fakeMachine(m)
+	tt := ui.NewTester(m.view, 1180, 760)
+	tt.SetTitleBar(ui.TitleBar{Height: 40, Right: 138})
+	tt.Frame()
+	if !tt.HasText("16 cores (8 P + 8 E)") {
+		t.Error("header does not show the hybrid core split")
+	}
+	click := func(name string, wants ...string) {
+		t.Helper()
+		if err := tt.Click(name); err != nil {
+			t.Fatal(err)
+		}
+		tt.Frame()
+		for _, w := range wants {
+			if !tt.HasText(w) {
+				t.Errorf("clicking %q: missing %q", name, w)
+			}
+		}
+		if err := tt.Click("Back"); err != nil {
+			t.Fatal(err)
+		}
+		tt.Frame()
+	}
+	click("CPU", "8 P + 8 E")
+	click("Disk 0 (C:)", "Serial number", "S6Z1NJ0T123456", "4B2QJXD7", "Partition style", "GPT")
+	click("WLAN", "Errors", "Dropped")
+	click("Battery", "Design capacity", "75.0 Wh", "Health", "97%", "Cycle count", "120", "LION")
 }
 
 // TestDiskHealthPanel checks the NVMe verdict panel: a readable drive shows
@@ -254,7 +292,7 @@ func TestComputerScreenshots(t *testing.T) {
 		tt.SetTitleBar(ui.TitleBar{Height: 40, Right: 138})
 		tt.Frame()
 		dump(t, tt, dest, "computer-overview-"+suffix+".png")
-		for _, id := range []string{"cpu", "mem", "gpu:0", "disk:0", "net:10"} {
+		for _, id := range []string{"cpu", "mem", "gpu:0", "disk:0", "net:10", "battery"} {
 			m.hw.detail = id
 			tt.Frame()
 			dump(t, tt, dest, "computer-"+filepath.Base(id[:3])+"-detail-"+suffix+".png")

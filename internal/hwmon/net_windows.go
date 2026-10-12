@@ -26,16 +26,22 @@ const (
 	ifOffTxSpeed = 1192
 	ifOffRxSpeed = 1200
 	ifOffInOct   = 1208
+	ifOffInDisc  = 1232
+	ifOffInErr   = 1240
 	ifOffOutOct  = 1280
+	ifOffOutDisc = 1304
+	ifOffOutErr  = 1312
 )
 
 type ifRow struct {
-	Index               uint32
-	Alias, Desc, MAC    string
-	MTU, Type           uint32
-	Hardware, Up        bool
-	RxBps               uint64
-	InOctets, OutOctets uint64
+	Index                   uint32
+	Alias, Desc, MAC        string
+	MTU, Type               uint32
+	Hardware, Up            bool
+	RxBps                   uint64
+	InOctets, OutOctets     uint64
+	InErrors, OutErrors     uint64
+	InDiscards, OutDiscards uint64
 }
 
 type nicPrev struct {
@@ -78,6 +84,8 @@ func parseIfRow(r []byte) ifRow {
 		Hardware: r[ifOffFlags]&1 != 0, Up: le32(r[ifOffOper:]) == 1,
 		RxBps:    le64(r[ifOffRxSpeed:]),
 		InOctets: le64(r[ifOffInOct:]), OutOctets: le64(r[ifOffOutOct:]),
+		InErrors: le64(r[ifOffInErr:]), OutErrors: le64(r[ifOffOutErr:]),
+		InDiscards: le64(r[ifOffInDisc:]), OutDiscards: le64(r[ifOffOutDisc:]),
 	}
 }
 
@@ -160,6 +168,8 @@ func (p *platform) sampleNICs(s *Sample, info *Info) {
 		}
 		ns.Up, ns.LinkBps = r.Up, r.RxBps
 		ns.InTotal, ns.OutTotal = r.InOctets, r.OutOctets
+		ns.InErrors, ns.OutErrors = r.InErrors, r.OutErrors
+		ns.InDiscards, ns.OutDiscards = r.InDiscards, r.OutDiscards
 		now := s.At.UnixNano()
 		if pr, ok := p.nics[n.Index]; ok && now > pr.at && r.InOctets >= pr.in && r.OutOctets >= pr.out {
 			sec := float64(now-pr.at) / 1e9

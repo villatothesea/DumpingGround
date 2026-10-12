@@ -123,7 +123,7 @@ func hwFacts(info *hwmon.Info) [][2]string {
 		os += " (build " + info.OSBuild + ")"
 	}
 	add("Operating system", os)
-	add("Processor", fmt.Sprintf("%s · %d cores, %d threads", shortCPU(info.CPU.Name), info.CPU.Cores, info.CPU.Threads))
+	add("Processor", fmt.Sprintf("%s · %s, %d threads", shortCPU(info.CPU.Name), cpuCores(info.CPU), info.CPU.Threads))
 	add("Installed memory", memSummary(info))
 	var gpus []string
 	for _, g := range info.GPUs {
@@ -159,6 +159,22 @@ func plural(n int) string {
 		return ""
 	}
 	return "s"
+}
+
+// cpuCores names the core count, spelling out a hybrid P/E split.
+func cpuCores(cpu hwmon.CPUInfo) string {
+	if cpu.PerfCores > 0 || cpu.EffCores > 0 {
+		return fmt.Sprintf("%d cores (%d P + %d E)", cpu.Cores, cpu.PerfCores, cpu.EffCores)
+	}
+	return fmt.Sprintf("%d cores", cpu.Cores)
+}
+
+// capWh renders a battery capacity that the driver reports in mWh.
+func capWh(mwh uint64) string {
+	if mwh == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%.1f Wh", float64(mwh)/1000)
 }
 
 // hwCardView is one hardware card: icon and name, the current figure, a

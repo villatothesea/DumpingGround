@@ -25,13 +25,28 @@ type Info struct {
 	Disks                     []DiskInfo
 	NICs                      []NICInfo
 	Battery                   bool
+	Batt                      *BatteryInfo
+}
+
+// BatteryInfo is the battery's static identity and wear, read from the
+// battery driver itself (BATTERY_INFORMATION) rather than estimated from
+// the charge percentage.
+type BatteryInfo struct {
+	DesignCapacity uint64 // mWh as designed
+	FullCapacity   uint64 // mWh it holds when full now (health = full/design)
+	CycleCount     uint64
+	Chemistry      string // "LiP", "LION", …
 }
 
 type CPUInfo struct {
 	Name, Vendor            string
 	Sockets, Cores, Threads int
 	BaseMHz                 int
-	L1, L2, L3              uint64 // bytes, summed over every cache instance
+	// PerfCores and EffCores split a hybrid processor by efficiency class
+	// (P-cores vs E-cores). Both are 0 on a uniform CPU, where Cores is the
+	// whole story.
+	PerfCores, EffCores int
+	L1, L2, L3          uint64 // bytes, summed over every cache instance
 }
 
 type MemInfo struct {
@@ -61,12 +76,15 @@ type GPUInfo struct {
 }
 
 type DiskInfo struct {
-	Index   int
-	Model   string
-	Bus     string // "NVMe", "SATA", "USB", …
-	Kind    string // "SSD", "HDD" or ""
-	Size    uint64
-	Letters []string // "C:", "D:"
+	Index          int
+	Model          string
+	Serial         string
+	Firmware       string
+	PartitionStyle string // "MBR", "GPT", "RAW" or ""
+	Bus            string // "NVMe", "SATA", "USB", …
+	Kind           string // "SSD", "HDD" or ""
+	Size           uint64
+	Letters        []string // "C:", "D:"
 }
 
 type NICInfo struct {
@@ -124,11 +142,13 @@ type DiskSample struct {
 }
 
 type NICSample struct {
-	Index             uint32 // the adapter this reading belongs to (NICInfo.Index)
-	Up                bool
-	InRate, OutRate   uint64 // bytes/s
-	InTotal, OutTotal uint64 // bytes since the adapter came up
-	LinkBps           uint64 // negotiated receive speed
+	Index                   uint32 // the adapter this reading belongs to (NICInfo.Index)
+	Up                      bool
+	InRate, OutRate         uint64 // bytes/s
+	InTotal, OutTotal       uint64 // bytes since the adapter came up
+	LinkBps                 uint64 // negotiated receive speed
+	InErrors, OutErrors     uint64 // receive/transmit errors since the adapter came up
+	InDiscards, OutDiscards uint64 // packets dropped since the adapter came up
 }
 
 type BatterySample struct {

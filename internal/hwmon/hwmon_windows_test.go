@@ -31,7 +31,7 @@ func TestLive(t *testing.T) {
 	for _, n := range info.NICs {
 		t.Logf("NIC %+v", n)
 	}
-	t.Logf("Battery=%v", info.Battery)
+	t.Logf("Battery=%v detail=%+v", info.Battery, info.Batt)
 
 	if info.Host == "" || info.OS == "" || info.CPU.Name == "" || info.CPU.Threads == 0 || info.Mem.Total == 0 {
 		t.Errorf("basic inventory missing: %+v", info)
@@ -55,7 +55,7 @@ func TestLive(t *testing.T) {
 		t.Logf("Disk[%d] active=%.1f%% read=%d/s write=%d/s resp=%.2fms q=%d health=%+v", i, d.Active, d.ReadRate, d.WriteRate, d.RespMs, d.Queue, d.Health)
 	}
 	for i, n := range last.NICs {
-		t.Logf("NIC[%d] up=%v in=%d/s out=%d/s link=%d totals=%d/%d", i, n.Up, n.InRate, n.OutRate, n.LinkBps, n.InTotal, n.OutTotal)
+		t.Logf("NIC[%d] up=%v in=%d/s out=%d/s link=%d totals=%d/%d errors=%d/%d discards=%d/%d", i, n.Up, n.InRate, n.OutRate, n.LinkBps, n.InTotal, n.OutTotal, n.InErrors, n.OutErrors, n.InDiscards, n.OutDiscards)
 	}
 	if last.Battery != nil {
 		t.Logf("Battery %+v", *last.Battery)

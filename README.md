@@ -83,6 +83,11 @@ The page the app opens on (Ctrl+1; Ctrl+2–5 are the other tabs).
   always shows its reasons; there is no invented health score. A drive
   that does not pass its health log through (SATA, a USB bridge, NVMe
   behind Intel RST/VMD) says so instead of guessing.
+- More of what each part reports: a hybrid CPU's performance/efficiency
+  core split, each disk's serial number, firmware revision and partition
+  table (GPT/MBR), a network adapter's error and dropped-packet counters,
+  and the battery's design vs full-charge capacity, cycle count and
+  chemistry — the pack's wear, read from its own firmware.
 
 ### Processes
 

@@ -45,7 +45,7 @@ func (m *Model) hwDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist []hw
 				case sscan(cd.id, "net:%d", &idx):
 					m.hwNetDetail(c, t, info, hist, cd, uint32(idx))
 				case cd.id == "battery":
-					m.hwBatteryDetail(c, t, hist, cd)
+					m.hwBatteryDetail(c, t, info, hist, cd)
 				}
 			})
 		})
@@ -213,7 +213,7 @@ func (m *Model) hwCPUDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist [
 		{"Processor", strings.Join(strings.Fields(cpu.Name), " ")},
 		{"Vendor", cpu.Vendor},
 		{"Sockets", fmt.Sprint(cpu.Sockets)},
-		{"Cores", fmt.Sprint(cpu.Cores)},
+		{"Cores", cpuCores(cpu)},
 		{"Logical processors", fmt.Sprint(cpu.Threads)},
 		{"Base speed", ghz(cpu.BaseMHz)},
 		{"L1 cache", sizeOrBlank(cpu.L1)},
@@ -479,9 +479,12 @@ func (m *Model) hwDiskDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist 
 	}
 	m.hwSpecs(c, t, "Specifications", [][2]string{
 		{"Model", d.Model},
+		{"Serial number", d.Serial},
+		{"Firmware", d.Firmware},
 		{"Type", d.Kind},
 		{"Interface", d.Bus},
 		{"Capacity", format.Bytes(d.Size)},
+		{"Partition style", d.PartitionStyle},
 		{"Drive letters", strings.Join(d.Letters, "  ")},
 		{"Physical drive", fmt.Sprintf(`\\.\PhysicalDrive%d`, d.Index)},
 	})
@@ -562,7 +565,8 @@ func (m *Model) hwNetDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist [
 	stats := [][2]string{{"Download", "—"}, {"Upload", "—"}, {"Received", "—"}, {"Sent", "—"}, {"Link speed", "—"}}
 	if ns := nicSample(last, index); ns != nil {
 		stats = [][2]string{{"Download", format.Rate(ns.InRate)}, {"Upload", format.Rate(ns.OutRate)},
-			{"Received", format.Bytes(ns.InTotal)}, {"Sent", format.Bytes(ns.OutTotal)}, {"Link speed", cmp.Or(linkSpeed(ns.LinkBps), "—")}}
+			{"Received", format.Bytes(ns.InTotal)}, {"Sent", format.Bytes(ns.OutTotal)}, {"Link speed", cmp.Or(linkSpeed(ns.LinkBps), "—")},
+			{"Errors", format.Int(ns.InErrors + ns.OutErrors)}, {"Dropped", format.Int(ns.InDiscards + ns.OutDiscards)}}
 	}
 	m.hwStatGrid(c, t, stats)
 	m.hwSpecs(c, t, "Specifications", [][2]string{
@@ -575,7 +579,7 @@ func (m *Model) hwNetDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist [
 	})
 }
 
-func (m *Model) hwBatteryDetail(c *ui.Context, t *ui.Theme, hist []hwmon.Sample, cd *hwCard) {
+func (m *Model) hwBatteryDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist []hwmon.Sample, cd *hwCard) {
 	m.hwChartPanel(c, t, hist, "Charge level", "100%", cd.opts, 200, hwLegend{"Charge", hwBatCol})
 	stats := [][2]string{{"Charge", "—"}, {"State", "—"}, {"Time remaining", "—"}}
 	if last := lastSample(hist); last != nil && last.Battery != nil {
@@ -587,4 +591,22 @@ func (m *Model) hwBatteryDetail(c *ui.Context, t *ui.Theme, hist []hwmon.Sample,
 		stats = [][2]string{{"Charge", fmt.Sprintf("%d%%", b.Percent)}, {"State", batteryState(b)}, {"Time remaining", remain}}
 	}
 	m.hwStatGrid(c, t, stats)
+	// The pack's own identity: wear comes from the firmware, not from the
+	// charge percentage.
+	if b := info.Batt; b != nil {
+		health, cycles := "", ""
+		if b.DesignCapacity > 0 && b.FullCapacity > 0 {
+			health = fmt.Sprintf("%.0f%%", float64(b.FullCapacity)/float64(b.DesignCapacity)*100)
+		}
+		if b.CycleCount > 0 {
+			cycles = format.Int(b.CycleCount)
+		}
+		m.hwSpecs(c, t, "Battery", [][2]string{
+			{"Design capacity", capWh(b.DesignCapacity)},
+			{"Full charge capacity", capWh(b.FullCapacity)},
+			{"Health", health},
+			{"Cycle count", cycles},
+			{"Chemistry", b.Chemistry},
+		})
+	}
 }
