@@ -99,7 +99,7 @@ func TestStartupRowsFilterAndCounts(t *testing.T) {
 		t.Errorf("search by publisher: %d rows", len(rows))
 	}
 	// The default order groups by source and puts items that are on first.
-	m.st.query, m.st.sort = "", ui.SortOrder{Column: "Type"}
+	m.st.query, m.st.sort = "", ui.SortOrder{Column: "Category"}
 	rows, _, _ = m.startupRows()
 	if rows[0].Name != "Steam" || rows[1].Name != "Discord" {
 		t.Errorf("default order starts %q, %q", rows[0].Name, rows[1].Name)

@@ -99,6 +99,8 @@ func (m *Model) startupRows() (rows []*startup.Item, counts [4]int, hidden int) 
 			c = cmp.Compare(startupStatusRank(a), startupStatusRank(b))
 		case "Command":
 			c = cmp.Compare(strings.ToLower(a.Command), strings.ToLower(b.Command))
+		case "Starts":
+			c = cmp.Compare(startupStartsLabel(a), startupStartsLabel(b))
 		default: // "Type": apps, services, tasks — switched-on items first within each
 			c = cmp.Or(cmp.Compare(startupKindRank(a), startupKindRank(b)), cmp.Compare(b2i(!a.Enabled), b2i(!b.Enabled)))
 		}
@@ -136,18 +138,29 @@ func startupStatusRank(it *startup.Item) int {
 	return 3
 }
 
-// startupTypeLabel is the Type column: where the item comes from and, for
-// services and tasks, when it fires.
-func startupTypeLabel(it *startup.Item) string {
+// startupStartsLabel is the Starts column: for apps, which mechanism and
+// whose; for services and tasks, when they fire.
+func startupStartsLabel(it *startup.Item) string {
 	switch it.Kind {
-	case startup.KindService:
-		return "Service · " + it.Trigger
-	case startup.KindTask:
-		return "Task · " + it.Trigger
+	case startup.KindService, startup.KindTask:
+		return it.Trigger
 	case startup.KindFolder:
 		return "Startup folder · " + it.Scope
 	}
-	return "Startup app · " + it.Scope
+	return "Run key · " + it.Scope
+}
+
+// startupCategory is the Category column: what kind of thing this is.
+// Run keys and Startup folders are both apps - the Starts column tells
+// them apart.
+func startupCategory(it *startup.Item) string {
+	switch it.Kind {
+	case startup.KindService:
+		return "Service"
+	case startup.KindTask:
+		return "Task"
+	}
+	return "App"
 }
 
 func (m *Model) startupView(c *ui.Context, t *ui.Theme) {
@@ -156,7 +169,7 @@ func (m *Model) startupView(c *ui.Context, t *ui.Theme) {
 		m.reloadStartup()
 	}
 	if st.sort.Column == "" {
-		st.sort = ui.SortOrder{Column: "Type"}
+		st.sort = ui.SortOrder{Column: "Category"}
 		st.list.Sort = &st.sort
 	}
 	rows, counts, hidden := m.startupRows()
@@ -226,8 +239,9 @@ func (m *Model) startupTable(c *ui.Context, t *ui.Theme, rows []*startup.Item) {
 	cols := []ui.TableColumn{
 		{Title: "", ID: "switch", Width: 64, Fixed: true},
 		{Title: "Name", Sortable: true, MinWidth: 160},
+		{Title: "Category", Width: 86, MinWidth: 60, Sortable: true},
 		{Title: "Publisher", Width: 190, MinWidth: 60, Sortable: true},
-		{Title: "Type", Width: 190, MinWidth: 60, Sortable: true},
+		{Title: "Starts", Width: 170, MinWidth: 60, Sortable: true},
 		{Title: "Status", Width: 150, MinWidth: 60, Sortable: true},
 		{Title: "Command", MinWidth: 220, Sortable: true},
 	}
@@ -262,10 +276,12 @@ func (m *Model) startupTable(c *ui.Context, t *ui.Theme, rows []*startup.Item) {
 						icon(c, "lock", 11).TextColor(muted).Tooltip(it.Locked)
 					}
 				case 2:
-					ui.Text(c, it.Publisher).TextColor(muted).SingleLine().Tooltip(it.Publisher)
+					ui.Text(c, startupCategory(it)).TextColor(muted).SingleLine()
 				case 3:
-					ui.Text(c, startupTypeLabel(it)).TextColor(muted).SingleLine().Tooltip(it.Location)
+					ui.Text(c, it.Publisher).TextColor(muted).SingleLine().Tooltip(it.Publisher)
 				case 4:
+					ui.Text(c, startupStartsLabel(it)).TextColor(muted).SingleLine().Tooltip(it.Location)
+				case 5:
 					m.startupStatus(c, t, it, muted)
 				default:
 					ui.Text(c, it.Command).TextColor(muted).SingleLine().Tooltip(it.Command)
@@ -459,7 +475,7 @@ func (m *Model) startupMenu(c *ui.Context, menu *ui.Menu, it *startup.Item) {
 		c.WriteClipboard(it.Command)
 	}
 	if menu.Item("Copy details").Chosen() {
-		c.WriteClipboard(fmt.Sprintf("%s — %s\n%s\nStarts from: %s (%s)\nRuns: %s", it.Name, it.Publisher, startupTypeLabel(it), it.Location, it.Scope, it.Command))
+		c.WriteClipboard(fmt.Sprintf("%s — %s\n%s · %s\nStarts from: %s (%s)\nRuns: %s", it.Name, it.Publisher, startupCategory(it), startupStartsLabel(it), it.Location, it.Scope, it.Command))
 	}
 	menu.Separator()
 	if menu.Item("Open in Registry Editor").Disabled(it.Kind != startup.KindRun && it.Kind != startup.KindService).Chosen() {
