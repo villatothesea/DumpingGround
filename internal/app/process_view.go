@@ -462,11 +462,17 @@ func (m *Model) modeButton(c *ui.Context, t *ui.Theme, label string, on bool, ch
 		choose()
 	}
 }
+
+// iconCacheMax bounds the shared process/uninstall icon cache. It must
+// hold a full process list's icons *and* a full app list's — a cap the
+// process rows can fill starves every other page into the placeholder.
+const iconCacheMax = 2048
+
 func (m *Model) processIcon(path string) *ui.Bitmap {
 	if icon, ok := m.iconCache[path]; ok {
 		return icon
 	}
-	if path != "" && m.window != nil && len(m.iconCache) < 256 && !m.iconPending[path] && !strings.HasPrefix(path, `\\`) {
+	if path != "" && m.window != nil && len(m.iconCache) < iconCacheMax && !m.iconPending[path] && !strings.HasPrefix(path, `\\`) {
 		select {
 		case m.iconRequests <- path:
 			m.iconPending[path] = true
@@ -495,7 +501,7 @@ func (m *Model) loadIcons() {
 				if icon == nil {
 					icon = m.iconCache[""]
 				}
-				if len(m.iconCache) < 256 {
+				if len(m.iconCache) < iconCacheMax {
 					m.iconCache[path] = icon
 				}
 			}

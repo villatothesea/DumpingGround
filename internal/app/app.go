@@ -280,7 +280,11 @@ func (m *Model) Run() error {
 			m.page = diskPage
 		}
 		m.iconCache[""] = systemIcon("")
-		go m.loadIcons()
+		// SHGetFileInfoW takes 5–50ms per icon; four workers keep a
+		// full app list's icons from queueing behind each other.
+		for range 4 {
+			go m.loadIcons()
+		}
 		m.window = mygo.NewWindow(mygo.WindowOptions{Title: "DumpingGround", Width: 1180, Height: 760, MinWidth: 960, MinHeight: 580, TitleBarStyle: mygo.TitleBarHidden, TitleBarHeight: 40, Content: ui.View(m.view)})
 		if err := m.window.SetIcon(appIcon); err != nil {
 			log.Print("window icon:", err)
