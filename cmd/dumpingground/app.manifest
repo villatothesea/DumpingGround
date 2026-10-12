@@ -4,10 +4,10 @@
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>
       <requestedPrivileges>
-        <!-- Unprivileged by default: the first operation that needs
-             admin spawns the elevated worker through a runas UAC
-             prompt, which donates handles / runs the closed op set. -->
-        <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
+        <!-- Administrator: MFT/USN reads, HKLM deletes and system-dir
+             cleanup all need it, so like WizTree/BCUninstall the app
+             asks once at launch instead of interrupting later. -->
+        <requestedExecutionLevel level="requireAdministrator" uiAccess="false"/>
       </requestedPrivileges>
     </security>
   </trustInfo>

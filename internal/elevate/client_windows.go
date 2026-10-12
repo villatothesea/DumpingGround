@@ -13,9 +13,12 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unsafe"
+
+	"github.com/dumpingground/dumpingground/internal/applog"
 )
 
 var (
@@ -35,8 +38,9 @@ const (
 )
 
 var (
-	mu  sync.Mutex // serializes every frame on the pipe
-	cli *client
+	mu     sync.Mutex // serializes every frame on the pipe
+	cli    *client
+	denied atomic.Bool // the UAC "No" — suppress repeat prompts this session
 )
 
 type client struct {
@@ -71,6 +75,9 @@ func Ensure() error {
 		cli.close()
 		cli = nil
 	}
+	if denied.Load() {
+		return ErrCancelled // do not nag: one No means no more prompts this session
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		return err
@@ -80,6 +87,10 @@ func Ensure() error {
 	pipe := fmt.Sprintf(`\\.\pipe\DumpingGround-elev-%d-%s`, os.Getpid(), hex.EncodeToString(nonce[:]))
 	args := fmt.Sprintf("--elevated-worker --elev-parent=%d --elev-pipe=%s", os.Getpid(), pipe)
 	if err := shellRunAs(exe, args); err != nil {
+		if errors.Is(err, ErrCancelled) {
+			denied.Store(true)
+			applog.Logf("elevation: UAC declined — privileged ops fall back for this session")
+		}
 		return err
 	}
 	// The prompt already resolved by the time ShellExecuteEx returns;
@@ -227,6 +238,13 @@ func ListTree(path string) ([]Kid, error) {
 	}
 	return r.Kids, nil
 }
+
+// ConsentDenied reports the UAC "No" — the UI shows a badge and can
+// re-arm the prompt with ResetConsent.
+func ConsentDenied() bool { return denied.Load() }
+
+// ResetConsent clears the session-scoped "no more prompts" flag.
+func ResetConsent() { denied.Store(false) }
 
 // Active reports whether the elevated worker is currently connected —
 // the UI shows a badge so privilege use stays visible.

@@ -2,10 +2,12 @@
 
 package elevate
 
-func SelfElevated() bool { return false }
-func Ensure() error      { return ErrUnsupported }
-func Active() bool       { return false }
-func Shutdown()          {}
+func SelfElevated() bool  { return false }
+func Ensure() error       { return ErrUnsupported }
+func Active() bool        { return false }
+func ConsentDenied() bool { return false }
+func ResetConsent()       {}
+func Shutdown()           {}
 
 func OpenVolume(drive string) (uintptr, error) { return 0, ErrUnsupported }
 func OpenProcessHandle(pid uint32, access uint32) (uintptr, error) {

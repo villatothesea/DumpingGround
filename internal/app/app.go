@@ -894,6 +894,13 @@ func (m *Model) statusBar(c *ui.Context, t *ui.Theme) {
 			ui.Text(c, "⛨ admin").FontSize(11).TextColor(t.Warning).Tooltip("running with administrator rights — every operation succeeds without asking")
 		} else if elevate.Active() {
 			ui.Text(c, "⛨ admin").FontSize(11).TextColor(t.Warning).Tooltip("an elevated worker is answering privileged requests for this session — spawned after the UAC prompt, exits with the app or after 10 idle minutes")
+		} else if elevate.ConsentDenied() {
+			d := ui.Row(c).AlignItems(ui.Center).PaddingX(4).Radius(3).Tooltip("admin consent was declined — privileged operations fall back this session. Click to allow the UAC prompt again")
+			d.Children(func() { ui.Text(c, "⛨ denied").FontSize(11).TextColor(t.TextMuted) })
+			if d.Clicked() {
+				elevate.ResetConsent()
+				m.status = "Admin consent reset — the next privileged operation asks again"
+			}
 		}
 		m.statMeter(c, t, "cpu", "CPU", fmt.Sprintf("%.0f%%", m.sys.cpu), m.sys.cpu, fmt.Sprintf("Total CPU usage %.0f%%", m.sys.cpu))
 		m.statMeter(c, t, "mem", "MEM", fmt.Sprintf("%d%%", m.sys.memLoad), float64(m.sys.memLoad), fmt.Sprintf("Memory %.1f of %.1f GB used (%d%%)", float64(m.sys.memUsed)/1073741824, float64(m.sys.memTotal)/1073741824, m.sys.memLoad))

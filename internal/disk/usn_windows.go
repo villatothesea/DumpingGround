@@ -54,6 +54,8 @@ func openVolume(root string) (*os.File, error) {
 		if elevate.IsAccessDenied(e) {
 			if dh, e2 := elevate.OpenVolume(root[:2]); e2 == nil {
 				return os.NewFile(dh, root), nil
+			} else if errors.Is(e2, elevate.ErrCancelled) {
+				return nil, fmt.Errorf("%w — admin consent declined, walking directories instead", e)
 			}
 		}
 		return nil, e

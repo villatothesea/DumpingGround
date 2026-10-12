@@ -177,6 +177,15 @@ func serve(pipe syscall.Handle, parent syscall.Handle) {
 		}
 		lastActivity.Store(time.Now().Unix())
 		resp := dispatch(&req, parent)
+		switch {
+		case req.Op == elevate.OpPing:
+		case !resp.OK:
+			applog.Logf("elevated worker: %s %q failed: %s", req.Op, req.Path+req.Key+req.Drive, resp.Err)
+		case len(resp.Kids) > 0:
+			applog.Logf("elevated worker: %s %q -> %d entries", req.Op, req.Path, len(resp.Kids))
+		default:
+			applog.Logf("elevated worker: %s %q ok", req.Op, req.Path+req.Key+req.Drive)
+		}
 		out, _ := json.Marshal(resp)
 		binary.LittleEndian.PutUint32(hdr[:], uint32(len(out)))
 		if _, err := f.Write(hdr[:]); err != nil {
