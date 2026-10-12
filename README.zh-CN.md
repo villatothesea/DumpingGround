@@ -3,9 +3,9 @@
 [English](README.md)
 
 Windows 原生维护工具，Go + [MyGo](https://github.com/egoist/mygo) 原生 UI——
-进程查看、磁盘空间分析，以及**安全**清理（Rust 构建产物、Windows 垃圾、
-带残留审查的彻底卸载）。以 Process Explorer / WizTree 的常用工作流为目标，
-仍有功能差距。
+实时硬件总览、进程查看、磁盘空间分析、启动项管理，以及**安全**清理（Rust
+构建产物、Windows 垃圾、带残留审查的彻底卸载）。以 Task Manager / Process
+Explorer / WizTree / Autoruns 的常用工作流为目标。
 
 ## 安全模型
 
@@ -19,6 +19,8 @@ Windows 原生维护工具，Go + [MyGo](https://github.com/egoist/mygo) 原生 
 - **不静默扩大范围**。删除时复查守卫：运行中的进程、重解析点、被其他已装
   应用占用的路径、当前 Rust 工具链、进行中的 Windows 服务。
 - **理由可见**。每条残留都显示路径和判定原因；猜测项一律不预选。
+- **开关而非删除**。关掉启动项从不移除它的条目；Windows 自带的服务和任务
+  只读。
 
 ## 运行
 
@@ -35,6 +37,16 @@ Releases 下载 `DumpingGround.exe`，或按下方构建。双击后在 UAC 弹�
 即便提权运行，应用也不启用 `SeDebugPrivilege`：内核保护的进程（csrss、
 lsass、杀毒软件）一律够不着——杀掉它们会直接蓝屏，而读取 lsass 内存
 正是凭证窃取工具的特征动作。禁区边界交给内核画，是特性不是缺陷。
+
+### 命令行
+
+- `--page=computer|processes|disk|startup`——启动时打开的页面（默认
+  `computer`）。
+- `--scan=<盘符或文件夹>`——打开磁盘页并开始扫描。
+- `--renderer=cpu|gpu`——软件绘制（默认）或 D3D11。
+
+页面快捷键：Ctrl+1 Computer、Ctrl+2 Processes、Ctrl+3 Disk Usage、
+Ctrl+4 Uninstall、Ctrl+5 Startup。
 
 ### 计算机
 

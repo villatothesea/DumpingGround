@@ -3,10 +3,10 @@
 [中文](README.zh-CN.md)
 
 A Windows-native maintenance utility in Go + [MyGo](https://github.com/egoist/mygo)
-native UI — process inspection, disk-usage analysis, and *safe* cleanup
-(Rust build artifacts, Windows junk, full uninstall with leftover review).
-Aims at the everyday Process Explorer / WizTree workflows; remaining gaps are
-listed below.
+native UI — a live hardware overview, process inspection, disk-usage
+analysis, startup management, and *safe* cleanup (Rust build artifacts,
+Windows junk, full uninstall with leftover review). Aims at the everyday
+Task Manager / Process Explorer / WizTree / Autoruns workflows.
 
 ## Safety model
 
@@ -24,6 +24,8 @@ This app deletes things, so the rules come first:
   active Rust toolchain, Windows servicing in progress.
 - **Visible reasoning.** Every leftover shows the path and *why* it was
   flagged; guesses are never pre-selected.
+- **Switches, not deletions.** Turning a startup item off never removes its
+  entry, and Windows' own services and tasks are read-only.
 
 ## Running
 
@@ -43,6 +45,16 @@ protected processes (csrss, lsass, antivirus) stay out of reach —
 killing one would blue-screen the machine, and an `lsass` memory-read
 handle is what credential-dumping tools look like. The kernel's
 boundary is the feature, not a limitation.
+
+### Command line
+
+- `--page=computer|processes|disk|startup` — the page to open on
+  (default `computer`).
+- `--scan=<drive or folder>` — open the disk page and start scanning.
+- `--renderer=cpu|gpu` — software rendering (default) or D3D11.
+
+Pages are also on Ctrl+1 Computer, Ctrl+2 Processes, Ctrl+3 Disk Usage,
+Ctrl+4 Uninstall, Ctrl+5 Startup.
 
 ### Computer
 
