@@ -778,26 +778,72 @@ func (m *Model) hwAudioDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info) {
 	})
 }
 
-// hwDevicesDetail lists every present Plug-and-Play device, by class.
+// hwDevicesDetail lists every present Plug-and-Play device as one
+// collapsible group per class, with each device's running state.
 func (m *Model) hwDevicesDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info) {
 	if len(info.Devices) == 0 {
 		return
+	}
+	if m.hw.devOpen == nil {
+		m.hw.devOpen = map[string]bool{}
+	}
+	var classes []string
+	groups := map[string][]hwmon.DeviceInfo{}
+	for _, d := range info.Devices {
+		if _, ok := groups[d.Class]; !ok {
+			classes = append(classes, d.Class)
+		}
+		groups[d.Class] = append(groups[d.Class], d)
 	}
 	m.hwPanel(c, t, func() {
 		ui.Row(c).Children(func() {
 			ui.Text(c, "Present devices").Bold().FontSize(13)
 			ui.Spacer(c)
-			ui.Text(c, fmt.Sprintf("%d devices", len(info.Devices))).FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, fmt.Sprintf("%d devices in %d classes", len(info.Devices), len(classes))).FontSize(11).TextColor(t.TextMuted)
 		})
-		ui.Grid(c).ColumnTracks(ui.Fr(3), ui.Fr(1.3), ui.Fr(1.6)).GapX(12).GapY(6).Children(func() {
-			for _, h := range []string{"Device", "Class", "Vendor"} {
-				ui.Text(c, h).FontSize(11).TextColor(t.TextMuted)
-			}
-			for _, d := range info.Devices {
-				ui.Text(c, d.Name).SingleLine().Ellipsis("…")
-				ui.Text(c, d.Class).TextColor(t.TextMuted).SingleLine()
-				ui.Text(c, cmp.Or(d.Vendor, "—")).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
+		ui.Accordion(c, func() {
+			for _, class := range classes {
+				open := m.hw.devOpen[class]
+				devs := groups[class]
+				if ui.AccordionItem(c, fmt.Sprintf("%s · %d", class, len(devs)), &open, func() {
+					ui.Grid(c).ColumnTracks(ui.Fr(2.6), ui.Fr(1.8), ui.Fr(1)).GapX(12).GapY(6).Padding(6, 4).Children(func() {
+						for _, d := range devs {
+							ui.Text(c, d.Name).SingleLine().Ellipsis("…")
+							ui.Text(c, cmp.Or(d.Vendor, "—")).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
+							ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+								ui.Box(c).Size(7, 7).Radius(4).Background(devStatusColor(d, t))
+								ui.Text(c, devStatusText(d)).FontSize(11).TextColor(t.TextMuted).SingleLine()
+							})
+						}
+					})
+				}).Changed() {
+					m.hw.devOpen[class] = open
+				}
 			}
 		})
 	})
+}
+
+// devStatusColor marks a device green when its driver is running,
+// orange when it reports a problem and muted when it sits idle.
+func devStatusColor(d hwmon.DeviceInfo, t *ui.Theme) ui.Color {
+	switch {
+	case d.Problem != 0:
+		return t.Warning
+	case d.Started:
+		return t.Success
+	default:
+		return t.TextMuted
+	}
+}
+
+func devStatusText(d hwmon.DeviceInfo) string {
+	switch {
+	case d.Problem != 0:
+		return fmt.Sprintf("Problem %d", d.Problem)
+	case d.Started:
+		return "Working"
+	default:
+		return "Idle"
+	}
 }

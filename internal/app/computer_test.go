@@ -39,9 +39,10 @@ func fakeMachine(m *Model) {
 		DisplayMode: hwmon.DisplayMode{Width: 2560, Height: 1440, RefreshHz: 144, BitsPerPel: 32},
 		Audio:       []hwmon.AudioInfo{{Name: "Realtek SoundWire Audio", Vendor: "Realtek"}, {Name: "Microphone Array on SDW", Vendor: "Intel"}},
 		Devices: []hwmon.DeviceInfo{
-			{Name: "Intel Wi-Fi 7 BE211", Class: "Network", Vendor: "Intel"},
-			{Name: "Realtek SoundWire Audio", Class: "Audio", Vendor: "Realtek"},
+			{Name: "Intel Wi-Fi 7 BE211", Class: "Network", Vendor: "Intel", Started: true},
+			{Name: "Realtek SoundWire Audio", Class: "Audio", Vendor: "Realtek", Started: true},
 			{Name: "USB xHCI Compliant Host Controller", Class: "USB", Vendor: "Intel"},
+			{Name: "Sad Bluetooth radio", Class: "Bluetooth", Vendor: "Intel", Problem: 43},
 		},
 	}
 	m.hw.info.Store(info)
@@ -141,7 +142,34 @@ func TestNewHardwareCards(t *testing.T) {
 	}
 	click("Display 1", "Monitor", "2560 × 1440", "Current mode", "DEL", "27.2 in")
 	click("Audio", "Audio devices", "Realtek SoundWire Audio", "Microphone Array on SDW")
-	click("Devices", "Present devices", "USB xHCI Compliant Host Controller", "Network")
+
+	// Devices groups its rows under a collapsible header per class.
+	if err := tt.Click("Devices"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	for _, want := range []string{"Present devices", "Audio · 1", "Network · 1", "USB · 1", "Bluetooth · 1"} {
+		if !tt.HasText(want) {
+			t.Errorf("devices detail missing %q", want)
+		}
+	}
+	if tt.HasText("USB xHCI Compliant Host Controller") {
+		t.Error("device row visible before its group was expanded")
+	}
+	if err := tt.Click("USB · 1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.Click("Bluetooth · 1"); err != nil {
+		t.Fatal(err)
+	}
+	for range 12 { // let the open animations finish
+		tt.Frame()
+	}
+	for _, want := range []string{"USB xHCI Compliant Host Controller", "Idle", "Sad Bluetooth radio", "Problem 43"} {
+		if !tt.HasText(want) {
+			t.Errorf("expanded group missing %q", want)
+		}
+	}
 }
 
 // TestDiskHealthPanel checks the health panel's three states: an NVMe log,
@@ -377,9 +405,15 @@ func TestComputerScreenshots(t *testing.T) {
 		tt.SetTitleBar(ui.TitleBar{Height: 40, Right: 138})
 		tt.Frame()
 		dump(t, tt, dest, "computer-overview-"+suffix+".png")
-		for _, id := range []string{"cpu", "mem", "gpu:0", "disk:0", "net:10", "battery"} {
+		for _, id := range []string{"cpu", "mem", "gpu:0", "disk:0", "net:10", "battery", "devices"} {
 			m.hw.detail = id
 			tt.Frame()
+			if id == "devices" {
+				m.hw.devOpen["Audio"] = true // show one group expanded
+				for range 12 {               // let the open animation finish
+					tt.Frame()
+				}
+			}
 			dump(t, tt, dest, "computer-"+filepath.Base(id[:3])+"-detail-"+suffix+".png")
 		}
 	}

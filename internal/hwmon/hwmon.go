@@ -57,9 +57,12 @@ type AudioInfo struct {
 }
 
 // DeviceInfo is one present Plug-and-Play device: what it is, its
-// Windows device class and who made it.
+// Windows device class and who made it. Started mirrors the devnode's
+// DN_STARTED flag; Problem is its CM_PROB_* code, 0 when it works.
 type DeviceInfo struct {
 	Name, Class, Vendor string
+	Started             bool
+	Problem             uint32
 }
 
 // BatteryInfo is the battery's static identity and wear, read from the

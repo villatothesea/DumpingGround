@@ -43,8 +43,9 @@ var (
 	procSetupDiGetDeviceInstanceID   = setupapi.NewProc("SetupDiGetDeviceInstanceIdW")
 	procSetupDiDestroyDeviceInfoList = setupapi.NewProc("SetupDiDestroyDeviceInfoList")
 
-	procCMGetDevNodeProp = cfgmgr32.NewProc("CM_Get_DevNode_PropertyW")
-	procCMGetParent      = cfgmgr32.NewProc("CM_Get_Parent")
+	procCMGetDevNodeProp   = cfgmgr32.NewProc("CM_Get_DevNode_PropertyW")
+	procCMGetParent        = cfgmgr32.NewProc("CM_Get_Parent")
+	procCMGetDevNodeStatus = cfgmgr32.NewProc("CM_Get_DevNode_Status")
 
 	procEnumDisplaySettings = user32.NewProc("EnumDisplaySettingsW")
 )

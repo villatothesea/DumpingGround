@@ -94,7 +94,8 @@ func loadDevices(info *Info) map[string]bool {
 			}
 			seen[key] = true
 			vendor := devProp(h, unsafe.Pointer(&di), spdrpMfg)
-			info.Devices = append(info.Devices, DeviceInfo{Name: name, Class: dc.name, Vendor: vendor})
+			started, problem := devNodeStatus(di.DevInst)
+			info.Devices = append(info.Devices, DeviceInfo{Name: name, Class: dc.name, Vendor: vendor, Started: started, Problem: problem})
 			if dc.name == "Audio" {
 				info.Audio = append(info.Audio, AudioInfo{Name: name, Vendor: vendor})
 			}
@@ -109,6 +110,16 @@ func loadDevices(info *Info) map[string]bool {
 	})
 	slices.SortFunc(info.Audio, func(a, b AudioInfo) int { return strings.Compare(a.Name, b.Name) })
 	return monitors
+}
+
+// devNodeStatus reads a devnode's status flags and CM_PROB_* problem
+// code; started mirrors DN_STARTED (0x08).
+func devNodeStatus(inst uint32) (started bool, problem uint32) {
+	var status uint32
+	if r, _, _ := procCMGetDevNodeStatus.Call(uintptr(unsafe.Pointer(&status)), uintptr(unsafe.Pointer(&problem)), uintptr(inst), 0); r != 0 {
+		return false, 0
+	}
+	return status&0x08 != 0, problem
 }
 
 // devProp reads one SetupAPI device property as a string.

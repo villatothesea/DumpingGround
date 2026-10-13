@@ -304,7 +304,12 @@ func (m *Model) Run() error {
 			log.Print("window icon:", err)
 		}
 		mygo.App.OnSecondInstance(func(_ []string, _ string) { m.window.Restore(); m.window.Show(); m.window.Focus() })
-		m.window.OnMinimize(func() { m.minimized = true; m.samplerActive.Store(false); m.hw.running.Store(false) })
+		m.window.OnMinimize(func() {
+			m.minimized = true
+			m.samplerActive.Store(false)
+			m.hw.running.Store(false)
+			go trimMemory() // hand idle pages back while hidden
+		})
 		m.window.OnRestore(func() {
 			m.minimized = false
 			m.hw.running.Store(true)
