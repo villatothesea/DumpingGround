@@ -76,11 +76,18 @@ func TestScreenshotStates(t *testing.T) {
 	tt2.Frame()
 	dump(t, tt2, dest, "disk-info.png")
 
-	// Settings modal.
+	// Settings window: catalogue rail and the general, tray and About
+	// sections.
 	tt3 := ui.NewTester(m.view, 1180, 760)
 	tt3.Click("Settings")
 	tt3.Frame()
 	dump(t, tt3, dest, "settings.png")
+	tt3.Click("Tray & window")
+	tt3.Frame()
+	dump(t, tt3, dest, "settings-tray.png")
+	tt3.Click("About")
+	tt3.Frame()
+	dump(t, tt3, dest, "settings-about.png")
 
 	// Pill tab style with a light theme and a selected process.
 	m.settingsOpen = false

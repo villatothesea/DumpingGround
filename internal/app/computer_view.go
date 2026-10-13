@@ -32,6 +32,10 @@ func (m *Model) computerView(c *ui.Context, t *ui.Theme) {
 	}
 	hist := m.hwSnapshot()
 	cards := hwCards(info, hist)
+	if m.computerLayout == "Cards" {
+		m.computerViewCards(c, t, info, hist, cards)
+		return
+	}
 	selID := m.hw.detail
 	if selID == "" {
 		selID = "machine"

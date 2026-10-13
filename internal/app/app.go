@@ -112,7 +112,14 @@ type Model struct {
 	detailSplit                     float32
 	themeMode                       int
 	appliedThemeMode                int
+	computerLayout                  string // "Sidebar" | "Cards"
+	language                        string // reserved until localization lands
+	tray                            *mygo.Tray
+	trayMetric                      string // "CPU" | "Memory" | "GPU" | "Icon"
+	closeToTray                     bool
+	quitting                        bool // a real quit is underway — don't divert window closes to the tray
 	settingsOpen                    bool
+	settingsSection                 string
 	diskInfoOpen                    bool
 	reservedQuery                   string
 	sys                             systemUsage
@@ -267,6 +274,7 @@ func New() *Model {
 		iconCache:   make(map[string]*ui.Bitmap),
 		iconPending: make(map[string]bool), iconRequests: make(chan string, 32),
 		diskStatus: "Choose a drive or folder to scan", diskMode: "Tree", diskMetric: "Allocated", diskSelected: -1, diskNode: -1, extensionSelected: -1, mapRoot: -1, diskSplit: 300, animateMap: true, detailTab: "Properties", memRelease: "Automatic", tabStyle: "Pill",
+		computerLayout: "Sidebar", language: "System", trayMetric: "CPU", settingsSection: "general",
 		rustGone: map[string]bool{}, rustSel: -1, rustConfirm: -1, rustPathsCat: -1, rustRecycle: true,
 		rustFilterCat: -1, junkSel: -1, junkConfirm: -1, junkFilterCat: -1, junkPathsCat: -1,
 		rustCollapsed: map[int]bool{}, junkCollapsed: map[string]bool{}}
@@ -281,6 +289,7 @@ func (m *Model) Run() error {
 			return nil
 		}
 	}
+	m.loadSettings()
 	mygo.App.WhenReady(func() {
 		switch m.InitialPage {
 		case "disk":
@@ -307,7 +316,9 @@ func (m *Model) Run() error {
 		m.window.OnMinimize(func() {
 			m.minimized = true
 			m.samplerActive.Store(false)
-			m.hw.running.Store(false)
+			// With a tray icon the sparkline stays live, so hardware
+			// sampling continues; without one the window can sleep.
+			m.hw.running.Store(m.tray == nil)
 			go trimMemory() // hand idle pages back while hidden
 		})
 		m.window.OnRestore(func() {
@@ -322,8 +333,24 @@ func (m *Model) Run() error {
 				m.diskCancel()
 			}
 		})
+		m.setupTray()
+		// App.Quit closes every window; a close that arrived through that
+		// path must not be diverted into the tray or Quit would stall.
+		mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { m.quitting = true })
+		m.window.OnClose(func(e *mygo.CloseEvent) {
+			if m.closeToTray && !m.quitting {
+				e.PreventDefault()
+				m.window.Hide()
+				// Treat it like a minimize: pause the process sampler and
+				// trim memory; the hardware sampler keeps feeding the
+				// tray sparkline.
+				m.minimized = true
+				m.samplerActive.Store(false)
+				go trimMemory()
+			}
+		})
 		m.samplerActive.Store(true)
-		m.sampleInterval.Store(int64(time.Second))
+		m.applySampleInterval()
 		go m.sampleProcesses()
 		go func() {
 			vols := disk.Volumes()
@@ -654,6 +681,7 @@ func (m *Model) topBar(c *ui.Context, t *ui.Theme) {
 			} else {
 				m.themeMode = 2
 			}
+			m.saveSettings()
 		}
 		if m.iconButton(c, "gear", "Settings").Clicked() {
 			m.settingsOpen = true
@@ -990,54 +1018,6 @@ func (m *Model) statusBar(c *ui.Context, t *ui.Theme) {
 				m.diskInfoOpen = true
 			}
 		}
-	})
-}
-
-// settingsView is the popover of the redesign, a small modal with the two
-// scope-wide preferences plus the map transition toggle.
-func (m *Model) settingsView(c *ui.Context) {
-	ui.Modal(c, &m.settingsOpen, func() {
-		ui.Column(c).Width(360).Padding(6, 16, 14, 16).Gap(10).Children(func() {
-			ui.Text(c, "Settings").Bold().FontSize(14)
-			ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
-				ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-					ui.Text(c, "Process refresh")
-					ui.Text(c, "Automatic sampling on the Processes page").FontSize(11).TextColor(c.Theme().TextMuted)
-				})
-				if ui.Select(c, &m.processInterval, []string{"1 s", "2 s", "5 s"}).Width(80).Changed() {
-					switch m.processInterval {
-					case "2 s":
-						m.sampleInterval.Store(2e9)
-					case "5 s":
-						m.sampleInterval.Store(5e9)
-					default:
-						m.sampleInterval.Store(1e9)
-					}
-				}
-			})
-			ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
-				ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-					ui.Text(c, "Space metric")
-					ui.Text(c, "Used by the space map and percent column").FontSize(11).TextColor(c.Theme().TextMuted)
-				})
-				ui.Select(c, &m.diskMetric, []string{"Allocated", "Logical"}).Width(100).Label("Size metric")
-			})
-			ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
-				ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-					ui.Text(c, "Tab style")
-					ui.Text(c, "Look of the page tabs in the top bar").FontSize(11).TextColor(c.Theme().TextMuted)
-				})
-				ui.Select(c, &m.tabStyle, []string{"Underline", "Pill"}).Width(100).Label("Tab style")
-			})
-			ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
-				ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-					ui.Text(c, "Memory after scan")
-					ui.Text(c, "Return scan buffers to the OS, or keep them for faster rescans").FontSize(11).TextColor(c.Theme().TextMuted)
-				})
-				ui.Select(c, &m.memRelease, []string{"Automatic", "Keep for rescan"}).Width(110).Label("Memory after scan")
-			})
-			ui.Checkbox(c, &m.animateMap, "Animate map drill-down").Tooltip("Respects Windows reduced motion")
-		})
 	})
 }
 

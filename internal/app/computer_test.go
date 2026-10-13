@@ -405,6 +405,12 @@ func TestComputerScreenshots(t *testing.T) {
 		tt.SetTitleBar(ui.TitleBar{Height: 40, Right: 138})
 		tt.Frame()
 		dump(t, tt, dest, "computer-overview-"+suffix+".png")
+		if !dark {
+			m.computerLayout = "Cards"
+			tt.Frame()
+			dump(t, tt, dest, "computer-cards-light.png")
+			m.computerLayout = "Sidebar"
+		}
 		for _, id := range []string{"cpu", "mem", "gpu:0", "disk:0", "net:10", "battery", "devices"} {
 			m.hw.detail = id
 			tt.Frame()

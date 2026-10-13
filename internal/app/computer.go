@@ -77,13 +77,16 @@ func (m *Model) startHardware() {
 				}
 			}
 			vis := m.hw.visible.Load()
-			s := m.hw.mon.Sample(vis)
+			// A GPU tray icon needs the utilization counter even while
+			// the Computer page is hidden.
+			s := m.hw.mon.Sample(vis || m.trayMetric == "GPU")
 			m.hw.mu.Lock()
 			m.hw.hist = append(m.hw.hist, s)
 			if len(m.hw.hist) > hwKeep {
 				m.hw.hist = append(m.hw.hist[:0], m.hw.hist[len(m.hw.hist)-hwKeep:]...)
 			}
 			m.hw.mu.Unlock()
+			m.updateTrayIcon(s)
 			if vis && m.window != nil {
 				m.window.Invalidate()
 			}
