@@ -11,14 +11,15 @@ import (
 )
 
 const (
-	hwPad     = 16 // page padding
-	hwGap     = 12 // gap between cards and panels
-	hwCardMin = 300
-	hwCardH   = 188
+	hwPad   = 16  // page padding
+	hwGap   = 12  // gap between panels
+	hwRailW = 300 // catalogue column width
+	hwRowH  = 54  // one catalogue entry
 )
 
-// computerView is the Computer page: the overview of cards, or the detail
-// of the one that was clicked.
+// computerView is the Computer page: a catalogue rail on the left, the
+// selected card's detail on the right. The first entry is the machine
+// itself; m.hw.detail "" selects it, as does "machine".
 func (m *Model) computerView(c *ui.Context, t *ui.Theme) {
 	info := m.hw.info.Load()
 	if info == nil {
@@ -29,35 +30,87 @@ func (m *Model) computerView(c *ui.Context, t *ui.Theme) {
 	}
 	hist := m.hwSnapshot()
 	cards := hwCards(info, hist)
-	if m.hw.detail != "" {
-		for i := range cards {
-			if cards[i].id == m.hw.detail {
-				m.hwDetail(c, t, info, hist, &cards[i])
-				return
-			}
-		}
-		m.hw.detail = "" // the hardware went away (a disk was ejected)
+	selID := m.hw.detail
+	if selID == "" {
+		selID = "machine"
 	}
-	m.hwOverview(c, t, info, hist, cards)
+	cd := &cards[0]
+	for i := range cards {
+		if cards[i].id == selID {
+			cd = &cards[i]
+			break
+		}
+	}
+	if cd.id != selID {
+		m.hw.detail = "" // the hardware went away (a disk was ejected)
+		cd = &cards[0]
+	}
+	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
+		m.hwRail(c, t, cards, cd.id, hist)
+		ui.Box(c).Width(1).FillHeight().Background(t.Border)
+		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
+			m.hwDetail(c, t, info, hist, cd)
+		})
+	})
 }
 
-func (m *Model) hwOverview(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist []hwmon.Sample, cards []hwCard) {
-	w, _ := c.Size()
-	cols := max(1, min(4, int((w-2*hwPad+hwGap)/(hwCardMin+hwGap))))
-	ui.Scroll(c.Key("hw-overview")).Grow(1).MinHeight(0).Children(func() {
-		ui.Column(c).Padding(hwPad).Gap(hwGap).AlignItems(ui.Stretch).Children(func() {
-			m.hwHeader(c, t, info, hist)
-			ui.Grid(c).Columns(cols).Gap(hwGap).Children(func() {
+// hwRail is the left catalogue: one compact row per card, the machine
+// entry first.
+func (m *Model) hwRail(c *ui.Context, t *ui.Theme, cards []hwCard, selID string, hist []hwmon.Sample) {
+	ui.Column(c).Width(hwRailW).Shrink(0).MinHeight(0).Children(func() {
+		ui.Scroll(c.Key("hw-rail")).Grow(1).MinHeight(0).Children(func() {
+			ui.Column(c).Padding(hwPad, 10).Gap(6).AlignItems(ui.Stretch).Children(func() {
 				for i := range cards {
-					m.hwCardView(c, t, &cards[i], hist)
+					m.hwRailRow(c, t, &cards[i], hist, cards[i].id == selID)
 				}
 			})
 		})
 	})
 }
 
-// hwHeader is the machine's identity: name, make and model, operating
-// system and uptime, then the one-line summary of each major part.
+// hwRailRow is one catalogue entry: glyph, name, a one-line summary and
+// either the current figure or a thumbnail of its live chart.
+func (m *Model) hwRailRow(c *ui.Context, t *ui.Theme, cd *hwCard, hist []hwmon.Sample, selected bool) {
+	e := ui.Row(c.Key("rail:"+cd.id)).Height(hwRowH).Padding(10, 0).Gap(10).AlignItems(ui.Center).Radius(8).Cursor(ui.CursorPointer).Label(cd.title)
+	e.Draw(func(p *ui.Painter, r ui.Rect) {
+		switch {
+		case selected:
+			p.Fill(r, cd.col.Alpha(0.10), 8)
+			p.Fill(ui.Rect{X: r.X + 4, Y: r.Y + 10, W: 3, H: r.H - 20}, cd.col, 2)
+		case e.Hovered():
+			p.Fill(r, t.SurfaceHover, 8)
+		}
+	})
+	e.Children(func() {
+		icon(c, cd.glyph, 20).TextColor(cd.col)
+		ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
+			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, cd.title).Bold().FontSize(12).SingleLine().Ellipsis("…")
+				if cd.health != "" {
+					ui.Box(c).Size(7, 7).Radius(4).Background(hwHealthColor(cd.health, t))
+				}
+			})
+			ui.Text(c, cd.sub).FontSize(10).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
+		})
+		ui.Column(c).AlignItems(ui.End).Shrink(0).Gap(2).Children(func() {
+			if cd.value != "" {
+				ui.Text(c, cd.value).FontSize(11).Bold().SingleLine()
+			}
+			if len(cd.opts.lines) > 0 {
+				ui.Box(c).Size(58, 18).Draw(func(p *ui.Painter, r ui.Rect) { drawChart(p, r, t, hist, cd.opts) })
+			} else if cd.vsub != "" {
+				ui.Text(c, cd.vsub).FontSize(10).TextColor(t.TextMuted).SingleLine()
+			}
+		})
+	})
+	if e.Clicked() {
+		m.hw.detail = cd.id
+	}
+}
+
+// hwHeader is the machine's identity panel: name, make and model,
+// operating system and uptime, then the one-line summary of each major
+// part. The machine card's detail shows it.
 func (m *Model) hwHeader(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist []hwmon.Sample) {
 	w, _ := c.Size()
 	facts := hwFacts(info)
@@ -110,7 +163,7 @@ func (m *Model) hwFact(c *ui.Context, t *ui.Theme, label, value string) {
 	})
 }
 
-// hwFacts are the overview header's label/value pairs; parts the machine
+// hwFacts are the machine detail's label/value pairs; parts the machine
 // does not have, or the firmware did not describe, are left out.
 func hwFacts(info *hwmon.Info) [][2]string {
 	var f [][2]string
@@ -192,67 +245,4 @@ func cmPair(w, h int) string {
 		return ""
 	}
 	return fmt.Sprintf("%d × %d cm", w, h)
-}
-
-// hwCardView is one hardware card: icon and name, the current figure, a
-// live chart and a few facts. The whole card is the click target.
-func (m *Model) hwCardView(c *ui.Context, t *ui.Theme, cd *hwCard, hist []hwmon.Sample) {
-	e := ui.Column(c.Key(cd.id)).Height(hwCardH).Padding(12).Gap(8).Radius(10).Background(t.Surface).Cursor(ui.CursorPointer).Label(cd.title)
-	e.BorderWidth(1).BorderColor(t.Border)
-	e.Draw(func(p *ui.Painter, r ui.Rect) {
-		if e.Hovered() {
-			p.Fill(r, t.SurfaceHover, 10)
-			p.Stroke(r, cd.col.Alpha(0.7), 10, 1)
-		}
-	})
-	e.Children(func() {
-		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			icon(c, cd.glyph, 18).TextColor(cd.col)
-			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-				ui.Text(c, cd.title).Bold().FontSize(13).SingleLine().Ellipsis("…")
-				if cd.health != "" {
-					ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
-						ui.Box(c).Size(7, 7).Radius(4).Background(hwHealthColor(cd.health, t))
-						ui.Text(c, cd.sub).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Tooltip("Health: " + cd.health)
-					})
-				} else {
-					ui.Text(c, cd.sub).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
-				}
-			})
-			ui.Column(c).AlignItems(ui.End).Shrink(0).Children(func() {
-				v := ui.Text(c, cd.value).FontSize(18).Bold().SingleLine()
-				if cd.vsub != "" {
-					v.FontSize(14)
-					ui.Text(c, cd.vsub).FontSize(11).TextColor(t.TextMuted).SingleLine()
-				}
-			})
-		})
-		if len(cd.opts.lines) > 0 {
-			ui.Box(c).Grow(1).MinHeight(0).Draw(func(p *ui.Painter, r ui.Rect) { drawChart(p, r, t, hist, cd.opts) })
-		} else {
-			ui.Column(c).Grow(1).MinHeight(0).Gap(4).Children(func() {
-				for _, row := range cd.rows {
-					if row[0] == "" {
-						ui.Text(c, row[1]).FontSize(11).SingleLine().Ellipsis("…")
-						continue
-					}
-					ui.Row(c).Gap(8).Children(func() {
-						ui.Text(c, row[0]).FontSize(11).TextColor(t.TextMuted).Shrink(0)
-						ui.Spacer(c)
-						ui.Text(c, row[1]).FontSize(11).SingleLine().Ellipsis("…")
-					})
-				}
-			})
-		}
-		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-			for _, s := range cd.stats {
-				ui.Text(c, s).FontSize(11).TextColor(t.TextMuted).SingleLine()
-			}
-			ui.Spacer(c)
-			icon(c, "right", 12).TextColor(t.TextMuted)
-		})
-	})
-	if e.Clicked() {
-		m.hw.detail = cd.id
-	}
 }

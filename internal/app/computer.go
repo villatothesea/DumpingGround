@@ -104,14 +104,13 @@ type hwCard struct {
 	title, sub  string
 	col         ui.Color
 	value, vsub string // the big figure, and a smaller line under it
-	stats       []string
-	health      string      // disks: "Good", "Caution", "Replace"; "" when unknown
-	rows        [][2]string // static cards (displays, audio, devices) instead of a chart
+	health      string // disks: "Good", "Caution", "Replace"; "" when unknown
 	opts        chartOpts
 }
 
-// hwCards builds the overview's cards in display order: CPU, memory, each
-// GPU, each disk, each network adapter, and the battery when there is one.
+// hwCards builds the catalogue's cards in display order: the machine
+// itself first, then CPU, memory, each GPU, each disk, each network
+// adapter, and the battery when there is one.
 func hwCards(info *hwmon.Info, h []hwmon.Sample) []hwCard {
 	var last *hwmon.Sample
 	if len(h) > 0 {
@@ -119,11 +118,19 @@ func hwCards(info *hwmon.Info, h []hwmon.Sample) []hwCard {
 	}
 	var cards []hwCard
 
+	mc := hwCard{id: "machine", glyph: "monitor", title: cmp.Or(info.Host, "Computer"), sub: strings.TrimSpace(info.Manufacturer + " " + info.Model), col: hwCPUCol}
+	if info.Battery {
+		mc.glyph = "laptop"
+	}
+	if last != nil {
+		mc.value = "Up " + durHM(last.Uptime)
+	}
+	cards = append(cards, mc)
+
 	cpu := hwCard{id: "cpu", glyph: "cpu", title: "CPU", sub: shortCPU(info.CPU.Name), col: hwCPUCol, value: "—",
 		opts: chartOpts{max: 100, col: hwCPUCol, lines: []hwLine{{val: func(s *hwmon.Sample) (float64, bool) { return s.CPU, true }, col: hwCPUCol, fill: true}}}}
 	if last != nil {
 		cpu.value = fmt.Sprintf("%.0f%%", last.CPU)
-		cpu.stats = []string{fmt.Sprintf("%.2f GHz", float64(last.MHz)/1000), fmt.Sprintf("%s processes", format.Int(uint64(last.Procs))), fmt.Sprintf("%s threads", format.Int(uint64(last.Threads)))}
 	}
 	cards = append(cards, cpu)
 
@@ -131,7 +138,6 @@ func hwCards(info *hwmon.Info, h []hwmon.Sample) []hwCard {
 		opts: chartOpts{max: 100, col: hwMemCol, lines: []hwLine{{val: func(s *hwmon.Sample) (float64, bool) { return memPct(s), s.MemTotal > 0 }, col: hwMemCol, fill: true}}}}
 	if last != nil {
 		mem.value = fmt.Sprintf("%.0f%%", memPct(last))
-		mem.stats = []string{format.Bytes(last.MemUsed) + " in use", format.Bytes(last.MemAvail) + " available"}
 	}
 	cards = append(cards, mem)
 
@@ -154,10 +160,7 @@ func hwCards(info *hwmon.Info, h []hwmon.Sample) []hwCard {
 				c.value = fmt.Sprintf("%.0f%%", gs.Util)
 			}
 			if gs.HasMemory {
-				c.stats = []string{gpuMemLine(g, gs)}
-			}
-			if g.Driver != "" {
-				c.stats = append(c.stats, "Driver "+g.Driver)
+				c.vsub = gpuMemLine(g, gs)
 			}
 		}
 		cards = append(cards, c)
@@ -179,7 +182,7 @@ func hwCards(info *hwmon.Info, h []hwmon.Sample) []hwCard {
 		if last != nil && i < len(last.Disks) {
 			ds := last.Disks[i]
 			c.value = fmt.Sprintf("%.0f%%", ds.Active)
-			c.stats = []string{"R " + format.Rate(ds.ReadRate), "W " + format.Rate(ds.WriteRate)}
+			c.vsub = "R " + format.Rate(ds.ReadRate) + " · W " + format.Rate(ds.WriteRate)
 			switch {
 			case ds.Health != nil:
 				c.health, _ = hwmon.JudgeHealth(ds.Health)
@@ -197,11 +200,6 @@ func hwCards(info *hwmon.Info, h []hwmon.Sample) []hwCard {
 			c.value, c.vsub = "↓ "+format.Rate(ns.InRate), "↑ "+format.Rate(ns.OutRate)
 			if !ns.Up {
 				c.value, c.vsub = "Not connected", ""
-			} else {
-				c.stats = []string{n.Kind, linkSpeed(ns.LinkBps)}
-				if len(n.IPs) > 0 {
-					c.stats = append(c.stats, n.IPs[0])
-				}
 			}
 		}
 		cards = append(cards, c)
@@ -232,27 +230,11 @@ func hwCards(info *hwmon.Info, h []hwmon.Sample) []hwCard {
 		}
 		c := hwCard{id: fmt.Sprintf("display:%d", i), glyph: "monitor", title: title,
 			sub: deTM(d.Manufacturer + " " + d.Model), col: hwDispCol, value: fmt.Sprintf("%d×%d", d.NativeWidth, d.NativeHeight)}
-		if i == 0 && info.DisplayMode.Width > 0 {
-			c.rows = append(c.rows, [2]string{"Now", fmt.Sprintf("%d×%d @ %d Hz", info.DisplayMode.Width, info.DisplayMode.Height, info.DisplayMode.RefreshHz)})
-		}
-		if s := sizeInches(d.WidthCM, d.HeightCM); s != "" {
-			c.rows = append(c.rows, [2]string{"Size", s})
-		}
-		if d.Year > 0 {
-			c.rows = append(c.rows, [2]string{"Year", fmt.Sprint(d.Year)})
-		}
 		cards = append(cards, c)
 	}
 
 	if len(info.Audio) > 0 {
 		c := hwCard{id: "audio", glyph: "audio", title: "Audio", sub: "adapters and endpoints", col: hwAudCol, value: fmt.Sprint(len(info.Audio))}
-		for i, a := range info.Audio {
-			if i >= 4 {
-				c.rows = append(c.rows, [2]string{"", fmt.Sprintf("+%d more", len(info.Audio)-i)})
-				break
-			}
-			c.rows = append(c.rows, [2]string{"", a.Name})
-		}
 		cards = append(cards, c)
 	}
 
@@ -262,21 +244,15 @@ func hwCards(info *hwmon.Info, h []hwmon.Sample) []hwCard {
 		for _, d := range info.Devices {
 			counts[d.Class]++
 		}
-		classes := make([]string, 0, len(counts))
-		for k := range counts {
-			classes = append(classes, k)
+		var top string
+		best := 0
+		for k, n := range counts {
+			if n > best || (n == best && k < top) {
+				top, best = k, n
+			}
 		}
-		slices.SortFunc(classes, func(a, b string) int {
-			if counts[a] != counts[b] {
-				return counts[b] - counts[a]
-			}
-			return strings.Compare(a, b)
-		})
-		for i, k := range classes {
-			if i >= 5 {
-				break
-			}
-			c.rows = append(c.rows, [2]string{k, fmt.Sprint(counts[k])})
+		if top != "" {
+			c.sub = fmt.Sprintf("%s ×%d, %d classes", top, best, len(counts))
 		}
 		cards = append(cards, c)
 	}

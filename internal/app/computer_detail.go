@@ -16,24 +16,34 @@ import (
 // big charts, live figures and the static specification.
 func (m *Model) hwDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist []hwmon.Sample, cd *hwCard) {
 	ui.Column(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-		ui.Row(c).Padding(12, hwPad).Gap(12).AlignItems(ui.Center).Children(func() {
-			if m.iconTextButton(c, "left", "Back").Clicked() {
-				m.hw.detail = ""
-			}
-			icon(c, cd.glyph, 20).TextColor(cd.col)
-			ui.Text(c, cd.title).FontSize(18).Bold().SingleLine()
-			ui.Text(c, cd.sub).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Grow(1).MinWidth(0)
-			ui.Column(c).AlignItems(ui.End).Shrink(0).Children(func() {
-				ui.Text(c, cd.value).FontSize(22).Bold().SingleLine()
-				if cd.vsub != "" {
-					ui.Text(c, cd.vsub).FontSize(12).TextColor(t.TextMuted)
+		// The machine page's own header panel carries its identity; the
+		// back bar belongs to the hardware pages only.
+		if cd.id != "machine" {
+			ui.Row(c).Padding(12, hwPad).Gap(12).AlignItems(ui.Center).Children(func() {
+				if m.iconTextButton(c, "left", "Back").Clicked() {
+					m.hw.detail = ""
 				}
+				icon(c, cd.glyph, 20).TextColor(cd.col)
+				ui.Text(c, cd.title).FontSize(18).Bold().SingleLine()
+				ui.Text(c, cd.sub).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Grow(1).MinWidth(0)
+				ui.Column(c).AlignItems(ui.End).Shrink(0).Children(func() {
+					ui.Text(c, cd.value).FontSize(22).Bold().SingleLine()
+					if cd.vsub != "" {
+						ui.Text(c, cd.vsub).FontSize(12).TextColor(t.TextMuted)
+					}
+				})
 			})
-		})
+		}
+		topPad := float32(0)
+		if cd.id == "machine" {
+			topPad = hwPad
+		}
 		ui.Scroll(c.Key("hw-detail:" + cd.id)).Grow(1).MinHeight(0).Children(func() {
-			ui.Column(c).Padding(0, hwPad, hwPad, hwPad).Gap(hwGap).AlignItems(ui.Stretch).Children(func() {
+			ui.Column(c).Padding(topPad, hwPad, hwPad, hwPad).Gap(hwGap).AlignItems(ui.Stretch).Children(func() {
 				var idx int
 				switch {
+				case cd.id == "machine":
+					m.hwMachineDetail(c, t, info, hist)
 				case cd.id == "cpu":
 					m.hwCPUDetail(c, t, info, hist, cd)
 				case cd.id == "mem":
@@ -183,6 +193,30 @@ func sizeOrBlank(v uint64) string {
 }
 
 // ---- per-hardware pages ----
+
+// hwMachineDetail is the first catalogue entry's page: the machine's
+// identity and the whole system's vitals at a glance.
+func (m *Model) hwMachineDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist []hwmon.Sample) {
+	m.hwHeader(c, t, info, hist)
+	stats := [][2]string{{"Up time", "—"}, {"CPU busy", "—"}, {"Memory in use", "—"}}
+	if last := lastSample(hist); last != nil {
+		stats = [][2]string{
+			{"Up time", durHM(last.Uptime)},
+			{"CPU busy", pct(last.CPU)},
+			{"Memory in use", fmt.Sprintf("%.0f / %.0f GB", float64(last.MemUsed)/(1<<30), float64(last.MemTotal)/(1<<30))},
+		}
+		var busiest float64
+		for _, g := range last.GPUs {
+			if g.HasUtilization && g.Util > busiest {
+				busiest = g.Util
+			}
+		}
+		if busiest > 0 {
+			stats = append(stats, [2]string{"Busiest GPU", pct(busiest)})
+		}
+	}
+	m.hwStatGrid(c, t, stats)
+}
 
 func (m *Model) hwCPUDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist []hwmon.Sample, cd *hwCard) {
 	last := lastSample(hist)
