@@ -24,11 +24,12 @@ func (m *Model) uninstallView(c *ui.Context, t *ui.Theme) {
 	if !m.uninstLoaded && !m.uninstLoading {
 		m.uninstLoading = true
 		go func() {
-			rows := uninstall.List()
+			rows, complete := uninstall.ListChecked()
 			m.post(func() {
 				m.uninstLoading = false
 				m.uninstLoaded = true
 				m.uninstRows = rows
+				m.uninstComplete = complete
 			})
 		}()
 	}
@@ -129,6 +130,7 @@ func (m *Model) uninstallView(c *ui.Context, t *ui.Theme) {
 			{Title: tr("Publisher"), ID: "publisher", Width: 230, MinWidth: 60, Sortable: true},
 			{Title: tr("Size"), ID: "size", Width: 80, MinWidth: 50, Align: ui.End, Sortable: true},
 			{Title: tr("Installed"), ID: "installed", Width: 90, MinWidth: 70, Align: ui.End, Sortable: true},
+			{Title: tr("Last active"), ID: "active", Width: 90, MinWidth: 70, Align: ui.End, Sortable: true},
 			{Title: tr("Install location"), ID: "location", MinWidth: 240, Sortable: true},
 			{Title: "", ID: "actions", Width: 152, Fixed: true, Align: ui.End},
 		}
@@ -176,6 +178,12 @@ func (m *Model) uninstallView(c *ui.Context, t *ui.Theme) {
 						}
 						ui.Text(c, d).TextColor(muted).Tooltip(tip)
 					case 5:
+						d := e.LastActiveDate()
+						if d == "" {
+							d = "—"
+						}
+						ui.Text(c, d).TextColor(muted).Tooltip(tr("Newest change in the install folder — an approximation"))
+					case 6:
 						ui.Text(c, e.Location).TextColor(muted).SingleLine().Tooltip(e.Location)
 					default:
 						m.uninstRowActions(c, t, e)
@@ -216,6 +224,8 @@ func (m *Model) uninstRowsFiltered() []*uninstall.Entry {
 			lt = strings.ToLower(ra.Publisher) < strings.ToLower(rb.Publisher)
 		case "installed":
 			lt = ra.InstallDate < rb.InstallDate
+		case "active":
+			lt = ra.LastActive.Before(rb.LastActive)
 		case "location":
 			lt = strings.ToLower(ra.Location) < strings.ToLower(rb.Location)
 		default: // "size"
@@ -365,12 +375,14 @@ func (m *Model) scanProgress(base float64) func(string, float64) {
 // finishSweepScan presents what a scan produced — the checkbox list,
 // or the "clean machine" alert when empty. Only Confirmed items start
 // checked: a Likely row is a name-matched guess and must be opted into
-// by hand.
+// by hand, and personal data or machine-wide items always start
+// unticked — removing them is an explicit choice.
 func (m *Model) finishSweepScan(name string, items []uninstall.Item) {
 	m.sweepItems = items
 	m.sweepSel = make([]bool, len(items))
 	for i := range items {
-		m.sweepSel[i] = items[i].Confidence == uninstall.Confirmed
+		m.sweepSel[i] = items[i].Confidence == uninstall.Confirmed &&
+			!items[i].Personal() && !items[i].MachineWide()
 	}
 	if len(items) > 0 {
 		uninstall.SavePending(name, items)
@@ -387,8 +399,9 @@ func (m *Model) startSweep(e *uninstall.Entry) {
 	m.openSweepScan(e.Name)
 	all := append([]uninstall.Entry(nil), m.uninstRows...)
 	entry := *e
+	protected := append([]string(nil), m.protected...)
 	go func() {
-		items := uninstall.Footprint(&entry, all, m.scanProgress(0))
+		items := uninstall.Footprint(&entry, all, protected, m.scanProgress(0))
 		m.post(func() {
 			if !entry.Gone() {
 				m.sweepLiveApp = true
@@ -431,8 +444,9 @@ func (m *Model) startOrphanScan() {
 	m.uninstMsg = tr("Scanning for leftovers of removed apps…")
 	m.openSweepScan(orphanScanName)
 	all := append([]uninstall.Entry(nil), m.uninstRows...)
+	protected := append([]string(nil), m.protected...)
 	go func() {
-		items := uninstall.Orphans(all, m.scanProgress(0))
+		items := uninstall.Orphans(all, protected, m.scanProgress(0))
 		applog.Logf("orphan scan: %d items", len(items))
 		m.post(func() {
 			m.orphanScanning = false
@@ -476,6 +490,7 @@ func (m *Model) launchUninstall(e *uninstall.Entry) {
 	uninstall.RecordLaunch(e)
 	entry := *e
 	all := append([]uninstall.Entry(nil), m.uninstRows...)
+	protected := append([]string(nil), m.protected...)
 	ctx, cancel := context.WithCancel(m.ctx)
 	m.uninstCancel = cancel
 	go func() {
@@ -524,7 +539,7 @@ func (m *Model) launchUninstall(e *uninstall.Entry) {
 				last = cur
 			}
 		}
-		items := uninstall.Footprint(&entry, all, m.scanProgress(0.4))
+		items := uninstall.Footprint(&entry, all, protected, m.scanProgress(0.4))
 		m.post(func() {
 			m.uninstBusy = ""
 			m.uninstLoaded = false // the listing changed
@@ -602,6 +617,11 @@ func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 			if m.sweepLiveApp {
 				subtitle = fmt.Sprintf(tr("%s is still installed — its install folder, app entry and startup items are live and never listed here. What remains are name-matched folders only; none is preselected."), displaySweepName(m.sweepName))
 			}
+			if !m.uninstComplete {
+				// An inventory that could not be read in full can never
+				// prove a leftover is unowned — show, never delete.
+				subtitle = tr("Some registry entries could not be read, so what is still installed is unknown. These items are listed for review only — removal is locked until a complete inventory succeeds.")
+			}
 			ui.Text(c, subtitle).FontSize(11).TextColor(t.TextMuted).MaxWidth(760)
 			ui.List(c, &m.sweepList, len(m.sweepItems), func(i int) {
 				it := m.sweepItems[i]
@@ -610,17 +630,27 @@ func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 					row.Background(t.SurfaceHover)
 				}
 				row.Children(func() {
-					if ui.Checkbox(c, &m.sweepSel[i], "").Changed() {
+					if !m.uninstComplete {
+						m.sweepSel[i] = false
+						icon(c, "lock", 14)
+					} else if ui.Checkbox(c, &m.sweepSel[i], "").Changed() {
 						// A changed selection voids the armed confirm —
 						// the second click must cover what is ticked.
 						m.sweepArmed = false
 					}
+					why := trWhy(it.Why)
+					switch {
+					case it.Personal():
+						why += " · " + tr("your data — tick to remove")
+					case it.MachineWide():
+						why += " · " + tr("system-wide — tick to remove")
+					}
 					ui.Text(c, it.Path).FontSize(13).SingleLine().Grow(1).MinWidth(0).
-						Tooltip(it.Path + "\n" + trWhy(it.Why))
+						Tooltip(it.Path + "\n" + why)
 					if it.Kind == uninstall.KindDir && it.Bytes > 0 {
 						ui.Text(c, format.Bytes(it.Bytes)).FontSize(13).Shrink(0)
 					}
-					ui.Text(c, trWhy(it.Why)).FontSize(13).TextColor(t.TextMuted).SingleLine().Shrink(0)
+					ui.Text(c, why).FontSize(13).TextColor(t.TextMuted).SingleLine().Shrink(0)
 				})
 			}).Grow(1).FillWidth().Padding(0, 12, 0, 0)
 			sel, bytes := 0, uint64(0)
@@ -642,7 +672,7 @@ func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 				if m.sweepArmed && sel > 0 {
 					label = fmt.Sprintf(tr("Sure? Remove %d to the Recycle Bin"), sel)
 				}
-				if m.dangerButton(c, "trash", label).Clicked() && sel > 0 {
+				if m.uninstComplete && m.dangerButton(c, "trash", label).Clicked() && sel > 0 {
 					if !m.sweepArmed {
 						m.sweepArmed = true
 					} else {
@@ -676,6 +706,7 @@ func (m *Model) runSweepRemoval() {
 		hasReg = hasReg || it.Registry()
 	}
 	name := m.sweepName // capture now — the goroutine runs later
+	protected := append([]string(nil), m.protected...)
 	if hasReg {
 		backup = filepath.Join(applog.Dir(), fmt.Sprintf("sweep-%s-%s.reg",
 			sanitizeFileName(name), time.Now().Format("20060102-150405")))
@@ -691,7 +722,7 @@ func (m *Model) runSweepRemoval() {
 				applog.Logf("registry backup FAILED to create  %s  — %v", backup, err)
 			}
 		}
-		errs := uninstall.RemoveItems(chosen, reg, func(done, total int, path string) {
+		errs := uninstall.RemoveItems(chosen, reg, protected, func(done, total int, path string) {
 			m.post(func() {
 				m.sweepRmDone, m.sweepRmTotal, m.sweepRmPath = done, total, path
 			})

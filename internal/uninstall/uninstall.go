@@ -3,32 +3,48 @@
 package uninstall
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
+
+// errPathChanged means the leftover's ancestor chain no longer
+// matches the identity bound at scan time — refuse, never follow.
+var errPathChanged = errors.New("path changed since the scan — item kept")
+
+// errProtected means the path sat inside the user's protected list at
+// removal time — whitelisting wins over any earlier scan.
+var errProtected = errors.New("path is protected — item kept")
 
 // Entry is one installed program. SizeBytes comes from the registry's
 // EstimatedSize (kilobytes); zero when the entry does not report one.
 // UninstallString is the command line Windows itself would run — we
 // launch it as-is rather than removing anything ourselves.
 type Entry struct {
-	Name          string
-	Version       string
-	Publisher     string
-	SizeBytes     uint64
-	InstallDate   string // YYYYMMDD when present, formatted at display time
-	Location      string
-	Uninstall     string
-	QuietUninst   string
-	Icon          string
-	SystemScope   bool // machine-wide (HKLM) vs current-user (HKCU)
-	Key           string
-	Hive          string // "HKLM" or "HKCU" — the display root of Key
-	Wow32         bool   // Key lives in the 32-bit (WOW6432Node) view
-	EstimatedSize bool   // false when the app never reported a size
+	Name        string
+	Version     string
+	Publisher   string
+	SizeBytes   uint64
+	InstallDate string // YYYYMMDD when present, formatted at display time
+	Location    string
+	Uninstall   string
+	QuietUninst string
+	Icon        string
+	SystemScope bool // machine-wide (HKLM) vs current-user (HKCU)
+	Key         string
+	Hive        string // "HKLM" or "HKCU" — the display root of Key
+	Wow32       bool   // Key lives in the 32-bit (WOW6432Node) view
+
+	// Alts holds registry twins folded into this entry by mergeDupes
+	// — a product registered in both the 32- and 64-bit hives, or an
+	// MSI beside its bootstrapper record. Each keeps its own uninstall
+	// record and each must vanish before the entry counts as gone.
+	Alts          []Entry
+	EstimatedSize bool // false when the app never reported a size
 	// LocationGuessed marks a Location inferred from a shortcut
 	// target rather than the registry — footprint downgrades it to
 	// Likely so it is never treated as proven.
@@ -36,6 +52,18 @@ type Entry struct {
 	// DateEstimated marks an InstallDate synthesized from the key's
 	// last-write time — it is the last change, not the install day.
 	DateEstimated bool
+	// LastActive approximates when the app last did anything — the
+	// install folder's newest timestamp when known. Zero when there is
+	// no folder to ask; the UI renders it as "—".
+	LastActive time.Time
+}
+
+// LastActiveDate renders the activity approximation as YYYY-MM-DD.
+func (e *Entry) LastActiveDate() string {
+	if e.LastActive.IsZero() {
+		return ""
+	}
+	return e.LastActive.Format("2006-01-02")
 }
 
 // List returns every installed program with a name and an uninstall
@@ -43,20 +71,97 @@ type Entry struct {
 // flagged SystemComponent — runtime dependencies and OS patches — are
 // left out, matching the Apps settings page.
 func List() []Entry {
+	entries, _ := ListChecked()
+	return entries
+}
+
+// ListChecked is List plus the inventory's completeness: false means
+// some Uninstall keys could not be opened or read, so the list cannot
+// prove that a leftover path is unowned. Cleanup decisions must treat
+// that as "ownership unknown", never as "no owner".
+func ListChecked() ([]Entry, bool) {
+	raw, complete := enumUninstall()
 	var out []Entry
-	for _, e := range enumUninstall() {
+	for _, e := range raw {
 		if e.Name == "" || e.Uninstall == "" {
 			continue
 		}
 		out = append(out, e)
 	}
+	out = mergeDupes(out)
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].SizeBytes != out[j].SizeBytes {
 			return out[i].SizeBytes > out[j].SizeBytes
 		}
 		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
 	})
-	return out
+	return out, complete
+}
+
+// mergeDupes folds double-registered products into one row. Two
+// records merge when they share an install folder and name, share a
+// literal uninstall command, or share name + version + publisher.
+// Different install folders never merge: each copy owns its own
+// uninstaller. The richer record wins and the loser's registry key
+// rides along in Alts so Gone() waits for every record to vanish.
+func mergeDupes(in []Entry) []Entry {
+	var kept []Entry
+	score := func(e Entry) int {
+		s := 0
+		if e.Location != "" {
+			s += 4
+			if !e.LocationGuessed {
+				s++
+			}
+		}
+		if e.SizeBytes > 0 {
+			s += 2
+		}
+		if e.Icon != "" {
+			s++
+		}
+		return s
+	}
+	var scores []int
+next:
+	for _, e := range in {
+		for i, o := range kept {
+			if e.Location != "" && o.Location != "" && !strings.EqualFold(e.Location, o.Location) {
+				continue
+			}
+			sameName := strings.EqualFold(e.Name, o.Name)
+			merge := e.Uninstall != "" && e.Uninstall == o.Uninstall
+			if e.Location != "" && sameName && strings.EqualFold(e.Location, o.Location) {
+				merge = true
+			}
+			if sameName && e.Version != "" && e.Version == o.Version &&
+				e.Publisher != "" && strings.EqualFold(e.Publisher, o.Publisher) {
+				merge = true
+			}
+			if !merge {
+				continue
+			}
+			if s := score(e); s > scores[i] {
+				if e.Location == "" {
+					e.Location, e.LocationGuessed = o.Location, o.LocationGuessed
+				}
+				if e.Icon == "" {
+					e.Icon = o.Icon
+				}
+				if e.SizeBytes == 0 {
+					e.SizeBytes, e.EstimatedSize = o.SizeBytes, o.EstimatedSize
+				}
+				e.Alts = append(o.Alts, o)
+				kept[i], scores[i] = e, s
+			} else {
+				kept[i].Alts = append(kept[i].Alts, e)
+			}
+			continue next
+		}
+		kept = append(kept, e)
+		scores = append(scores, score(e))
+	}
+	return kept
 }
 
 // Date renders the registry's YYYYMMDD InstallDate as YYYY-MM-DD.

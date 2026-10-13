@@ -4,6 +4,7 @@ package startup
 
 import (
 	"bytes"
+	"context"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 	"unicode/utf16"
 	"unicode/utf8"
 )
@@ -152,7 +154,9 @@ func setTaskEnabled(it Item, on bool) error {
 	if on {
 		flag = "/ENABLE"
 	}
-	cmd := exec.Command("schtasks", "/Change", "/TN", it.value, flag)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "schtasks", "/Change", "/TN", it.value, flag)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000} // CREATE_NO_WINDOW
 	out, err := cmd.CombinedOutput()
 	if err != nil {

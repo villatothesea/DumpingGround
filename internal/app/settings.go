@@ -23,6 +23,9 @@ type settings struct {
 	AnimateMap      bool   `json:"animateMap"`
 	TrayMetric      string `json:"trayMetric"` // "CPU" | "Memory" | "GPU" | "Icon"
 	CloseToTray     bool   `json:"closeToTray"`
+	// Protected is the user's path whitelist — cleanup never lists or
+	// touches these folders or anything under them.
+	Protected []string `json:"protected"`
 }
 
 // defaults returns the settings a fresh install starts with: the
@@ -58,6 +61,7 @@ func (m *Model) loadSettings() {
 	m.animateMap = s.AnimateMap
 	m.trayMetric = s.TrayMetric
 	m.closeToTray = s.CloseToTray
+	m.protected = append(m.protected[:0], s.Protected...)
 	m.applySampleInterval()
 	m.applyLanguage()
 }
@@ -83,6 +87,7 @@ func (m *Model) saveSettings() {
 		Language: m.language, ProcessInterval: m.processInterval, DiskMetric: m.diskMetric,
 		MemRelease: m.memRelease, AnimateMap: m.animateMap,
 		TrayMetric: m.trayMetric, CloseToTray: m.closeToTray,
+		Protected: m.protected,
 	}
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {

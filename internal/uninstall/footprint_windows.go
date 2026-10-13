@@ -43,6 +43,23 @@ func shortcutRoots() []string {
 	return roots
 }
 
+// reparsePath reports whether a known path is a symlink, junction or
+// mount point — alias folders are checked the same way walked entries
+// are.
+func reparsePath(p string) bool {
+	info, err := os.Lstat(p)
+	if err != nil {
+		return true // cannot inspect — do not touch
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return true
+	}
+	if w, ok := info.Sys().(*syscall.Win32FileAttributeData); ok {
+		return w.FileAttributes&0x400 != 0
+	}
+	return false
+}
+
 // isReparse reports whether a walked entry is a symlink, junction or
 // mount point — footprint scanning and sizing never follow them.
 func isReparse(e os.DirEntry) bool {
@@ -185,9 +202,19 @@ func (e *Entry) wowBit() uintptr {
 }
 
 // Gone reports whether the app's Uninstall entry has vanished — the
-// signal that its uninstaller actually ran to completion.
+// signal that its uninstaller actually ran to completion. Merged
+// twins each keep their own record; the app counts as gone only when
+// every record vanished.
 func (e *Entry) Gone() bool {
-	return e.Key == "" || !keyExists(e.hiveRoot(), keyRead|e.wowBit(), e.Key)
+	if e.Key != "" && keyExists(e.hiveRoot(), keyRead|e.wowBit(), e.Key) {
+		return false
+	}
+	for _, a := range e.Alts {
+		if a.Key != "" && keyExists(a.hiveRoot(), keyRead|a.wowBit(), a.Key) {
+			return false
+		}
+	}
+	return true
 }
 
 // keyExists reports whether a registry path opens for reading.

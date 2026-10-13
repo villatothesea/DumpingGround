@@ -1,10 +1,13 @@
 package disk
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"unicode"
 
 	"github.com/dumpingground/dumpingground/internal/elevate"
 )
@@ -29,6 +32,8 @@ const (
 	JunkCatWindowsOld        // previous Windows installation — REVIEW
 	JunkCatFound             // chkdsk file fragments — REVIEW
 	JunkCatWinSxS            // DISM component cleanup — REVIEW
+	JunkCatOrphanData        // stale AppData dirs no installed app claims — REVIEW
+	JunkCatInstallers        // downloaded setup files — REVIEW
 	JunkCatCount
 )
 
@@ -68,6 +73,11 @@ type JunkDir struct {
 	// Recycle routes per-file deletion through the Recycle Bin —
 	// user content gets undo, caches do not need it.
 	Recycle bool
+	// id pins the path's ancestor chain to volume:file-index
+	// identities, bound when the row is measured and verified before
+	// deletion — a junction swapped in meanwhile rewrites the chain
+	// and JunkClean refuses to run on it.
+	id *PathID
 }
 
 // JunkCat is one junk category: a name, what deleting costs, a risk
@@ -88,14 +98,28 @@ type JunkReport struct {
 	// Downloads is measured for the reminder card only — it is user
 	// content, not junk, and never enters Bytes or any preset.
 	Downloads *JunkDir
+	// protected is the whitelist snapshot the scan ran with —
+	// normProtected output, consulted by junkAdd before a row exists.
+	protected []string
 }
 
-// JunkOpts feeds FindJunk: Running reports whether an exe name (lower
-// case) is currently running — used to guard browser caches; Progress
-// reports the category being measured, if set.
+// JunkOpts feeds FindJunk. Running reports whether an exe name (lower
+// case) is currently running — used to guard live caches. The second
+// result is false when the process table could not be read, and that
+// unknown answer denies cleanup exactly like a running app does: an
+// unreadable process table is never read as idle. Progress reports
+// the category being measured, if set.
 type JunkOpts struct {
-	Running  func(name string) bool
+	Running  func(name string) (running, known bool)
 	Progress func(cat int)
+	// Protected is the user's path whitelist — absolute paths cleanup
+	// never lists or touches. Checked at discovery and again at
+	// deletion; case-insensitive, a path covers everything under it.
+	Protected []string
+	// AppNames are normalized installed-app names plus their install
+	// folder basenames, used by the orphan-data category to tell a
+	// claimed AppData folder from an abandoned one.
+	AppNames []string
 }
 
 // junkCatDefs describes every category: what it is, and the risk level
@@ -121,6 +145,8 @@ var junkCatDefs = [JunkCatCount]struct {
 	{"Windows upgrades", "Rollback data from past installs — deleting is permanent", RustRiskReview},
 	{"Chkdsk fragments", "File fragments chkdsk recovered — may hold user data, review before deleting", RustRiskReview},
 	{"Windows Update cleanup", "Superseded components removed through DISM — runs for minutes and cannot be undone", RustRiskReview},
+	{"Orphaned app data", "Folders no installed app claims, untouched for 60+ days — can hold settings or saves, review each one", RustRiskReview},
+	{"Setup files", "Downloaded installers you can usually re-download — tick only the ones you recognize", RustRiskReview},
 }
 
 // JunkCatName reports a category's display name, for progress text.
@@ -130,7 +156,7 @@ func JunkCatName(cat int) string { return junkCatDefs[cat].name }
 // same approach cleanmgr's handlers and BleachBit's CleanerML take —
 // so nothing is ever matched heuristically.
 func FindJunk(opts JunkOpts) *JunkReport {
-	rep := &JunkReport{}
+	rep := &JunkReport{protected: normProtected(opts.Protected)}
 	for i, n := range junkCatDefs {
 		rep.Cats[i].Name, rep.Cats[i].Note, rep.Cats[i].Risk = n.name, n.note, n.risk
 	}
@@ -171,10 +197,7 @@ func FindJunk(opts JunkOpts) *JunkReport {
 		} {
 			rep.junkKids(JunkCatShader, absJoin(local, sub), 0)
 		}
-		steamSkip := ""
-		if opts.Running != nil && opts.Running("steam.exe") {
-			steamSkip = "Steam is running"
-		}
+		steamSkip := guardState("steam.exe", "Steam", opts.Running)
 		for _, p := range steamShaderCaches() {
 			rep.junkKidsGuard(JunkCatShader, p, 0, "Steam re-downloads shaders as games run", steamSkip, "steam.exe")
 		}
@@ -356,6 +379,8 @@ func FindJunk(opts JunkOpts) *JunkReport {
 		// DISM fights a servicing transaction over the component store.
 		rep.guardCat(JunkCatWinSxS, "tiworker.exe")
 	})
+	run(JunkCatOrphanData, func() { rep.junkOrphanData(roaming, local, opts.AppNames) })
+	run(JunkCatInstallers, func() { rep.junkInstallers(home) })
 	if dl := DownloadsDir(); dl != "" && saneUserDir(dl) {
 		if bytes, files := junkDirStats(dl); files > 0 {
 			rep.Downloads = &JunkDir{Path: dl, Bytes: bytes, Files: files,
@@ -368,8 +393,166 @@ func FindJunk(opts JunkOpts) *JunkReport {
 	return rep
 }
 
-// junkAdd appends a measured location to a category.
+// orphanMinAge is how quiet a data folder must be before the question
+// "does any installed app still own this" is even asked.
+const orphanMinAge = 60 * 24 * time.Hour
+
+// orphanSkip names dirs inside the user-data roots that are never
+// orphaned app data — Windows' own folders, shared caches other
+// categories already handle, and containers too generic to blame.
+var orphanSkip = map[string]bool{
+	"microsoft": true, "windows": true, "packages": true,
+	"temp": true, "cache": true, "caches": true, "logs": true,
+	"crashdumps": true, "commonfiles": true, "system": true,
+	"fonts": true, "themes": true, "recent": true,
+}
+
+// junkOrphanData lists user-data folders nothing installed claims.
+// Ownership needs an exact or ≥4-letter prefix match against the
+// installed names — prefix, never substring — plus sixty quiet days
+// measured at whatever depth the folder actually changed. These rows
+// are personal data: settings, saves, profiles. They are listed for
+// review only; the UI decides what gets ticked.
+func (rep *JunkReport) junkOrphanData(roaming, local string, appNames []string) {
+	// No proven inventory, no orphans: an incomplete installed-app
+	// list must never read as "nothing claims these folders".
+	if len(appNames) == 0 {
+		return
+	}
+	cutoff := time.Now().Add(-orphanMinAge)
+	claimed := func(dn string) bool {
+		if dn == "" || orphanSkip[dn] {
+			return true
+		}
+		for _, n := range appNames {
+			if dn == n ||
+				(len(dn) >= 4 && len(n) > len(dn) && strings.HasPrefix(n, dn)) ||
+				(len(n) >= 4 && len(dn) > len(n) && strings.HasPrefix(dn, n)) {
+				return true
+			}
+		}
+		return false
+	}
+	for _, root := range []string{roaming, local, absJoin(local, "Low")} {
+		if !filepath.IsAbs(root) {
+			continue
+		}
+		kids, err := os.ReadDir(root)
+		if err != nil {
+			continue
+		}
+		for _, kid := range kids {
+			if !kid.IsDir() || junkReparse(kid) {
+				continue
+			}
+			if claimed(junkNorm(kid.Name())) {
+				continue
+			}
+			p := filepath.Join(root, kid.Name())
+			last := dirLastActive(p)
+			if last.IsZero() || !last.Before(cutoff) {
+				continue
+			}
+			bytes, files := junkDirStats(p)
+			if files == 0 {
+				continue
+			}
+			rep.junkAdd(JunkCatOrphanData, JunkDir{
+				Path: p, Bytes: bytes, Files: files,
+				Base: kid.Name(), Mode: JunkWhole, Recycle: true,
+				Warn: "No installed app matches this name — inactive since " + last.Format("2006-01-02"),
+			})
+		}
+	}
+}
+
+// junkInstallers lists setup files sitting in Downloads and on the
+// desktops — user content, never automatically selected, recycled
+// rather than erased.
+func (rep *JunkReport) junkInstallers(home string) {
+	if !filepath.IsAbs(home) {
+		return
+	}
+	roots := []string{DownloadsDir(),
+		filepath.Join(home, "Desktop"), filepath.Join(home, `OneDrive\Desktop`)}
+	seen := map[string]bool{}
+	for _, root := range roots {
+		if !saneUserDir(root) {
+			continue
+		}
+		for _, pat := range []string{"*.msi", "*.exe", "setup*.*", "install*.*"} {
+			for _, p := range globNoErr(filepath.Join(root, pat)) {
+				if seen[strings.ToLower(p)] {
+					continue
+				}
+				info, err := os.Lstat(p)
+				if err != nil || info.IsDir() || info.Size() == 0 {
+					continue
+				}
+				seen[strings.ToLower(p)] = true
+				rep.junkAdd(JunkCatInstallers, JunkDir{
+					Path: p, Bytes: uint64(info.Size()), Files: 1,
+					Base: filepath.Base(p), File: true, Mode: JunkWhole, Recycle: true,
+					Warn: "A downloaded installer — usually re-downloadable, but tick only what you recognize",
+				})
+			}
+		}
+	}
+}
+
+// dirLastActive is the newest modification time anywhere in a tree,
+// bounded at 20k entries — a folder whose contents stopped changing
+// sixty days ago is quiet even though its own timestamp may lag.
+func dirLastActive(root string) time.Time {
+	var last time.Time
+	visited := 0
+	filepath.WalkDir(root, func(p string, e os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if visited++; visited > 20000 {
+			return filepath.SkipAll
+		}
+		if e.IsDir() && junkReparse(e) {
+			return filepath.SkipDir
+		}
+		info, err := e.Info()
+		if err == nil && info.ModTime().After(last) {
+			last = info.ModTime()
+		}
+		return nil
+	})
+	return last
+}
+
+// junkNorm reduces a name to lowercase letters and digits — the same
+// normalization the uninstall scanner uses to name-match folders.
+func junkNorm(s string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(s) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// junkAdd appends a measured location to a category. Filesystem rows
+// are bound to their ancestor-chain identity here so JunkClean can
+// prove the path it measured is the path it deletes; a path that
+// cannot be pinned is marked skipped rather than trusted. Whitelisted
+// rows are never listed at all.
 func (rep *JunkReport) junkAdd(cat int, d JunkDir) {
+	if protectedHit(d.Path, rep.protected) {
+		return
+	}
+	if (d.Mode == JunkWhole || d.Mode == JunkKids) && filepath.IsAbs(d.Path) {
+		if id, err := BindPath(d.Path, false); err == nil {
+			d.id = id
+		} else if d.Skip == "" {
+			d.Skip = "path could not be verified"
+		}
+	}
 	rep.Cats[cat].Dirs = append(rep.Cats[cat].Dirs, d)
 	rep.Cats[cat].Bytes += d.Bytes
 }
@@ -657,10 +840,27 @@ var junkCacheSubdirs = []string{
 // the profile folders.
 var junkRootCaches = []string{"ShaderCache", "GraphiteDawnCache", "GrShaderCache"}
 
+// guardState turns a process-guard verdict into a row's Skip text.
+// Running means the app's files are locked; unknown refuses the same
+// way — cleanup must prove idle, not just fail to see busy.
+func guardState(exe, display string, running func(string) (bool, bool)) string {
+	if running == nil {
+		return ""
+	}
+	on, known := running(exe)
+	switch {
+	case on:
+		return display + " is running"
+	case !known:
+		return display + " — running state unknown"
+	}
+	return ""
+}
+
 // junkBrowsers measures every profile's cache dirs for each catalogued
 // browser, plus Firefox's cache2. A running browser guards its rows —
 // its files are locked anyway, so cleaning then is pointless.
-func (rep *JunkReport) junkBrowsers(local, roaming string, running func(string) bool) {
+func (rep *JunkReport) junkBrowsers(local, roaming string, running func(string) (bool, bool)) {
 	for _, b := range junkBrowserCatalog {
 		base := filepath.Join(local, b.base)
 		var profs []string
@@ -672,18 +872,12 @@ func (rep *JunkReport) junkBrowsers(local, roaming string, running func(string) 
 			for _, pat := range []string{"Default", "Profile *", "Guest Profile"} {
 				profs = append(profs, globNoErr(filepath.Join(base, pat))...)
 			}
-			skip := ""
-			if running != nil && running(b.exe) {
-				skip = b.name + " is running"
-			}
+			skip := guardState(b.exe, b.name, running)
 			for _, sub := range junkRootCaches {
 				rep.junkKidsGuard(JunkCatBrowser, filepath.Join(base, sub), 0, "", skip, b.exe)
 			}
 		}
-		skip := ""
-		if running != nil && running(b.exe) {
-			skip = b.name + " is running"
-		}
+		skip := guardState(b.exe, b.name, running)
 		for _, prof := range profs {
 			for _, sub := range junkCacheSubdirs {
 				p := filepath.Join(prof, sub)
@@ -705,10 +899,7 @@ func (rep *JunkReport) junkBrowsers(local, roaming string, running func(string) 
 	// profile name from Roaming.
 	profDir := filepath.Join(roaming, `Mozilla\Firefox\Profiles`)
 	cacheRoot := filepath.Join(local, `Mozilla\Firefox\Profiles`)
-	skip := ""
-	if running != nil && running("firefox.exe") {
-		skip = "Firefox is running"
-	}
+	skip := guardState("firefox.exe", "Firefox", running)
 	for _, prof := range globNoErr(filepath.Join(profDir, "*")) {
 		for _, sub := range []string{"cache2", "startupCache", "shader-cache"} {
 			p := filepath.Join(cacheRoot, filepath.Base(prof), sub)
@@ -756,12 +947,9 @@ var junkAppCacheSubdirs = []string{
 
 // junkApps measures each app's cache dirs. Like the browsers, a running
 // app guards its rows.
-func (rep *JunkReport) junkApps(roaming string, running func(string) bool) {
+func (rep *JunkReport) junkApps(roaming string, running func(string) (bool, bool)) {
 	for _, a := range junkAppCatalog {
-		skip := ""
-		if running != nil && running(a.exe) {
-			skip = a.name + " is running"
-		}
+		skip := guardState(a.exe, a.name, running)
 		for _, sub := range junkAppCacheSubdirs {
 			p := filepath.Join(roaming, a.base, sub)
 			if fi, err := os.Stat(p); err != nil || !fi.IsDir() {
@@ -831,9 +1019,22 @@ var errReparse = os.ErrInvalid
 // use — locked files are routine, not failures. running, when given,
 // re-verifies the row's process guard: an app launched since the scan
 // must still protect its cache.
-func JunkClean(d JunkDir, running func(string) bool) (freed uint64, removed, skipped int, err error) {
-	if d.Skip != "" || (d.Guard != "" && running != nil && running(d.Guard)) {
+func JunkClean(d JunkDir, running func(string) (bool, bool), protected []string) (freed uint64, removed, skipped int, err error) {
+	if d.Skip != "" {
 		return 0, 0, 1, nil
+	}
+	// The whitelist is rechecked at the sink, not only at scan time —
+	// a path protected since the scan still refuses deletion.
+	if protectedHit(d.Path, normProtected(protected)) {
+		return 0, 0, 1, nil
+	}
+	// Re-verify the row's process guard — an app launched since the
+	// scan still protects its cache, and an answer of "cannot tell"
+	// refuses deletion rather than gambling on it.
+	if d.Guard != "" && running != nil {
+		if on, known := running(d.Guard); on || !known {
+			return 0, 0, 1, nil
+		}
 	}
 	switch d.Mode {
 	case JunkShell:
@@ -847,31 +1048,104 @@ func JunkClean(d JunkDir, running func(string) bool) (freed uint64, removed, ski
 		}
 		return d.Bytes, 1, 0, nil
 	case JunkWhole:
+		if err = verifyJunkPath(d); err != nil {
+			return 0, 0, 0, err
+		}
 		if err = SafeJunkEntry(d); err != nil {
 			return 0, 0, 0, err
 		}
-		err = os.RemoveAll(d.Path)
-		if err != nil && elevate.IsAccessDenied(err) {
-			err = elevate.DeletePath(d.Path, false)
+		if d.Recycle {
+			err = RecycleFileOrDirSized(d.Path, d.Bytes)
+			if err != nil && elevate.IsAccessDenied(err) {
+				err = elevate.DeletePath(d.Path, true)
+			}
+		} else {
+			err = os.RemoveAll(d.Path)
+			if err != nil && elevate.IsAccessDenied(err) {
+				err = elevate.DeletePath(d.Path, false)
+			}
 		}
 		if err == nil {
 			return d.Bytes, 1, 0, nil
 		}
 		return 0, 0, 0, err
 	}
+	if err = verifyJunkPath(d); err != nil {
+		return 0, 0, 0, err
+	}
 	if err = SafeJunkEntry(d); err != nil {
 		return 0, 0, 0, err
 	}
-	freed, removed, skipped = junkCleanKids(d)
+	freed, removed, skipped = junkCleanKids(d, protected)
 	return
+}
+
+// normProtected cleans the user whitelist to absolute, lowercase
+// comparison strings; junkProtected covers names, this covers paths.
+func normProtected(in []string) []string {
+	var out []string
+	for _, p := range in {
+		p = filepath.Clean(strings.TrimSpace(p))
+		if filepath.IsAbs(p) {
+			out = append(out, strings.ToLower(strings.TrimSuffix(p, `\`)))
+		}
+	}
+	return out
+}
+
+// ProtectedPath reports whether the whitelist covers p — the path
+// itself or anything beneath a protected entry. Shared with the
+// uninstall sweep, whose items are judged by the same rule.
+func ProtectedPath(p string, list []string) bool {
+	return protectedHit(p, normProtected(list))
+}
+
+// protectedHit reports whether the whitelist covers p — the path
+// itself or anything beneath a protected entry.
+func protectedHit(p string, protected []string) bool {
+	if !filepath.IsAbs(p) {
+		return false
+	}
+	c := strings.ToLower(strings.TrimSuffix(filepath.Clean(p), `\`))
+	for _, q := range protected {
+		if c == q || strings.HasPrefix(c, q+`\`) {
+			return true
+		}
+	}
+	return false
+}
+
+// verifyJunkPath proves the path about to be deleted is the path the
+// scan measured: the ancestor chain bound at discovery time must still
+// match identity-for-identity. Rows without a binding (built by hand
+// in tests) get bound now — either way, an unverifiable path is never
+// deleted.
+func verifyJunkPath(d JunkDir) error {
+	if !filepath.IsAbs(d.Path) {
+		return nil
+	}
+	if d.id == nil {
+		id, err := BindPath(d.Path, false)
+		if err != nil {
+			return err
+		}
+		d.id = id
+	}
+	if !d.id.Verify() {
+		return errors.New("path changed since it was scanned")
+	}
+	return nil
 }
 
 // junkCleanKids deletes matching files inside a kids-mode dir, then any
 // directories left empty. Reparse points are never touched; a dir only
 // goes when it emptied by itself and is old enough under the row's
 // rule — a directory created a minute ago is never collateral.
-func junkCleanKids(d JunkDir) (freed uint64, removed, skipped int) {
+func junkCleanKids(d JunkDir, protected []string) (freed uint64, removed, skipped int) {
 	cutoff := time.Now().Add(-time.Duration(d.Age) * time.Second)
+	if len(protected) > 0 {
+		protected = normProtected(protected)
+	}
 	var dirs []string
 	var bin []string                // files queued for one batched shell recycle call
 	binSizes := map[string]uint64{} // sizes captured before the delete
@@ -928,6 +1202,13 @@ func junkCleanKids(d JunkDir) (freed uint64, removed, skipped int) {
 		}
 		walked = true
 		if p == d.Path {
+			return nil
+		}
+		if protectedHit(p, protected) {
+			if e.IsDir() {
+				return filepath.SkipDir
+			}
+			skipped++
 			return nil
 		}
 		if junkReparse(e) {

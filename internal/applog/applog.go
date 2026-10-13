@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -75,7 +76,35 @@ func write(line string) {
 		return
 	}
 	defer f.Close()
-	fmt.Fprintf(f, "[%s] %s\n", time.Now().Format("15:04:05.000"), line)
+	fmt.Fprintf(f, "[%s] %s\n", time.Now().Format("15:04:05.000"), escape(line))
+}
+
+// escape rewrites control bytes as \n, \r, \t or \xHH before a line is
+// appended — a filename or app name carrying a newline must not be
+// able to forge extra log entries. Backslashes stay literal so paths
+// read exactly as they are on disk.
+func escape(s string) string {
+	if !strings.ContainsAny(s, "\n\r\t") && strings.IndexFunc(s, func(r rune) bool {
+		return r < 0x20 || r == 0x7f
+	}) < 0 {
+		return s
+	}
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r == '\n':
+			b.WriteString(`\n`)
+		case r == '\r':
+			b.WriteString(`\r`)
+		case r == '\t':
+			b.WriteString(`\t`)
+		case r < 0x20 || r == 0x7f:
+			fmt.Fprintf(&b, `\x%02x`, r)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 // Prune deletes log files older than the retention window. Called once
@@ -105,4 +134,42 @@ func Prune() {
 func Read() string {
 	data, _ := os.ReadFile(path())
 	return string(data)
+}
+
+// Recent returns the tail of the log — the last n lines across the
+// newest log files, oldest first. Dates come from the filenames; each
+// line keeps its own timestamp. Read-only: the view parses nothing.
+func Recent(n int) []string {
+	if n <= 0 {
+		return nil
+	}
+	matches, err := filepath.Glob(filepath.Join(Dir(), "dumpingground-*.log"))
+	if err != nil {
+		return nil
+	}
+	// Sort descending by filename — the date is in the name.
+	sort.Sort(sort.Reverse(sort.StringSlice(matches)))
+	var lines []string
+	for _, f := range matches {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		day := strings.TrimSuffix(filepath.Base(f), ".log")
+		day = strings.TrimPrefix(day, "dumpingground-")
+		var here []string
+		for _, l := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
+			if strings.TrimSpace(l) != "" {
+				here = append(here, day+"  "+l)
+			}
+		}
+		lines = append(here, lines...) // newest file's lines go last
+		if len(lines) >= n {
+			break
+		}
+	}
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return lines
 }

@@ -8,6 +8,7 @@ import (
 
 	"github.com/dumpingground/dumpingground/internal/disk"
 	"github.com/dumpingground/dumpingground/internal/format"
+	"github.com/dumpingground/dumpingground/internal/uninstall"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -55,6 +56,21 @@ const (
 	junkDimCat
 )
 
+// runningSet snapshots the process table once for the guard checks.
+// ok is false when the snapshot failed — callers must treat every
+// guarded exe as unverifiable, never as idle.
+func (m *Model) runningSet() (set map[string]bool, ok bool) {
+	infos, err := m.processSvc.Snapshot()
+	if err != nil {
+		return nil, false
+	}
+	set = make(map[string]bool, len(infos))
+	for _, in := range infos {
+		set[strings.ToLower(in.Name)] = true
+	}
+	return set, true
+}
+
 // junkScan measures every cleanup location off the UI goroutine. The
 // report is self-contained — junk lives in fixed locations, so no disk
 // index is needed or built.
@@ -64,18 +80,23 @@ func (m *Model) junkScan() {
 	}
 	m.junkBusy = true
 	m.junkAnCat = 0
+	// Capture UI state before the goroutine — model fields are not
+	// safe to read off-thread. Orphan-data ownership needs the
+	// installed list, so an unread or incomplete inventory never
+	// becomes "nothing claims these folders".
+	var appNames []string
+	if m.uninstLoaded && m.uninstComplete {
+		appNames = uninstall.AppNameKeys(m.uninstRows)
+	}
+	protected := append([]string(nil), m.protected...)
 	go func() {
-		var running map[string]bool
-		if infos, err := m.processSvc.Snapshot(); err == nil {
-			running = make(map[string]bool, len(infos))
-			for _, in := range infos {
-				running[strings.ToLower(in.Name)] = true
-			}
-		}
+		running, runningOK := m.runningSet()
 		rep := disk.FindJunk(disk.JunkOpts{
-			Running: func(name string) bool {
-				return running != nil && running[name]
+			Running: func(name string) (bool, bool) {
+				return running[name], runningOK
 			},
+			Protected: protected,
+			AppNames:  appNames,
 			Progress: func(cat int) {
 				m.post(func() { m.junkAnCat = cat })
 			},
@@ -246,25 +267,21 @@ func (m *Model) junkDelete(jobs []*disk.JunkDir) {
 	m.junkBusy = true
 	m.junkMsg = tr("Cleaning…")
 	m.junkRmDone, m.junkRmTotal, m.junkRmPath = 0, len(jobs), ""
+	protected := append([]string(nil), m.protected...)
 	go func() {
 		// The process check is minutes stale by now — a browser
-		// launched since the scan must still guard its cache.
-		var running map[string]bool
-		if infos, err := m.processSvc.Snapshot(); err == nil {
-			running = make(map[string]bool, len(infos))
-			for _, in := range infos {
-				running[strings.ToLower(in.Name)] = true
-			}
-		}
+		// launched since the scan must still guard its cache, and a
+		// failed snapshot denies rather than guesses idle.
+		running, runningOK := m.runningSet()
 		var freed uint64
 		var removed, skipped, failed int
 		var firstErr error
 		for i, d := range jobs {
 			path := d.Path
 			m.post(func() { m.junkRmDone, m.junkRmPath = i, path })
-			f, rm, sk, err := disk.JunkClean(*d, func(name string) bool {
-				return running != nil && running[name]
-			})
+			f, rm, sk, err := disk.JunkClean(*d, func(name string) (bool, bool) {
+				return running[name], runningOK
+			}, protected)
 			freed += f
 			removed += rm
 			skipped += sk

@@ -2,9 +2,13 @@ package app
 
 import (
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/dumpingground/dumpingground/internal/appdir"
+	"github.com/dumpingground/dumpingground/internal/applog"
 	"github.com/dumpingground/dumpingground/internal/hwmon"
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -35,6 +39,8 @@ func (m *Model) settingsView(c *ui.Context) {
 							m.settingsScanning(c, t)
 						case "tray":
 							m.settingsTray(c, t)
+						case "safety":
+							m.settingsSafety(c, t)
 						case "about":
 							m.settingsAbout(c, t)
 						default:
@@ -57,6 +63,7 @@ var settingsItems = []settingsItem{
 	{id: "general", glyph: "monitor", label: "Display & language"},
 	{id: "scanning", glyph: "search", label: "Processes & scanning"},
 	{id: "tray", glyph: "chart", label: "Tray & window"},
+	{id: "safety", glyph: "lock", label: "Safety"},
 	{id: "about", glyph: "info", label: "About"},
 }
 
@@ -190,6 +197,69 @@ func (m *Model) settingsTray(c *ui.Context, t *ui.Theme) {
 		}).Width(settingsSelectW)
 	})
 	ui.Text(c, tr("Left-click the tray icon to reopen the window; right-click for Open and Quit.")).FontSize(11).TextColor(t.TextMuted).MaxLines(3)
+}
+
+// settingsSafety is the Safety section: the protected-path whitelist
+// and a read-only tail of the operation log.
+func (m *Model) settingsSafety(c *ui.Context, t *ui.Theme) {
+	m.settingsRow(c, t, tr("Protected paths"), tr("Cleanup never lists or touches these folders or anything inside them — checked again at deletion time"), func() {
+		if m.iconTextButton(c, "folder", tr("Add folder…")).Clicked() {
+			m.pickProtected()
+		}
+	})
+	if len(m.protected) == 0 {
+		ui.Text(c, tr("Nothing protected yet.")).FontSize(11).TextColor(t.TextMuted)
+	}
+	for i, p := range m.protected {
+		i, p := i, p
+		ui.Row(c).FillWidth().Height(26).Gap(8).AlignItems(ui.Center).Children(func() {
+			icon(c, "lock", 12).TextColor(t.TextMuted)
+			ui.Text(c, p).FontSize(12).SingleLine().Grow(1).MinWidth(0).Tooltip(p)
+			if m.iconButton(c, "x", tr("Remove")).Clicked() {
+				m.protected = append(m.protected[:i], m.protected[i+1:]...)
+				m.saveSettings()
+			}
+		})
+	}
+	ui.Divider(c)
+	ui.Text(c, tr("Operation history")).Bold().FontSize(13)
+	ui.Text(c, tr("What cleanup and uninstalls did — the newest lines of the operation log")).FontSize(11).TextColor(t.TextMuted).MaxLines(3)
+	lines := applog.Recent(120)
+	if len(lines) == 0 {
+		ui.Text(c, tr("No operations recorded yet.")).FontSize(11).TextColor(t.TextMuted)
+		return
+	}
+	ui.Box(c).FillWidth().Height(190).Radius(8).Background(t.Surface).Children(func() {
+		ui.List(c, &m.historyList, len(lines), func(i int) {
+			ui.Text(c, lines[i]).FontSize(10.5).TextColor(t.TextMuted).SingleLine().
+				MinWidth(0).Tooltip(lines[i]).Height(18).PaddingX(10)
+		}).Fill().PaddingY(4)
+	})
+}
+
+// pickProtected adds a folder to the cleanup whitelist through the
+// folder picker — the dialog runs async so the picker lands back on
+// the model.
+func (m *Model) pickProtected() {
+	parent := m.window
+	go func() {
+		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{
+			Parent: parent, Title: tr("Folder to protect"), Directory: true,
+		})
+		if err != nil || len(paths) == 0 {
+			return
+		}
+		p := filepath.Clean(paths[0])
+		m.post(func() {
+			for _, q := range m.protected {
+				if strings.EqualFold(q, p) {
+					return
+				}
+			}
+			m.protected = append(m.protected, p)
+			m.saveSettings()
+		})
+	}()
 }
 
 func (m *Model) settingsAbout(c *ui.Context, t *ui.Theme) {

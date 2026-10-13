@@ -66,7 +66,7 @@ func TestJunkCleanKidsKeepsFreshAndRoot(t *testing.T) {
 	rep := &JunkReport{}
 	rep.junkKids(JunkCatUserTemp, root, junkTempAge)
 	d := junkKidsDir(t, rep, JunkCatUserTemp)
-	freed, removed, skipped, err := JunkClean(d, nil)
+	freed, removed, skipped, err := JunkClean(d, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func TestJunkCleanKidsSkipsReparse(t *testing.T) {
 		t.Skipf("cannot create reparse point: %v", err)
 	}
 	d := JunkDir{Path: root, Base: filepath.Base(root), Mode: JunkKids}
-	if _, _, _, err := JunkClean(d, nil); err != nil {
+	if _, _, _, err := JunkClean(d, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Lstat(marker); err != nil {
@@ -129,7 +129,7 @@ func TestJunkCleanKidsRejectsReplacedPath(t *testing.T) {
 	if err := os.Mkdir(root, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, err := JunkClean(d, nil); err != nil {
+	if _, _, _, err := JunkClean(d, nil, nil); err != nil {
 		t.Fatal(err) // same name + same kind — a legit re-clean
 	}
 	// A file where the dir was expected is refused.
@@ -139,7 +139,7 @@ func TestJunkCleanKidsRejectsReplacedPath(t *testing.T) {
 	if err := os.WriteFile(root, []byte("decoy"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, err := JunkClean(d, nil); err == nil {
+	if _, _, _, err := JunkClean(d, nil, nil); err == nil {
 		t.Fatal("a file replacing the dir must fail the entry check")
 	}
 }
@@ -170,7 +170,7 @@ func TestJunkCleanWholeRemovesDir(t *testing.T) {
 		t.Fatal(err)
 	}
 	d := JunkDir{Path: dir, Bytes: 2, Base: "Windows.old", Mode: JunkWhole}
-	freed, removed, _, err := JunkClean(d, nil)
+	freed, removed, _, err := JunkClean(d, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +196,7 @@ func TestJunkKidsGuardStampsSkipAndGuard(t *testing.T) {
 	if d.Guard != "app.exe" || d.Skip != "app is running" || d.Warn != "warn" {
 		t.Fatalf("row missing stamps: %+v", d)
 	}
-	if _, _, sk, err := JunkClean(d, nil); err != nil || sk != 1 {
+	if _, _, sk, err := JunkClean(d, nil, nil); err != nil || sk != 1 {
 		t.Fatalf("guarded row must skip: err %v skipped %d", err, sk)
 	}
 	if _, err := os.Stat(filepath.Join(root, "c.bin")); err != nil {
@@ -208,12 +208,12 @@ func TestJunkCleanDismGuarded(t *testing.T) {
 	// A DISM row blocked by a running servicing transaction must not
 	// launch anything — the guard check runs before the mode switch.
 	d := JunkDir{Path: "DISM component cleanup", Mode: JunkDism, Guard: "tiworker.exe"}
-	_, _, sk, err := JunkClean(d, func(name string) bool { return name == "tiworker.exe" })
+	_, _, sk, err := JunkClean(d, func(name string) (bool, bool) { return name == "tiworker.exe", true }, nil)
 	if err != nil || sk != 1 {
 		t.Fatalf("guarded DISM row must skip: err %v skipped %d", err, sk)
 	}
 	d = JunkDir{Path: "DISM component cleanup", Mode: JunkDism, Skip: "TiWorker is running"}
-	if _, _, sk, err = JunkClean(d, nil); err != nil || sk != 1 {
+	if _, _, sk, err = JunkClean(d, nil, nil); err != nil || sk != 1 {
 		t.Fatalf("skipped DISM row must not run: err %v skipped %d", err, sk)
 	}
 }
@@ -222,7 +222,7 @@ func TestJunkCleanShellGuardsSkip(t *testing.T) {
 	// A row marked skipped — e.g. its browser is running — must not be
 	// touched even when asked directly.
 	d := JunkDir{Path: "all drives", Base: "", Mode: JunkShell, Skip: "Chrome is running"}
-	_, _, sk, err := JunkClean(d, nil)
+	_, _, sk, err := JunkClean(d, nil, nil)
 	if err != nil || sk != 1 {
 		t.Fatalf("skipped row: err %v skipped %d", err, sk)
 	}
@@ -239,7 +239,7 @@ func TestJunkBrowserGuard(t *testing.T) {
 		t.Fatal(err)
 	}
 	rep := &JunkReport{}
-	rep.junkBrowsers(local, roaming, func(name string) bool { return name == "chrome.exe" })
+	rep.junkBrowsers(local, roaming, func(name string) (bool, bool) { return name == "chrome.exe", true })
 	dirs := rep.Cats[JunkCatBrowser].Dirs
 	if len(dirs) != 1 {
 		t.Fatalf("expected one cache row, got %d", len(dirs))
@@ -248,10 +248,17 @@ func TestJunkBrowserGuard(t *testing.T) {
 		t.Fatal("a running browser must mark its rows skipped")
 	}
 	rep = &JunkReport{}
-	rep.junkBrowsers(local, roaming, func(string) bool { return false })
+	rep.junkBrowsers(local, roaming, func(string) (bool, bool) { return false, true })
 	dirs = rep.Cats[JunkCatBrowser].Dirs
 	if len(dirs) != 1 || dirs[0].Skip != "" {
 		t.Fatalf("idle browser row should be cleanable, got %+v", dirs)
+	}
+	// An unreadable process table must deny, never pass as idle.
+	rep = &JunkReport{}
+	rep.junkBrowsers(local, roaming, func(string) (bool, bool) { return false, false })
+	dirs = rep.Cats[JunkCatBrowser].Dirs
+	if len(dirs) != 1 || dirs[0].Skip == "" {
+		t.Fatalf("unknown process state must skip the row, got %+v", dirs)
 	}
 }
 
@@ -265,7 +272,7 @@ func TestJunkAppsGuardAndWarn(t *testing.T) {
 		t.Fatal(err)
 	}
 	rep := &JunkReport{}
-	rep.junkApps(roaming, func(name string) bool { return name == "code.exe" })
+	rep.junkApps(roaming, func(name string) (bool, bool) { return name == "code.exe", true })
 	dirs := rep.Cats[JunkCatAppCaches].Dirs
 	if len(dirs) != 1 {
 		t.Fatalf("expected one app cache row, got %d", len(dirs))
@@ -277,7 +284,7 @@ func TestJunkAppsGuardAndWarn(t *testing.T) {
 		t.Fatalf("row warn should name the app, got %q", dirs[0].Warn)
 	}
 	rep = &JunkReport{}
-	rep.junkApps(roaming, func(string) bool { return false })
+	rep.junkApps(roaming, func(string) (bool, bool) { return false, true })
 	if len(rep.Cats[JunkCatAppCaches].Dirs) != 1 ||
 		rep.Cats[JunkCatAppCaches].Dirs[0].Skip != "" {
 		t.Fatal("an idle app's cache should be cleanable")
@@ -333,5 +340,92 @@ func TestSaneTempDirRejectsProfileAndDocs(t *testing.T) {
 	}
 	if got := saneTempDir(filepath.Join(home, "scratch")); got == "" {
 		t.Fatal("a non-standard folder inside the profile was refused")
+	}
+}
+
+func TestProtectedPath(t *testing.T) {
+	list := []string{`C:\Keep\Me\`, `D:\data`}
+	if !ProtectedPath(`C:\keep\me\sub\f.txt`, list) {
+		t.Fatal("child of a protected path must be covered")
+	}
+	if !ProtectedPath(`d:\DATA`, list) {
+		t.Fatal("the path itself must be covered")
+	}
+	if ProtectedPath(`C:\Keep\Other`, list) {
+		t.Fatal("sibling directory falsely covered")
+	}
+	if ProtectedPath(`notabs`, list) || ProtectedPath(`C:\Keep`, []string{""}) {
+		t.Fatal("relative or empty entries must never match")
+	}
+}
+
+func TestJunkWhitelist(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("junk"), 0o644)
+
+	// Discovery: a protected row never gets listed.
+	rep := &JunkReport{protected: normProtected([]string{dir})}
+	rep.junkAdd(0, JunkDir{Path: dir, Mode: JunkKids})
+	if len(rep.Cats[0].Dirs) != 0 {
+		t.Fatal("protected path was listed")
+	}
+
+	// Deletion sink: protecting between scan and clean still refuses.
+	d := JunkDir{Path: dir, Mode: JunkKids}
+	if _, _, sk, err := JunkClean(d, nil, []string{dir}); err != nil || sk != 1 {
+		t.Fatalf("protected clean: sk=%d err=%v", sk, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "a.txt")); err != nil {
+		t.Fatal("protected file was deleted")
+	}
+
+	// A protected child inside an unprotected container survives.
+	inner := filepath.Join(dir, "keep")
+	os.Mkdir(inner, 0o755)
+	os.WriteFile(filepath.Join(inner, "b.txt"), []byte("keep"), 0o644)
+	_, _, _, err := JunkClean(d, nil, []string{inner})
+	if err != nil {
+		t.Fatalf("clean with protected child: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(inner, "b.txt")); err != nil {
+		t.Fatal("protected child was deleted")
+	}
+}
+
+func TestJunkOrphanData(t *testing.T) {
+	root := t.TempDir()
+	old := time.Now().Add(-90 * 24 * time.Hour)
+	mk := func(name string) string {
+		p := filepath.Join(root, name)
+		os.Mkdir(p, 0o755)
+		os.WriteFile(filepath.Join(p, "data.bin"), []byte("x"), 0o644)
+		os.Chtimes(filepath.Join(p, "data.bin"), old, old)
+		os.Chtimes(p, old, old)
+		return p
+	}
+	mk("KeepMe")
+	mk("GhostApp")
+	fresh := mk("FreshApp")
+	os.Chtimes(fresh, time.Now(), time.Now())
+	os.Chtimes(filepath.Join(fresh, "data.bin"), time.Now(), time.Now())
+
+	rep := &JunkReport{}
+	rep.junkOrphanData(root, "", []string{"keepme", "freshapp"})
+	var names []string
+	for _, d := range rep.Cats[JunkCatOrphanData].Dirs {
+		names = append(names, filepath.Base(d.Path))
+		if d.Mode != JunkWhole || !d.Recycle {
+			t.Fatal("orphan rows must recycle the whole folder")
+		}
+	}
+	if len(names) != 1 || names[0] != "GhostApp" {
+		t.Fatalf("orphans = %v, want [GhostApp]", names)
+	}
+
+	// No inventory, no verdict: an empty app list flags nothing.
+	rep2 := &JunkReport{}
+	rep2.junkOrphanData(root, "", nil)
+	if len(rep2.Cats[JunkCatOrphanData].Dirs) != 0 {
+		t.Fatal("missing inventory must not flag orphans")
 	}
 }

@@ -117,7 +117,8 @@ type Model struct {
 	tray                            *mygo.Tray
 	trayMetric                      string // "CPU" | "Memory" | "GPU" | "Icon"
 	closeToTray                     bool
-	quitting                        bool // a real quit is underway — don't divert window closes to the tray
+	protected                       []string // user whitelist — cleanup never touches these paths
+	quitting                        bool     // a real quit is underway — don't divert window closes to the tray
 	settingsOpen                    bool
 	settingsSection                 string
 	diskInfoOpen                    bool
@@ -225,6 +226,7 @@ type Model struct {
 	junkList                        ui.ListState
 	uninstRows                      []uninstall.Entry
 	uninstLoaded                    bool // the registry list has been read at least once
+	uninstComplete                  bool // false = some uninstall keys unreadable; leftover removal is locked
 	uninstLoading                   bool
 	uninstQuery                     string
 	uninstSort                      ui.SortOrder       // the Table header drives this directly
@@ -243,6 +245,7 @@ type Model struct {
 	sweepLiveApp                    bool // "Find leftovers" ran on an app that is still installed
 	sweepRestored                   bool // pending review was offered once this launch
 	sweepList                       ui.ListState
+	historyList                     ui.ListState
 	sweepPhase                      int    // review / scanning / removing / done
 	sweepScanText                   string // stage label under the scan progress bar
 	sweepScanFrac                   float64

@@ -3,7 +3,9 @@
 package uninstall
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"syscall"
@@ -166,28 +168,40 @@ func (vals regValues) str(name string) string {
 	return vals[name].str()
 }
 
-// enumUninstall reads every Uninstall subkey from all three hives.
-func enumUninstall() []Entry {
-	var out []Entry
+// enumUninstall walks the four Uninstall roots. complete reports
+// whether every key could be opened and read — a partial inventory can
+// never prove that a leftover is unowned, so callers that delete must
+// treat incomplete as "ownership unknown".
+func enumUninstall() (out []Entry, complete bool) {
+	complete = true
 	for _, h := range hives {
 		root, err := openKey(h.root, h.access, h.sub)
 		if err != nil {
+			// A hive that does not exist at all (no WOW6432 on a
+			// pure-64 system is normal) is absent, not unreadable.
+			if errors.Is(err, syscall.ERROR_FILE_NOT_FOUND) {
+				continue
+			}
+			complete = false
 			continue
 		}
 		names, err := root.subKeys()
 		if err != nil {
 			root.close()
+			complete = false
 			continue
 		}
 		for _, name := range names {
 			k, err := openKey(h.root, h.access, h.sub+`\`+name)
 			if err != nil {
+				complete = false
 				continue
 			}
 			vals, err := k.values()
 			stamp, stampOK := k.writeTime()
 			k.close()
 			if err != nil {
+				complete = false
 				continue
 			}
 			// SystemComponent entries are runtimes, patches and driver
@@ -285,11 +299,28 @@ func enumUninstall() []Entry {
 				e.SizeBytes = sz * 1024 // EstimatedSize is kilobytes
 				e.EstimatedSize = true
 			}
+			// Vendor sizes lie in both directions: a DWORD past 2 GB
+			// reads negative somewhere, and bytes have been written
+			// into the KB field (a 1000x exaggeration). A claim above
+			// 10 GB earns one measurement of the install folder — when
+			// the folder is an order of magnitude smaller, it wins.
+			if e.SizeBytes > 10<<30 && e.Location != "" && isDir(e.Location) {
+				if measured := DirSize(e.Location); measured > 0 && measured*10 <= e.SizeBytes {
+					e.SizeBytes = measured
+				}
+			}
+			// The folder's own timestamp is the cheapest activity
+			// signal — installers, auto-updaters and launches touch it.
+			if e.Location != "" {
+				if fi, err := os.Stat(e.Location); err == nil {
+					e.LastActive = fi.ModTime()
+				}
+			}
 			out = append(out, e)
 		}
 		root.close()
 	}
-	return out
+	return out, complete
 }
 
 func (e Entry) String() string { return fmt.Sprintf("%s %s", e.Name, e.Version) }

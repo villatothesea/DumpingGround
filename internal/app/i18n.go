@@ -113,6 +113,9 @@ func trSkip(s string) string {
 	if n, ok := strings.CutSuffix(s, " is running"); ok {
 		return fmt.Sprintf(tr("%s is running"), n)
 	}
+	if n, ok := strings.CutSuffix(s, " — running state unknown"); ok {
+		return fmt.Sprintf(tr("%s — running state unknown"), n)
+	}
 	return tr(s)
 }
 
@@ -138,6 +141,9 @@ func trWarn(s string) string {
 		if n, ok2 := strings.CutSuffix(rest, " crash — keep it if you are still diagnosing"); ok2 {
 			return fmt.Sprintf(tr("Evidence of an %s crash — keep it if you are still diagnosing"), n)
 		}
+	}
+	if n, ok := strings.CutPrefix(s, "No installed app matches this name — inactive since "); ok {
+		return fmt.Sprintf(tr("No installed app matches this name — inactive since %s"), n)
 	}
 	return s
 }

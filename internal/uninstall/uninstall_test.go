@@ -71,3 +71,38 @@ func TestTokensDropSharedVariants(t *testing.T) {
 		t.Fatal("exact name token was dropped")
 	}
 }
+
+func TestMergeDupes(t *testing.T) {
+	// 32/64-bit twins: same folder + name merge, richer record wins,
+	// loser's key preserved in Alts.
+	twin64 := Entry{Name: "App", Location: `C:\Program Files\App`, Uninstall: "u64", Key: "a64", SizeBytes: 5}
+	twin32 := Entry{Name: "App", Location: `C:\PROGRAM FILES\APP`, Uninstall: "u32", Key: "a32"}
+	got := mergeDupes([]Entry{twin32, twin64})
+	if len(got) != 1 || len(got[0].Alts) != 1 {
+		t.Fatalf("twins did not merge: %+v", got)
+	}
+	if got[0].Key != "a64" || got[0].Alts[0].Key != "a32" {
+		t.Fatalf("richer record lost: %+v", got[0])
+	}
+
+	// Identical uninstall commands merge even across names.
+	a := Entry{Name: "App", Uninstall: `"C:\u.exe"`, Key: "k1"}
+	b := Entry{Name: "App (x64)", Uninstall: `"C:\u.exe"`, Key: "k2"}
+	if len(mergeDupes([]Entry{a, b})) != 1 {
+		t.Fatal("same uninstaller did not merge")
+	}
+
+	// Same name+version+publisher merges without a shared folder.
+	c := Entry{Name: "App", Version: "1.0", Publisher: "ACME", Key: "k3"}
+	d := Entry{Name: "App", Version: "1.0", Publisher: "acme", Key: "k4"}
+	if len(mergeDupes([]Entry{c, d})) != 1 {
+		t.Fatal("name+version+publisher did not merge")
+	}
+
+	// Different install folders never merge.
+	e := Entry{Name: "App", Version: "1.0", Publisher: "ACME", Location: `C:\A`, Uninstall: "ua", Key: "k5"}
+	f := Entry{Name: "App", Version: "1.0", Publisher: "ACME", Location: `D:\B`, Uninstall: "ub", Key: "k6"}
+	if n := len(mergeDupes([]Entry{e, f})); n != 2 {
+		t.Fatalf("different folders merged (%d rows)", n)
+	}
+}

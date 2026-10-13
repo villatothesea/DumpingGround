@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"unicode"
+
+	"github.com/dumpingground/dumpingground/internal/disk"
 )
 
 // Confidence is how sure the scanner is that an item belongs to the
@@ -45,11 +47,36 @@ type Item struct {
 	Bytes      uint64
 	Reg32      bool   // registry items in the 32-bit (WOW6432) view
 	RegValue   string // KindRegValue only: the value's name
+	// ID pins a filesystem item's ancestor chain at discovery time;
+	// RemoveItems verifies it before touching anything, so a junction
+	// swapped in after the scan cannot redirect the deletion.
+	ID *disk.PathID
 }
 
 // Registry reports whether removing this item edits the registry
 // rather than the filesystem.
 func (i Item) Registry() bool { return i.Kind != KindDir }
+
+// AppNameKeys returns the normalized identity strings the orphan-data
+// scan uses to recognize a claimed folder — each app's display name
+// plus its install folder's basename.
+func AppNameKeys(list []Entry) []string {
+	seen := map[string]bool{}
+	var out []string
+	for i := range list {
+		if n := norm(list[i].Name); n != "" && !seen[n] {
+			seen[n] = true
+			out = append(out, n)
+		}
+		if list[i].Location != "" {
+			if n := norm(filepath.Base(list[i].Location)); n != "" && !seen[n] {
+				seen[n] = true
+				out = append(out, n)
+			}
+		}
+	}
+	return out
+}
 
 // stageReporter lifts an optional progress callback into a plain
 // func — scans pass it stage labels and a 0→1 fraction so the review
@@ -65,7 +92,7 @@ func stageReporter(p []func(string, float64)) func(string, float64) {
 // user-data directories, registry keys, startup entries and shortcuts.
 // all is the full installed-app list, used to suppress anything that
 // still belongs to another program. Read-only; nothing is removed.
-func Footprint(e *Entry, all []Entry, progress ...func(string, float64)) []Item {
+func Footprint(e *Entry, all []Entry, protected []string, progress ...func(string, float64)) []Item {
 	rep := stageReporter(progress)
 	rep("Scanning app folders", 0)
 	items := fsFootprint(e, all, appRoots(), shortcutRoots(), progress...)
@@ -74,7 +101,8 @@ func Footprint(e *Entry, all []Entry, progress ...func(string, float64)) []Item 
 	rep("Finishing up", 0.95)
 	// Dedupe: an install folder sitting inside a scanned root would be
 	// listed twice, and a registry key can be reached through two
-	// views. Path + value name is the identity.
+	// views. Path + value name is the identity. Whitelisted paths are
+	// dropped before they ever reach a list.
 	seen := map[string]bool{}
 	out := items[:0]
 	for _, it := range items {
@@ -82,7 +110,15 @@ func Footprint(e *Entry, all []Entry, progress ...func(string, float64)) []Item 
 		if seen[key] {
 			continue
 		}
+		if !it.Registry() && disk.ProtectedPath(it.Path, protected) {
+			continue
+		}
 		seen[key] = true
+		// Bind filesystem items to their ancestor chain now — removal
+		// later must find the same identities or refuse.
+		if it.Kind == KindDir && it.ID == nil {
+			it.ID, _ = disk.BindPath(it.Path, false)
+		}
 		out = append(out, it)
 	}
 	return out
@@ -111,8 +147,29 @@ func fsFootprint(e *Entry, all []Entry, roots, shortcuts []string, progress ...f
 		})
 	}
 
+	// Alias folders: products whose data directory shares nothing with
+	// the display name — "Microsoft Visual Studio Code" writes to
+	// "Code". The first matching rule wins so a channel-specific name
+	// ("… Insiders") never claims the stable channel's folder.
+	var aliasDirs []string
+	if n := norm(e.Name); n != "" {
+		for _, a := range dataAliases {
+			if strings.Contains(n, a.match) {
+				aliasDirs = a.rels
+				break
+			}
+		}
+	}
+
 	for i, root := range roots {
 		rep("Scanning "+root, 0.05+0.5*float64(i)/float64(len(roots)))
+		for _, rel := range aliasDirs {
+			p := filepath.Join(root, rel)
+			if isDir(p) && !reparsePath(p) && !claimed(p, e, all) {
+				out = append(out, Item{Path: p, Kind: KindDir, Confidence: Likely,
+					Why: "the app's data folder"})
+			}
+		}
 		kids, err := os.ReadDir(root)
 		if err != nil {
 			continue
@@ -124,6 +181,9 @@ func fsFootprint(e *Entry, all []Entry, roots, shortcuts []string, progress ...f
 			p := filepath.Join(root, kid.Name())
 			dn := norm(kid.Name())
 			switch {
+			case sharedRuntime[dn]:
+				// Vendor runtimes outlive any single product — they are
+				// never a leftover of the app being removed.
 			case names[dn]:
 				if claimed(p, e, all) {
 					continue
@@ -135,7 +195,7 @@ func fsFootprint(e *Entry, all []Entry, roots, shortcuts []string, progress ...f
 				// carry the app's name — siblings may belong to
 				// other products from the same vendor.
 				for _, sub := range kidNames(p) {
-					if names[norm(sub)] && !claimed(filepath.Join(p, sub), e, all) {
+					if names[norm(sub)] && !sharedRuntime[norm(sub)] && !claimed(filepath.Join(p, sub), e, all) {
 						out = append(out, Item{Path: filepath.Join(p, sub), Kind: KindDir, Confidence: Likely,
 							Why: "app folder under the publisher's folder"})
 					}
@@ -229,13 +289,14 @@ func nameTokens(name string) map[string]bool {
 	if i := strings.Index(name, " - "); i > 0 {
 		out[norm(name[:i])] = true
 	}
-	// Drop trailing version words until a real name is left:
-	// "Bitwig Studio 6.1.1" → "bitwigstudio",
-	// "ACE Studio 版本 2.1.8" → "acestudio".
+	// Drop trailing version and channel words until a real name is
+	// left: "Bitwig Studio 6.1.1" → "bitwigstudio",
+	// "ACE Studio 版本 2.1.8" → "acestudio",
+	// "Zed Nightly" → "zed", "Firefox Developer Edition" → "firefox".
 	fields := strings.Fields(name)
 	for len(fields) > 1 {
 		last := fields[len(fields)-1]
-		if last != "版本" && !isVersionWord(last) {
+		if last != "版本" && !isVersionWord(last) && !channelWords[strings.ToLower(last)] {
 			break
 		}
 		fields = fields[:len(fields)-1]
@@ -327,6 +388,103 @@ var generic = map[string]bool{
 	"temp": true, "cache": true, "logs": true, "the": true,
 	"intel": true, "nvidia": true, "amd": true, "google": true,
 	"programs": true, "program": true, "new": true, "my": true,
+}
+
+// dataAliases covers products whose data folder shares nothing with
+// the display name, matched by a fragment of the normalized name. The
+// first hit wins, so channel-specific rules must precede the plain
+// one — "Visual Studio Code Insiders" must not claim "Code".
+// Paths are relative to the user-data roots; absence costs nothing.
+var dataAliases = []struct {
+	match string   // normalized name fragment
+	rels  []string // data folders under any app root
+}{
+	{"visualstudiocodeinsiders", []string{`Code - Insiders`}},
+	{"visualstudiocode", []string{`Code`}},
+	{"googlechrome", []string{`Google\Chrome`}},
+	{"microsoftedge", []string{`Microsoft\Edge`}},
+	{"wechat", []string{`Tencent\WeChat`}},
+	{"firefoxnightly", []string{`Mozilla\Firefox`}},
+	{"thunderbird", []string{`Mozilla\Thunderbird`}},
+}
+
+// channelWords are trailing display-name words that mark a release
+// channel rather than the product itself — "Zed Nightly", "Firefox
+// Developer Edition". Stripped variants join the token set so a
+// channel's data folder (usually the plain name) still matches.
+var channelWords = map[string]bool{
+	"nightly": true, "beta": true, "alpha": true, "dev": true,
+	"canary": true, "preview": true, "insider": true, "insiders": true,
+	"stable": true, "release": true, "rc": true, "lts": true,
+	"developer": true, "edition": true, "technology": true, "edge": true,
+}
+
+// sharedRuntime names vendor runtime containers that outlive every
+// product using them — a leftover scan must never flag them, even
+// when the app being removed is itself a runtime.
+var sharedRuntime = map[string]bool{
+	"microsoftvisualc": true, "vcredist": true,
+	"vcruntimeminimum": true, "vcruntimeadditional": true,
+	"dotnet": true, "netframework": true, "microsoftnet": true,
+	"windowsdesktopruntime": true, "aspnetcore": true,
+	"webview2": true, "edgewebview": true, "microsoftedgewebview2": true,
+	"java": true, "javaruntimeenvironment": true, "openjdk": true,
+	"adoptium": true, "microsoftjdk": true, "temurin": true,
+	"msxml": true, "directx": true, "xnaframework": true,
+}
+
+// Personal reports whether the item holds user data or settings
+// rather than disposable artifacts — such rows start unselected so
+// removal is an explicit choice. Registry values (a startup pointer)
+// and the app's own Uninstall record are never personal.
+func (i Item) Personal() bool {
+	switch i.Kind {
+	case KindRegValue:
+		return false
+	case KindRegKey:
+		p := strings.ToLower(i.Path)
+		if strings.Contains(p, `\currentversion\uninstall\`) {
+			return false
+		}
+		return strings.Contains(p, `\software\`)
+	}
+	return underDataRoot(i.Path) && !disposablePath(i.Path)
+}
+
+// MachineWide reports items owned by the machine rather than the
+// user — HKLM registry trees and ProgramData folders. Listed, but
+// never preselected: the blast radius covers every account.
+func (i Item) MachineWide() bool {
+	if i.Registry() {
+		return strings.HasPrefix(strings.ToUpper(i.Path), "HKLM")
+	}
+	pd := os.Getenv("PROGRAMDATA")
+	return pd != "" && pathWithin(i.Path, pd)
+}
+
+// underDataRoot reports whether p sits inside one of the app-data
+// roots a footprint scan checks.
+func underDataRoot(p string) bool {
+	for _, r := range appRoots() {
+		if pathWithin(p, r) {
+			return true
+		}
+	}
+	return false
+}
+
+// disposablePath reports whether a folder's leaf names it as
+// disposable output — caches, logs, temp and dump directories.
+func disposablePath(p string) bool {
+	leaf := norm(filepath.Base(p))
+	for _, d := range []string{"cache", "caches", "cachedata", "log", "logs",
+		"temp", "tmp", "crashdumps", "crashreports", "dumps", "shadercache",
+		"gpucache", "webcache", "blobstorage", "service worker"} {
+		if leaf == norm(d) {
+			return true
+		}
+	}
+	return false
 }
 
 func isDir(p string) bool {

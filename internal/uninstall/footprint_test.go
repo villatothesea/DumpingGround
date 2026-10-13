@@ -108,3 +108,55 @@ func TestNorm(t *testing.T) {
 		t.Fatal("lowercase")
 	}
 }
+
+func TestItemDataNature(t *testing.T) {
+	// HKLM + Software trees are machine-wide settings — listed, not
+	// preselected; the app's own Uninstall record is neither.
+	own := Item{Path: `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\App`, Kind: KindRegKey}
+	if own.Personal() || !own.MachineWide() {
+		t.Fatal("own uninstall record must stay a plain Confirmed row")
+	}
+	hklm := Item{Path: `HKLM\SOFTWARE\Vendor\App`, Kind: KindRegKey}
+	if !hklm.Personal() || !hklm.MachineWide() {
+		t.Fatal("HKLM Software key must be personal + machine-wide")
+	}
+	hkcu := Item{Path: `HKCU\SOFTWARE\Vendor\App`, Kind: KindRegKey}
+	if !hkcu.Personal() || hkcu.MachineWide() {
+		t.Fatal("HKCU Software key must be personal, user-scoped")
+	}
+	run := Item{Path: `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run`, Kind: KindRegValue}
+	if run.Personal() {
+		t.Fatal("a startup pointer is not personal data")
+	}
+	app := os.Getenv("APPDATA")
+	if app == "" {
+		t.Skip("APPDATA unset")
+	}
+	pers := Item{Path: filepath.Join(app, "Foo", "Data"), Kind: KindDir}
+	if !pers.Personal() {
+		t.Fatal("non-disposable data folder must read as personal")
+	}
+	// A disposable leaf stays non-personal.
+	cd := Item{Path: filepath.Join(app, "Cache"), Kind: KindDir}
+	if cd.Personal() {
+		t.Fatal("a Cache-named folder is disposable, not personal")
+	}
+	pf := Item{Path: `C:\Program Files\Foo`, Kind: KindDir}
+	if pf.Personal() || pf.MachineWide() {
+		t.Fatal("install folder is neither personal data nor ProgramData")
+	}
+}
+
+func TestChannelStrip(t *testing.T) {
+	for name, want := range map[string]string{
+		"Zed Nightly":                "zed",
+		"Firefox Developer Edition":  "firefox",
+		"Zed Preview 1.2":            "zed",
+		"Chrome Canary":              "chrome",
+		"Visual Studio Code Insiders": "visualstudiocode",
+	} {
+		if !nameTokens(name)[want] {
+			t.Errorf("nameTokens(%q) missing %q", name, want)
+		}
+	}
+}

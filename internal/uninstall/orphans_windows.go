@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	"github.com/dumpingground/dumpingground/internal/disk"
 )
 
 var procExpandEnvStr = syscall.NewLazyDLL("kernel32.dll").NewProc("ExpandEnvironmentStringsW")
@@ -22,7 +24,7 @@ var procExpandEnvStr = syscall.NewLazyDLL("kernel32.dll").NewProc("ExpandEnviron
 // name-matched traces of everything this tool has uninstalled before.
 // Every item is certain — a reference is dead only when its target is
 // verified missing, an empty folder carries nothing to lose.
-func Orphans(installed []Entry, progress ...func(string, float64)) []Item {
+func Orphans(installed []Entry, protected []string, progress ...func(string, float64)) []Item {
 	rep := stageReporter(progress)
 	var out []Item
 	rep("Checking leftover installed-apps entries", 0)
@@ -38,13 +40,16 @@ func Orphans(installed []Entry, progress ...func(string, float64)) []Item {
 	rep("Checking Start Menu groups", 5.0/7)
 	out = append(out, emptyGroupItems(startMenuRoots())...)
 	rep("Checking uninstall history", 6.0/7)
-	out = append(out, historyItems(installed)...)
+	out = append(out, historyItems(installed, protected)...)
 	rep("Finishing up", 0.98)
 	seen := map[string]bool{}
 	items := out[:0]
 	for _, it := range out {
 		key := strings.ToLower(it.Path) + "|" + it.RegValue
 		if seen[key] {
+			continue
+		}
+		if !it.Registry() && disk.ProtectedPath(it.Path, protected) {
 			continue
 		}
 		seen[key] = true
@@ -284,14 +289,14 @@ var systemGroups = map[string]bool{
 // than name-only. A folder a live app is still writing to — newest
 // content newer than the removal — is not a leftover: portable
 // same-name apps would lose their data otherwise.
-func historyItems(installed []Entry) []Item {
+func historyItems(installed []Entry, protected []string) []Item {
 	var out []Item
 	for _, rec := range History() {
 		if StillInstalled(rec.Name, installed) {
 			continue
 		}
 		e := Entry{Name: rec.Name, Location: rec.Location, Publisher: rec.Publisher, Key: rec.Key}
-		for _, it := range Footprint(&e, installed) {
+		for _, it := range Footprint(&e, installed, protected) {
 			if rec.Gone && it.Kind == KindDir && it.Confidence != Confirmed &&
 				dirNewestWrite(it.Path).After(rec.When.Add(2*time.Minute)) {
 				continue // written after the app vanished — still in use

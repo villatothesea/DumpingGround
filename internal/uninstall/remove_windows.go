@@ -35,7 +35,7 @@ const (
 // carries one error (or nil) per item, in order. progress, when given,
 // hears (done, total, currentPath) before each item and once at the
 // end — the review dialog's progress bar.
-func RemoveItems(items []Item, backup io.Writer, progress ...func(done, total int, path string)) []error {
+func RemoveItems(items []Item, backup io.Writer, protected []string, progress ...func(done, total int, path string)) []error {
 	rep := func(i int, path string) {
 		if len(progress) > 0 && progress[0] != nil {
 			progress[0](i, len(items), path)
@@ -49,8 +49,27 @@ func RemoveItems(items []Item, backup io.Writer, progress ...func(done, total in
 	}
 	for i, it := range items {
 		rep(i, it.Path)
+		// The whitelist is enforced again at the sink: a path the user
+		// protected after the scan still refuses removal.
+		if !it.Registry() && disk.ProtectedPath(it.Path, protected) {
+			errs[i] = errProtected
+			continue
+		}
 		switch it.Kind {
 		case KindDir:
+			// The leftover must still be the directory the scan saw —
+			// a rebound ancestor chain refuses the removal outright.
+			id := it.ID
+			if id == nil {
+				id, errs[i] = disk.BindPath(it.Path, false)
+			}
+			if errs[i] != nil {
+				continue
+			}
+			if !id.Verify() {
+				errs[i] = errPathChanged
+				continue
+			}
 			errs[i] = disk.RecycleFileOrDirSized(it.Path, it.Bytes)
 			// Protected leftovers (Program Files, system dirs) refuse
 			// the plain delete — retry through the elevated worker.

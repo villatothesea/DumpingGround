@@ -70,7 +70,7 @@ func hideWindow(cmd *exec.Cmd) {
 // elevation gets the UAC prompt it needs instead of error 740, and
 // MSI/composite commands resolve the way the shell runs them.
 func launch(e *Entry) (*Process, error) {
-	exe, tail := splitExeTail(e.Uninstall)
+	exe, tail := planLaunch(e)
 	if exe == "" {
 		return nil, fmt.Errorf("no uninstall command")
 	}
