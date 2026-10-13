@@ -50,6 +50,22 @@ func (m *Model) hwDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist []hw
 						m.setPage(uninstallPage)
 					}
 				}
+				if cd.id == "devices" && len(info.Devices) > 0 {
+					setAll := func(open bool) {
+						if m.hw.devOpen == nil {
+							m.hw.devOpen = map[string]bool{}
+						}
+						for _, class := range hwDeviceClasses(info) {
+							m.hw.devOpen[class] = open
+						}
+					}
+					if m.iconTextButton(c, "dn", "Expand all").Clicked() {
+						setAll(true)
+					}
+					if m.iconTextButton(c, "upa", "Collapse all").Clicked() {
+						setAll(false)
+					}
+				}
 			})
 		}
 		topPad := float32(0)
@@ -787,12 +803,9 @@ func (m *Model) hwDevicesDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info) {
 	if m.hw.devOpen == nil {
 		m.hw.devOpen = map[string]bool{}
 	}
-	var classes []string
+	classes := hwDeviceClasses(info)
 	groups := map[string][]hwmon.DeviceInfo{}
 	for _, d := range info.Devices {
-		if _, ok := groups[d.Class]; !ok {
-			classes = append(classes, d.Class)
-		}
 		groups[d.Class] = append(groups[d.Class], d)
 	}
 	m.hwPanel(c, t, func() {
@@ -822,6 +835,20 @@ func (m *Model) hwDevicesDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info) {
 			}
 		})
 	})
+}
+
+// hwDeviceClasses lists the device classes in first-seen order — the
+// same grouping the devices detail accordion uses.
+func hwDeviceClasses(info *hwmon.Info) []string {
+	var classes []string
+	seen := map[string]bool{}
+	for _, d := range info.Devices {
+		if !seen[d.Class] {
+			seen[d.Class] = true
+			classes = append(classes, d.Class)
+		}
+	}
+	return classes
 }
 
 // devStatusColor marks a device green when its driver is running,

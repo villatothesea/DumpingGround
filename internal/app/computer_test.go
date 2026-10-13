@@ -170,6 +170,24 @@ func TestNewHardwareCards(t *testing.T) {
 			t.Errorf("expanded group missing %q", want)
 		}
 	}
+
+	// The header bar's Expand all / Collapse all toggle every group.
+	if err := tt.Click("Collapse all"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if tt.HasText("USB xHCI Compliant Host Controller") {
+		t.Error("Collapse all left a device row visible")
+	}
+	if err := tt.Click("Expand all"); err != nil {
+		t.Fatal(err)
+	}
+	for range 12 {
+		tt.Frame()
+	}
+	if !tt.HasText("Intel Wi-Fi 7 BE211") || !tt.HasText("USB xHCI Compliant Host Controller") {
+		t.Error("Expand all did not open every class")
+	}
 }
 
 // TestDiskHealthPanel checks the health panel's three states: an NVMe log,
