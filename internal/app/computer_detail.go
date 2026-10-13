@@ -20,7 +20,7 @@ func (m *Model) hwDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist []hw
 		// back bar belongs to the hardware pages only.
 		if cd.id != "machine" {
 			ui.Row(c).Padding(12, hwPad).Gap(12).AlignItems(ui.Center).Children(func() {
-				if m.iconTextButton(c, "left", "Back").Clicked() {
+				if m.iconTextButton(c, "left", tr("Back")).Clicked() {
 					m.hw.detail = ""
 				}
 				icon(c, cd.glyph, 20).TextColor(cd.col)
@@ -40,13 +40,13 @@ func (m *Model) hwDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist []hw
 				if sscan(cd.id, "disk:%d", &didx) && didx < len(info.Disks) {
 					for _, l := range info.Disks[didx].Letters {
 						l := l
-						if m.iconTextButton(c, "hdd", "Scan "+l+`\`+" in Disk Usage").Clicked() {
+						if m.iconTextButton(c, "hdd", fmt.Sprintf(tr("Scan %s in Disk Usage"), l+`\`)).Clicked() {
 							m.diskDrive, m.diskPath = l+`\`, l+`\`
 							m.setPage(diskPage)
 							m.startScan()
 						}
 					}
-					if m.iconTextButton(c, "pkg", "Open Uninstall").Clicked() {
+					if m.iconTextButton(c, "pkg", tr("Open Uninstall")).Clicked() {
 						m.setPage(uninstallPage)
 					}
 				}
@@ -59,10 +59,10 @@ func (m *Model) hwDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist []hw
 							m.hw.devOpen[class] = open
 						}
 					}
-					if m.iconTextButton(c, "dn", "Expand all").Clicked() {
+					if m.iconTextButton(c, "dn", tr("Expand all")).Clicked() {
 						setAll(true)
 					}
-					if m.iconTextButton(c, "upa", "Collapse all").Clicked() {
+					if m.iconTextButton(c, "upa", tr("Collapse all")).Clicked() {
 						setAll(false)
 					}
 				}
@@ -133,15 +133,15 @@ func (m *Model) hwChartPanel(c *ui.Context, t *ui.Theme, hist []hwmon.Sample, ti
 	o.grid = true
 	m.hwPanel(c, t, func() {
 		ui.Row(c).Gap(14).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, title).Bold().FontSize(13)
+			ui.Text(c, tr(title)).Bold().FontSize(13)
 			ui.Spacer(c)
 			for _, l := range legend {
 				ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
 					ui.Box(c).Size(8, 8).Radius(4).Background(l.col)
-					ui.Text(c, l.label).FontSize(11).TextColor(t.TextMuted)
+					ui.Text(c, tr(l.label)).FontSize(11).TextColor(t.TextMuted)
 				})
 			}
-			ui.Text(c, "60 seconds").FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, tr("60 seconds")).FontSize(11).TextColor(t.TextMuted)
 		})
 		ui.Row(c).Children(func() {
 			ui.Spacer(c)
@@ -149,7 +149,7 @@ func (m *Model) hwChartPanel(c *ui.Context, t *ui.Theme, hist []hwmon.Sample, ti
 		})
 		ui.Box(c).FillWidth().Height(h).Draw(func(p *ui.Painter, r ui.Rect) { drawChart(p, r, t, hist, o) })
 		ui.Row(c).Children(func() {
-			ui.Text(c, "60 s").FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, tr("60 s")).FontSize(11).TextColor(t.TextMuted)
 			ui.Spacer(c)
 			ui.Text(c, "0").FontSize(11).TextColor(t.TextMuted)
 		})
@@ -172,13 +172,13 @@ func (m *Model) hwStatGrid(c *ui.Context, t *ui.Theme, items [][2]string) {
 // hwSpecs is a key/value table; rows without a value are skipped.
 func (m *Model) hwSpecs(c *ui.Context, t *ui.Theme, title string, rows [][2]string) {
 	m.hwPanel(c, t, func() {
-		ui.Text(c, title).Bold().FontSize(13)
+		ui.Text(c, tr(title)).Bold().FontSize(13)
 		ui.Grid(c).ColumnTracks(ui.Fixed(170), ui.Fr(1)).GapX(16).GapY(8).Children(func() {
 			for _, r := range rows {
 				if strings.TrimSpace(r[1]) == "" {
 					continue
 				}
-				ui.Text(c, r[0]).TextColor(t.TextMuted)
+				ui.Text(c, tr(r[0])).TextColor(t.TextMuted)
 				ui.Text(c, r[1]).Selectable()
 			}
 		})
@@ -191,13 +191,13 @@ func (m *Model) hwMiniCharts(c *ui.Context, t *ui.Theme, hist []hwmon.Sample, ti
 	w, _ := c.Size()
 	cols := max(1, min(8, int((w-2*hwPad-28+8)/168)))
 	m.hwPanel(c, t, func() {
-		ui.Text(c, title).Bold().FontSize(13)
+		ui.Text(c, tr(title)).Bold().FontSize(13)
 		ui.Grid(c).Columns(cols).Gap(8).Children(func() {
 			for i := range names {
 				i := i
 				ui.Column(c).Gap(3).Children(func() {
 					ui.Row(c).Children(func() {
-						ui.Text(c, names[i]).FontSize(11).TextColor(t.TextMuted)
+						ui.Text(c, tr(names[i])).FontSize(11).TextColor(t.TextMuted)
 						ui.Spacer(c)
 						ui.Text(c, now(i)).FontSize(11)
 					})
@@ -265,7 +265,7 @@ func (m *Model) hwCPUDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist [
 	m.hwStatGrid(c, t, stats)
 	names := make([]string, cores)
 	for i := range names {
-		names[i] = fmt.Sprintf("CPU %d", i)
+		names[i] = fmt.Sprintf(tr("CPU %d"), i)
 	}
 	m.hwMiniCharts(c, t, hist, "Logical processors", names,
 		func(i int) hwLine {
@@ -311,9 +311,9 @@ func (m *Model) hwMemDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist [
 			{"Paged pool", format.Bytes(last.PagedPool)}, {"Non-paged pool", format.Bytes(last.NonPagedPool)}}
 		m.hwPanel(c, t, func() {
 			ui.Row(c).Children(func() {
-				ui.Text(c, "Composition").Bold().FontSize(13)
+				ui.Text(c, tr("Composition")).Bold().FontSize(13)
 				ui.Spacer(c)
-				ui.Text(c, fmt.Sprintf("%s in use · %s available", format.Bytes(last.MemUsed), format.Bytes(last.MemAvail))).FontSize(11).TextColor(t.TextMuted)
+				ui.Text(c, fmt.Sprintf(tr("%s in use · %s available"), format.Bytes(last.MemUsed), format.Bytes(last.MemAvail))).FontSize(11).TextColor(t.TextMuted)
 			})
 			frac := float64(last.MemUsed) / max(1, float64(last.MemTotal))
 			ui.Box(c).FillWidth().Height(16).Draw(func(p *ui.Painter, r ui.Rect) {
@@ -341,10 +341,10 @@ func (m *Model) hwMemDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist [
 	})
 	if len(mem.Modules) > 0 {
 		m.hwPanel(c, t, func() {
-			ui.Text(c, "Memory modules").Bold().FontSize(13)
+			ui.Text(c, tr("Memory modules")).Bold().FontSize(13)
 			ui.Grid(c).ColumnTracks(ui.Fr(2.2), ui.Fr(0.8), ui.Fr(0.9), ui.Fr(1.2), ui.Fr(1.3), ui.Fr(2)).GapX(12).GapY(6).Children(func() {
 				for _, h := range []string{"Slot", "Size", "Type", "Speed", "Manufacturer", "Part number"} {
-					ui.Text(c, h).FontSize(11).TextColor(t.TextMuted)
+					ui.Text(c, tr(h)).FontSize(11).TextColor(t.TextMuted)
 				}
 				for _, d := range mem.Modules {
 					speed := d.ConfigMTs
@@ -530,7 +530,7 @@ func (m *Model) hwDiskDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist 
 
 	if len(d.Letters) > 0 {
 		m.hwPanel(c, t, func() {
-			ui.Text(c, "Volumes").Bold().FontSize(13)
+			ui.Text(c, tr("Volumes")).Bold().FontSize(13)
 			for _, l := range d.Letters {
 				for _, v := range m.diskVolumes {
 					if !strings.HasPrefix(strings.ToUpper(v.Path), l) {
@@ -542,7 +542,7 @@ func (m *Model) hwDiskDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist 
 							ui.Text(c, strings.TrimSpace(l+" "+v.Label)).Bold()
 							ui.Text(c, v.FS).TextColor(t.TextMuted)
 							ui.Spacer(c)
-							ui.Text(c, fmt.Sprintf("%s free of %s", format.Bytes(v.Free), format.Bytes(v.Total))).TextColor(t.TextMuted)
+							ui.Text(c, fmt.Sprintf(tr("%s free of %s"), format.Bytes(v.Free), format.Bytes(v.Total))).TextColor(t.TextMuted)
 						})
 						ui.Box(c).FillWidth().Height(8).Draw(func(p *ui.Painter, r ui.Rect) {
 							p.Fill(r, hwDiskCol.Alpha(0.16), 4)
@@ -576,18 +576,18 @@ func (m *Model) hwDiskDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist 
 func (m *Model) hwHealthPanel(c *ui.Context, t *ui.Theme, health *hwmon.DiskHealth, sata *hwmon.SATAHealth) {
 	m.hwPanel(c, t, func() {
 		ui.Row(c).Gap(14).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "Health").Bold().FontSize(13)
+			ui.Text(c, tr("Health")).Bold().FontSize(13)
 			ui.Spacer(c)
-			source := "NVMe SMART / health log"
+			source := tr("NVMe SMART / health log")
 			if health == nil && sata != nil {
-				source = "ATA SMART attributes"
+				source = tr("ATA SMART attributes")
 			}
 			ui.Text(c, source).FontSize(11).TextColor(t.TextMuted)
 		})
 		switch {
 		case health == nil && sata == nil:
-			ui.Text(c, "Health information is not available for this drive.").TextColor(t.TextMuted)
-			ui.Text(c, "USB bridges and NVMe drives behind a RAID driver (Intel RST/VMD) do not pass the drive's health log through. Nothing is assumed about the drive's condition.").FontSize(12).TextColor(t.TextMuted)
+			ui.Text(c, tr("Health information is not available for this drive.")).TextColor(t.TextMuted)
+			ui.Text(c, tr("USB bridges and NVMe drives behind a RAID driver (Intel RST/VMD) do not pass the drive's health log through. Nothing is assumed about the drive's condition.")).FontSize(12).TextColor(t.TextMuted)
 		case health != nil:
 			status, reasons := hwmon.JudgeHealth(health)
 			m.hwVerdict(c, t, status, reasons)
@@ -602,14 +602,14 @@ func (m *Model) hwVerdict(c *ui.Context, t *ui.Theme, status string, reasons []s
 	col := hwHealthColor(status, t)
 	ui.Row(c).Gap(9).AlignItems(ui.Center).Children(func() {
 		ui.Box(c).Size(10, 10).Radius(5).Background(col)
-		ui.Text(c, status).FontSize(16).Bold().TextColor(col)
-		ui.Text(c, "judged from the drive's own counters").FontSize(11).TextColor(t.TextMuted)
+		ui.Text(c, tr(status)).FontSize(16).Bold().TextColor(col)
+		ui.Text(c, tr("judged from the drive's own counters")).FontSize(11).TextColor(t.TextMuted)
 	})
 	if len(reasons) == 0 {
-		ui.Text(c, "No faults reported by the drive's own counters.").FontSize(12).TextColor(t.TextMuted)
+		ui.Text(c, tr("No faults reported by the drive's own counters.")).FontSize(12).TextColor(t.TextMuted)
 	} else {
 		for _, r := range reasons {
-			ui.Text(c, "• "+r).FontSize(12).TextColor(col)
+			ui.Text(c, "• "+trHealthReason(r)).FontSize(12).TextColor(col)
 		}
 	}
 }
@@ -773,8 +773,8 @@ func (m *Model) hwDisplayDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, i 
 		{"Year of manufacture", year},
 	})
 	m.hwPanel(c, t, func() {
-		ui.Text(c, "Where this comes from").Bold().FontSize(13)
-		ui.Text(c, "Decoded from the monitor's EDID — the block the display reports over its link — and from the current display mode. Only monitors actually attached are listed; Windows keeps EDID for displays that have been unplugged.").FontSize(12).TextColor(t.TextMuted)
+		ui.Text(c, tr("Where this comes from")).Bold().FontSize(13)
+		ui.Text(c, tr("Decoded from the monitor's EDID — the block the display reports over its link — and from the current display mode. Only monitors actually attached are listed; Windows keeps EDID for displays that have been unplugged.")).FontSize(12).TextColor(t.TextMuted)
 	})
 }
 
@@ -784,7 +784,7 @@ func (m *Model) hwAudioDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info) {
 		return
 	}
 	m.hwPanel(c, t, func() {
-		ui.Text(c, "Audio devices").Bold().FontSize(13)
+		ui.Text(c, tr("Audio devices")).Bold().FontSize(13)
 		ui.Grid(c).ColumnTracks(ui.Fr(3), ui.Fr(2)).GapX(16).GapY(8).Children(func() {
 			for _, a := range info.Audio {
 				ui.Text(c, a.Name).Selectable().SingleLine().Ellipsis("…")
@@ -810,9 +810,9 @@ func (m *Model) hwDevicesDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info) {
 	}
 	m.hwPanel(c, t, func() {
 		ui.Row(c).Children(func() {
-			ui.Text(c, "Present devices").Bold().FontSize(13)
+			ui.Text(c, tr("Present devices")).Bold().FontSize(13)
 			ui.Spacer(c)
-			ui.Text(c, fmt.Sprintf("%d devices in %d classes", len(info.Devices), len(classes))).FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, fmt.Sprintf(tr("%d devices in %d classes"), len(info.Devices), len(classes))).FontSize(11).TextColor(t.TextMuted)
 		})
 		ui.Accordion(c, func() {
 			for _, class := range classes {
@@ -867,10 +867,10 @@ func devStatusColor(d hwmon.DeviceInfo, t *ui.Theme) ui.Color {
 func devStatusText(d hwmon.DeviceInfo) string {
 	switch {
 	case d.Problem != 0:
-		return fmt.Sprintf("Problem %d", d.Problem)
+		return fmt.Sprintf(tr("Problem %d"), d.Problem)
 	case d.Started:
-		return "Working"
+		return tr("Working")
 	default:
-		return "Idle"
+		return tr("Idle")
 	}
 }

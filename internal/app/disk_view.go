@@ -25,7 +25,7 @@ func (m *Model) startScan() {
 	}
 	path := strings.TrimSpace(m.diskPath)
 	if path == "" {
-		m.diskStatus = "Select a drive or folder first"
+		m.diskStatus = tr("Select a drive or folder first")
 		return
 	}
 	m.scanPath = path
@@ -56,7 +56,7 @@ func (m *Model) startScan() {
 	m.diskExtensions = nil
 	m.extPending = nil
 	m.extStats = nil
-	m.diskStatus = "Scanning…"
+	m.diskStatus = tr("Scanning…")
 	progress := make(chan disk.Progress, 1)
 	done := make(chan scanResult, 1)
 	m.diskProgressCh = progress
@@ -93,14 +93,14 @@ func (m *Model) drainScan() {
 			m.diskViewKey = ""
 		}
 		if errors.Is(r.err, context.Canceled) {
-			m.diskStatus = "Cancelled · partial results"
+			m.diskStatus = tr("Cancelled · partial results")
 		} else if r.err != nil {
-			m.diskStatus = "Scan failed: " + r.err.Error()
+			m.diskStatus = tr("Scan failed: ") + r.err.Error()
 		} else {
-			m.diskStatus = fmt.Sprintf("Complete · %s · %s files · %s · %.1f s · %s skipped", r.snapshot.Method, format.Int(r.snapshot.Files), format.Bytes(r.snapshot.Allocated), r.snapshot.Duration.Seconds(), format.Int(r.snapshot.Skipped))
+			m.diskStatus = fmt.Sprintf(tr("Complete · %s · %s files · %s · %.1f s · %s skipped"), r.snapshot.Method, format.Int(r.snapshot.Files), format.Bytes(r.snapshot.Allocated), r.snapshot.Duration.Seconds(), format.Int(r.snapshot.Skipped))
 			m.startWatch()
 			if m.diskLive {
-				m.diskStatus += " · live"
+				m.diskStatus += tr(" · live")
 			}
 		}
 		// Returning scan buffers to the OS makes the next rescan pay for
@@ -181,7 +181,7 @@ func (m *Model) drainWatch() {
 		case ev := <-m.diskEvents:
 			m.diskPending = append(m.diskPending, ev)
 		case err := <-m.diskWatchErr:
-			m.diskStatus = "Live index lost: " + err.Error()
+			m.diskStatus = tr("Live index lost: ") + err.Error()
 			m.stopWatch()
 		default:
 			goto apply
@@ -265,7 +265,7 @@ func (m *Model) cancelScan() {
 	if m.diskCancel != nil {
 		m.diskCancelling = true
 		m.diskCancel()
-		m.diskStatus = "Cancelling…"
+		m.diskStatus = tr("Cancelling…")
 	}
 }
 func (m *Model) clearDisk() {
@@ -304,7 +304,7 @@ func (m *Model) clearDisk() {
 	m.junkSel = -1
 	m.junkConfirm = -1
 	m.junkRowConfirm = ""
-	m.diskStatus = "Index cleared"
+	m.diskStatus = tr("Index cleared")
 	// Dropping the index frees hundreds of MB; return them to the OS now
 	// instead of letting the runtime sit on the released heap. Async so the
 	// sweep does not stall the UI.
@@ -337,7 +337,7 @@ func (m *Model) releaseIndexForRust() {
 	m.mapHover = ""
 	m.mapMotion = mapMotion{}
 	m.mapAnimating = false
-	m.diskStatus = "Rust report ready · index released"
+	m.diskStatus = tr("Rust report ready · index released")
 	go debug.FreeOSMemory()
 }
 func (m *Model) browse() {
@@ -346,7 +346,7 @@ func (m *Model) browse() {
 	}
 	parent, path := m.window, m.diskPath
 	go func() {
-		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: parent, Title: "Select folder to scan", DefaultPath: path, Directory: true})
+		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: parent, Title: tr("Select folder to scan"), DefaultPath: path, Directory: true})
 		m.post(func() {
 			if err != nil {
 				m.diskStatus = err.Error()
@@ -367,14 +367,14 @@ func (m *Model) diskView(c *ui.Context) {
 			m.driveChip(c, t, volume, scanning)
 		}
 		ui.Spacer(c)
-		if ui.Button(c, "Browse…").Disabled(scanning).Clicked() {
+		if ui.Button(c, tr("Browse…")).Disabled(scanning).Clicked() {
 			m.browse()
 		}
 		if scanning {
-			if ui.Button(c, "Cancel").Disabled(m.diskCancelling).TextColor(t.Danger).Clicked() {
+			if ui.Button(c, tr("Cancel")).Disabled(m.diskCancelling).TextColor(t.Danger).Clicked() {
 				m.cancelScan()
 			}
-		} else if ui.PrimaryButton(c, "Scan").Disabled(strings.TrimSpace(m.diskPath) == "").Clicked() {
+		} else if ui.PrimaryButton(c, tr("Scan")).Disabled(strings.TrimSpace(m.diskPath) == "").Clicked() {
 			m.startScan()
 		}
 		if m.rustButton(c, m.rustBusy || scanning && !m.rustPending).Clicked() {
@@ -430,7 +430,7 @@ func (m *Model) driveChip(c *ui.Context, t *ui.Theme, v disk.Volume, scanning bo
 	if on {
 		e.BorderColor(t.Accent)
 	}
-	e.Label("Drive " + v.Path).Tooltip(fmt.Sprintf("%s · %s used · %s free · %s total", v.Label, format.Bytes(v.Total-v.Free), format.Bytes(v.Free), format.Bytes(v.Total)))
+	e.Label(tr("Drive ") + v.Path).Tooltip(fmt.Sprintf(tr("%s · %s used · %s free · %s total"), v.Label, format.Bytes(v.Total-v.Free), format.Bytes(v.Free), format.Bytes(v.Total)))
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
 		if on {
 			p.Fill(r, t.Accent, 6)
@@ -457,7 +457,7 @@ func (m *Model) driveChip(c *ui.Context, t *ui.Theme, v disk.Volume, scanning bo
 		} else {
 			ui.Progress(c, used).Width(34).Height(4)
 		}
-		ui.Text(c, format.Bytes(v.Free)+" free").FontSize(11).TextColor(muted).SingleLine()
+		ui.Text(c, format.Bytes(v.Free)+tr(" free")).FontSize(11).TextColor(muted).SingleLine()
 	})
 	if !scanning && e.Clicked() {
 		m.selectDrive(v.Path)
@@ -483,14 +483,14 @@ func (m *Model) idleCard(c *ui.Context, t *ui.Theme) {
 					ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
 						icon(c, "folder", 26).TextColor(t.TextMuted)
 						ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-							ui.Text(c, "Custom folder").FontSize(14).Bold().SingleLine()
+							ui.Text(c, tr("Custom folder")).FontSize(14).Bold().SingleLine()
 							ui.Text(c, m.diskPath).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
 						})
 					})
 				})
 			}
 		})
-		ui.Text(c, "Pick a drive or browse for a folder, then Scan (F5). Scans run in the background and can be cancelled.").PaddingY(12).TextColor(t.TextMuted).SingleLine()
+		ui.Text(c, tr("Pick a drive or browse for a folder, then Scan (F5). Scans run in the background and can be cancelled.")).PaddingY(12).TextColor(t.TextMuted).SingleLine()
 		ui.Spacer(c)
 	})
 }
@@ -504,17 +504,17 @@ func (m *Model) driveCard(c *ui.Context, t *ui.Theme, v disk.Volume) {
 	if on {
 		card.BorderColor(t.Accent)
 	}
-	card.Label("Drive card " + v.Path).Tooltip("Scan " + v.Path)
+	card.Label(tr("Drive card ") + v.Path).Tooltip(tr("Scan ") + v.Path)
 	card.Children(func() {
 		ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
 			icon(c, "hdd", 26).TextColor(t.TextMuted)
 			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 				ui.Text(c, v.Path+"  "+v.Label).FontSize(14).Bold().SingleLine()
-				note := v.FS + " · directory walk"
+				note := v.FS + tr(" · directory walk")
 				if v.FS == "NTFS" {
-					note = "NTFS · read-only MFT path"
+					note = tr("NTFS · read-only MFT path")
 				} else if v.FS == "" {
-					note = "Directory walk"
+					note = tr("Directory walk")
 				}
 				ui.Text(c, note).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
 			})
@@ -561,9 +561,9 @@ func (m *Model) unscannedView(c *ui.Context, t *ui.Theme) {
 		ui.Spacer(c)
 		ui.Column(c).Width(340).Padding(18, 24).Gap(12).AlignItems(ui.Center).Background(t.Surface).Radius(8).BorderWidth(1).BorderColor(t.Border).Children(func() {
 			icon(c, "hdd", 30).TextColor(t.TextMuted)
-			ui.Text(c, m.diskPath+" hasn't been indexed").FontSize(14).Bold().SingleLine().Ellipsis("…").Tooltip(m.diskPath)
-			ui.Text(c, "Scan it to see what's inside — the previous index stays untouched until you do.").FontSize(11).TextColor(t.TextMuted)
-			if ui.PrimaryButton(c, "Scan "+m.diskPath).Clicked() {
+			ui.Text(c, m.diskPath+tr(" hasn't been indexed")).FontSize(14).Bold().SingleLine().Ellipsis("…").Tooltip(m.diskPath)
+			ui.Text(c, tr("Scan it to see what's inside — the previous index stays untouched until you do.")).FontSize(11).TextColor(t.TextMuted)
+			if ui.PrimaryButton(c, tr("Scan ")+m.diskPath).Clicked() {
 				m.startScan()
 			}
 		})
@@ -573,7 +573,7 @@ func (m *Model) unscannedView(c *ui.Context, t *ui.Theme) {
 
 func (m *Model) stat(c *ui.Context, t *ui.Theme, name, value string) {
 	ui.Column(c).Children(func() {
-		ui.Text(c, name).FontSize(11).TextColor(t.TextMuted)
+		ui.Text(c, tr(name)).FontSize(11).TextColor(t.TextMuted)
 		ui.Text(c, value).FontSize(16).Bold()
 	})
 }
@@ -586,25 +586,25 @@ func (m *Model) scanningCard(c *ui.Context, t *ui.Theme) {
 		card := ui.Column(c).Width(560).Padding(16, 20).Gap(10).Background(t.Surface).Radius(8)
 		card.BorderWidth(1).BorderColor(t.Border)
 		card.Children(func() {
-			title := "Scanning"
+			title := tr("Scanning")
 			if p.Method != "" {
 				title += " · " + p.Method
 			}
 			if m.diskCancelling {
-				title = "Cancelling"
+				title = tr("Cancelling")
 			}
 			ui.Text(c, title).FontSize(14).Bold()
 			ui.Row(c).Gap(28).FillWidth().Children(func() {
 				m.stat(c, t, "Files", format.Int(p.Files))
 				m.stat(c, t, "Folders", format.Int(p.Dirs))
 				m.stat(c, t, "Tallied", format.Bytes(p.Allocated))
-				m.stat(c, t, "Elapsed", fmt.Sprintf("%.1f s", time.Since(m.diskStarted).Seconds()))
+				m.stat(c, t, "Elapsed", fmt.Sprintf(tr("%.1f s"), time.Since(m.diskStarted).Seconds()))
 				m.stat(c, t, "Skipped", format.Int(p.Skipped))
 			})
 			ui.Text(c, p.Current).SingleLine().Ellipsis("…").Tooltip(p.Current).TextColor(t.TextMuted)
 			ui.Progress(c, -1).FillWidth().Height(4)
 		})
-		ui.Text(c, "Cancel keeps the partial results collected so far.").PaddingY(12).TextColor(t.TextMuted).SingleLine()
+		ui.Text(c, tr("Cancel keeps the partial results collected so far.")).PaddingY(12).TextColor(t.TextMuted).SingleLine()
 		ui.Spacer(c)
 	})
 }
@@ -618,8 +618,8 @@ func (m *Model) resultsView(c *ui.Context, t *ui.Theme, s *disk.Snapshot) {
 	bar := ui.Row(c).Height(40).FillWidth().Shrink(0).PaddingX(12).Gap(6).AlignItems(ui.Center)
 	bar.BorderWidth(1, 0, 0, 0).BorderColor(t.Border)
 	bar.Children(func() {
-		up := m.iconButton(c, "up", "Up one level")
-		up.Label("Up").Disabled(m.diskRoot == s.Root)
+		up := m.iconButton(c, "up", tr("Up one level"))
+		up.Label(tr("Up")).Disabled(m.diskRoot == s.Root)
 		if up.Clicked() {
 			m.navigateDisk(s.Nodes[m.diskRoot].Parent)
 		}
@@ -632,36 +632,36 @@ func (m *Model) resultsView(c *ui.Context, t *ui.Theme, s *disk.Snapshot) {
 		} else {
 			hover := m.mapHover
 			if hover == "" {
-				hover = "Click a folder to zoom · click a file to locate its row"
+				hover = tr("Click a folder to zoom · click a file to locate its row")
 			}
 			ui.Text(c, hover).SingleLine().Grow(1).MinWidth(0).FontSize(11).TextColor(t.TextMuted).Ellipsis("…")
 		}
 		ui.Spacer(c)
 		root := s.Nodes[m.diskRoot]
 		ui.Row(c).Gap(4).AlignItems(ui.Center).Shrink(0).Children(func() {
-			ui.Text(c, fmt.Sprintf("Allocated %s · Logical %s · %s files ·", format.Bytes(root.Allocated), format.Bytes(root.Bytes), format.Int(s.Files))).FontSize(11).TextColor(t.TextMuted).SingleLine()
-			skip := ui.Row(c).Gap(3).Padding(1, 5).Radius(4).AlignItems(ui.Center).Label("What is skipped").Tooltip("Entries the scan could not index — click for details")
+			ui.Text(c, fmt.Sprintf(tr("Allocated %s · Logical %s · %s files ·"), format.Bytes(root.Allocated), format.Bytes(root.Bytes), format.Int(s.Files))).FontSize(11).TextColor(t.TextMuted).SingleLine()
+			skip := ui.Row(c).Gap(3).Padding(1, 5).Radius(4).AlignItems(ui.Center).Label(tr("What is skipped")).Tooltip(tr("Entries the scan could not index — click for details"))
 			skip.Draw(func(p *ui.Painter, r ui.Rect) {
 				if skip.Hovered() {
 					p.Fill(r, t.SurfaceHover, 4)
 				}
 			})
 			skip.Children(func() {
-				ui.Text(c, format.Int(s.Skipped)+" skipped").FontSize(11).TextColor(t.TextMuted).SingleLine()
+				ui.Text(c, format.Int(s.Skipped)+tr(" skipped")).FontSize(11).TextColor(t.TextMuted).SingleLine()
 				icon(c, "info", 11).TextColor(t.Accent)
 			})
 			if skip.Clicked() {
 				m.diskInfoOpen = true
 			}
-			ui.Text(c, "· "+format.Int(s.Estimated)+" estimates").FontSize(11).TextColor(t.TextMuted).SingleLine().Tooltip("estimates: files whose on-disk size had to be guessed, e.g. no data attribute read")
+			ui.Text(c, "· "+format.Int(s.Estimated)+tr(" estimates")).FontSize(11).TextColor(t.TextMuted).SingleLine().Tooltip(tr("estimates: files whose on-disk size had to be guessed, e.g. no data attribute read"))
 			// Scan facts that used to sit in the status bar: method, duration
 			// and the live-index state.
-			state := s.Method + fmt.Sprintf(" · %.1f s", s.Duration.Seconds())
+			state := tr(s.Method) + fmt.Sprintf(tr(" · %.1f s"), s.Duration.Seconds())
 			switch {
-			case strings.HasPrefix(m.diskStatus, "Live index lost"):
-				state += " · index lost"
+			case strings.HasPrefix(m.diskStatus, tr("Live index lost")):
+				state += tr(" · index lost")
 			case m.diskLive:
-				state += " · live"
+				state += tr(" · live")
 			}
 			ui.Text(c, "· "+state).FontSize(11).TextColor(t.TextMuted).SingleLine().Tooltip(m.diskStatus)
 		})
@@ -670,15 +670,15 @@ func (m *Model) resultsView(c *ui.Context, t *ui.Theme, s *disk.Snapshot) {
 		}
 		if m.diskNode >= 0 && m.diskNode < len(s.Nodes) {
 			path := s.FullPath(m.diskNode)
-			if m.iconTextButton(c, "folder", "Open location").Clicked() && m.window != nil {
+			if m.iconTextButton(c, "folder", tr("Open location")).Clicked() && m.window != nil {
 				mygo.Shell.ShowItemInFolder(path)
 			}
-			if m.iconTextButton(c, "copy", "Copy path").Clicked() && m.window != nil {
+			if m.iconTextButton(c, "copy", tr("Copy path")).Clicked() && m.window != nil {
 				mygo.Clipboard.WriteText(path)
 			}
 		}
 		flat := m.diskMode == "Files" || m.diskQuery != "" || m.extensionFilter != ""
-		m.segPair(c, t, "Disk view", []string{"Tree", "Flat"}, b2i(flat), func(i int) {
+		m.segPair(c, t, tr("Disk view"), []string{tr("Tree"), tr("Flat")}, b2i(flat), func(i int) {
 			if i == 1 {
 				m.diskMode = "Files"
 			} else {
@@ -690,13 +690,13 @@ func (m *Model) resultsView(c *ui.Context, t *ui.Theme, s *disk.Snapshot) {
 			m.diskViewKey = ""
 			m.diskSelected = -1
 		})
-		if m.iconTextButton(c, "export", "Export CSV").Clicked() {
+		if m.iconTextButton(c, "export", tr("Export CSV")).Clicked() {
 			m.exportDisk()
 		}
-		if m.iconTextButton(c, "trash", "Clear index").Tooltip("Drop the index and return its memory to Windows").Clicked() {
+		if m.iconTextButton(c, "trash", tr("Clear index")).Tooltip(tr("Drop the index and return its memory to Windows")).Clicked() {
 			m.clearDisk()
 		}
-		ui.Checkbox(c, &m.animateMap, "Animate").Tooltip("Zoom transitions when drilling the space map")
+		ui.Checkbox(c, &m.animateMap, tr("Animate")).Tooltip(tr("Zoom transitions when drilling the space map"))
 	})
 	m.prepareDiskRows()
 	m.prepareMap()
@@ -770,7 +770,7 @@ func (m *Model) extChip(c *ui.Context, t *ui.Theme) {
 	chip.Children(func() {
 		ui.Box(c).Size(8, 8).Radius(2).Background(extensionColor(m.extensionFilter))
 		ui.Text(c, m.extensionFilter).FontSize(11).SingleLine().TextColor(t.AccentText)
-		x := ui.Row(c).Size(16, 16).Center().Radius(4).Label("Clear type filter").Tooltip("Clear type filter")
+		x := ui.Row(c).Size(16, 16).Center().Radius(4).Label(tr("Clear type filter")).Tooltip(tr("Clear type filter"))
 		x.Draw(func(p *ui.Painter, r ui.Rect) {
 			if x.Hovered() {
 				p.Fill(r, t.AccentText.Alpha(0.25), 4)
@@ -862,7 +862,7 @@ func (m *Model) prepareDiskRows() {
 func (m *Model) diskTable(c *ui.Context) {
 	s := m.diskSnapshot
 	m.diskMenuHits = m.diskMenuHits[:0]
-	cols := []ui.TableColumn{{ID: "name", Title: "Name", Width: 280, Sortable: true}, {ID: "logical", Title: "Logical size", Width: 110, Align: ui.End, Sortable: true}, {ID: "allocated", Title: "Allocated", Width: 110, Align: ui.End, Sortable: true}, {Title: "% of folder", Width: 110, Align: ui.End}, {Title: "Path / status"}}
+	cols := []ui.TableColumn{{ID: "name", Title: tr("Name"), Width: 280, Sortable: true}, {ID: "logical", Title: tr("Logical size"), Width: 110, Align: ui.End, Sortable: true}, {ID: "allocated", Title: tr("Allocated"), Width: 110, Align: ui.End, Sortable: true}, {Title: tr("% of folder"), Width: 110, Align: ui.End}, {Title: tr("Path / status")}}
 	cell := func(id, col int) {
 		n := s.Nodes[id]
 		text := ""
@@ -906,7 +906,7 @@ func (m *Model) diskTable(c *ui.Context) {
 		m.diskTree.List.Sort = &m.diskSort
 		tbl := tableChrome(c, func() ui.Element {
 			return ui.OutlineTable(c, &m.diskTree, cols, m.diskRows, func(id int) []int { return s.Nodes[id].Children }, cell)
-		}).Fill().Label("Disk table")
+		}).Fill().Label(tr("Disk table"))
 		tableRowMenu(tbl, &m.diskMenuHits, func(id int, menu *ui.Menu) { m.diskMenu(menu, id) })
 		submitted = tbl.Submitted()
 		if m.diskSelected >= 0 && m.diskSelected < m.diskTree.Rows() {
@@ -918,7 +918,7 @@ func (m *Model) diskTable(c *ui.Context) {
 		m.diskFiles.Key = func(i int) any { return m.diskRows[i] }
 		tbl := tableChrome(c, func() ui.Element {
 			return ui.Table(c, &m.diskFiles, cols, len(m.diskRows), func(i, col int) { cell(m.diskRows[i], col) })
-		}).Fill().Label("Disk table")
+		}).Fill().Label(tr("Disk table"))
 		tableRowMenu(tbl, &m.diskMenuHits, func(id int, menu *ui.Menu) { m.diskMenu(menu, id) })
 		submitted = tbl.Submitted()
 		if m.diskSelected >= 0 && m.diskSelected < len(m.diskRows) {
@@ -1042,7 +1042,7 @@ func (m *Model) diskMap(c *ui.Context) {
 	t := c.Theme()
 	animate := m.animateMap && !c.Preferences().ReduceMotion
 	ui.Column(c).Fill().AlignItems(ui.Stretch).Children(func() {
-		canvas := ui.Box(c.Key("space-map")).Grow(1).FillWidth().MinHeight(0).Clip().Background(t.Surface).Label("Treemap canvas")
+		canvas := ui.Box(c.Key("space-map")).Grow(1).FillWidth().MinHeight(0).Clip().Background(t.Surface).Label(tr("Treemap canvas"))
 		if canvas.Clicked() {
 			if x, y, ok := canvas.PointerPosition(); ok {
 				if id, hit := treemap.Hit(m.diskRects, x, y); hit && id >= 0 {
@@ -1071,7 +1071,7 @@ func (m *Model) diskMap(c *ui.Context) {
 		if x, y, ok := canvas.PointerPosition(); ok {
 			if id, hit := treemap.Hit(m.diskRects, x, y); hit {
 				if id < 0 {
-					m.mapHover = "Other files (aggregated to keep rendering bounded)"
+					m.mapHover = tr("Other files (aggregated to keep rendering bounded)")
 				} else {
 					n := m.diskSnapshot.Nodes[id]
 					m.mapHover = fmt.Sprintf("%s · %s", m.diskSnapshot.FullPath(id), format.Bytes(m.diskValue(n)))
@@ -1228,14 +1228,14 @@ type extensionStat struct {
 func fileExtension(name string) string {
 	ext := strings.ToLower(filepath.Ext(name))
 	if ext == "" {
-		return "(no extension)"
+		return tr("(no extension)")
 	}
 	return ext
 }
 
 func (m *Model) extensionTable(c *ui.Context) {
 	m.pumpExtensions(c)
-	cols := []ui.TableColumn{{Title: "Extension", Width: 100}, {Title: "Files", Width: 70, Align: ui.End}, {Title: "Size", Width: 95, Align: ui.End}}
+	cols := []ui.TableColumn{{Title: tr("Extension"), Width: 100}, {Title: tr("Files"), Width: 70, Align: ui.End}, {Title: tr("Size"), Width: 95, Align: ui.End}}
 	m.extensionList.Selected = &m.extensionSelected
 	m.extensionList.Key = func(i int) any { return m.diskExtensions[i].Extension }
 	table := tableChrome(c, func() ui.Element {
@@ -1254,7 +1254,7 @@ func (m *Model) extensionTable(c *ui.Context) {
 			}
 			ui.Text(c, text).SingleLine()
 		})
-	}).Fill().Label("File types")
+	}).Fill().Label(tr("File types"))
 	if table.Changed() && m.extensionSelected >= 0 && m.extensionSelected < len(m.diskExtensions) {
 		m.extensionFilter = m.diskExtensions[m.extensionSelected].Extension
 		m.diskMode = "Files"

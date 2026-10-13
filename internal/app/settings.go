@@ -49,6 +49,9 @@ func (m *Model) loadSettings() {
 	m.tabStyle = s.TabStyle
 	m.computerLayout = s.ComputerLayout
 	m.language = s.Language
+	if m.language == "中文" { // the pre-localization placeholder
+		m.language = "简体中文"
+	}
 	m.processInterval = s.ProcessInterval
 	m.diskMetric = s.DiskMetric
 	m.memRelease = s.MemRelease
@@ -56,6 +59,7 @@ func (m *Model) loadSettings() {
 	m.trayMetric = s.TrayMetric
 	m.closeToTray = s.CloseToTray
 	m.applySampleInterval()
+	m.applyLanguage()
 }
 
 // applySampleInterval maps the saved interval label onto the sampler.

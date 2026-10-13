@@ -290,6 +290,7 @@ func (m *Model) Run() error {
 		}
 	}
 	m.loadSettings()
+	m.diskStatus = tr("Choose a drive or folder to scan")
 	mygo.App.WhenReady(func() {
 		switch m.InitialPage {
 		case "disk":
@@ -606,14 +607,14 @@ func (m *Model) view(c *ui.Context) {
 		m.diskInfoView(c)
 	}
 	if m.terminateOpen {
-		title, msg := "End process?", fmt.Sprintf("%s (PID %d). Unsaved work may be lost.", m.terminateTarget.Name, m.terminateTarget.PID)
+		title, msg := tr("End process?"), fmt.Sprintf(tr("%s (PID %d). Unsaved work may be lost."), m.terminateTarget.Name, m.terminateTarget.PID)
 		if m.terminateTree {
 			if n := m.processDescendants(m.terminateTarget.PID); n > 0 {
-				title = "End process tree?"
-				msg = fmt.Sprintf("%s (PID %d) and the %d processes under it. Unsaved work may be lost.", m.terminateTarget.Name, m.terminateTarget.PID, n)
+				title = tr("End process tree?")
+				msg = fmt.Sprintf(tr("%s (PID %d) and the %d processes under it. Unsaved work may be lost."), m.terminateTarget.Name, m.terminateTarget.PID, n)
 			}
 		}
-		choice := ui.AlertDialog(c, &m.terminateOpen, title, msg, "Cancel", "End process")
+		choice := ui.AlertDialog(c, &m.terminateOpen, title, msg, tr("Cancel"), tr("End process"))
 		if choice == 1 {
 			target, tree := m.terminateTarget, m.terminateTree
 			go func() {
@@ -622,7 +623,7 @@ func (m *Model) view(c *ui.Context) {
 					if err != nil {
 						m.status = err.Error()
 					} else {
-						m.status = "Process ended"
+						m.status = tr("Process ended")
 					}
 					m.refreshOnce()
 				})
@@ -652,29 +653,29 @@ func (m *Model) topBar(c *ui.Context, t *ui.Theme) {
 			ui.Text(c, "DumpingGround").FontSize(14).Bold().SingleLine()
 		})
 		ui.Row(c).Gap(2).Shrink(0).Children(func() {
-			m.pageTab(c, t, computerPage, "Computer")
-			m.pageTab(c, t, processPage, "Processes")
-			m.pageTab(c, t, diskPage, "Disk Usage")
-			m.pageTab(c, t, uninstallPage, "Uninstall")
-			m.pageTab(c, t, startupPage, "Startup")
+			m.pageTab(c, t, computerPage, tr("Computer"))
+			m.pageTab(c, t, processPage, tr("Processes"))
+			m.pageTab(c, t, diskPage, tr("Disk Usage"))
+			m.pageTab(c, t, uninstallPage, tr("Uninstall"))
+			m.pageTab(c, t, startupPage, tr("Startup"))
 		})
 		ui.Spacer(c)
 		switch m.page {
 		case processPage:
-			if ui.SearchField(c, &m.processQuery).Label("Search processes").Placeholder("Name, PID or path").Width(190).Changed() {
+			if ui.SearchField(c, &m.processQuery).Label(tr("Search processes")).Placeholder(tr("Name, PID or path")).Width(190).Changed() {
 				m.dirtyProcesses = true
 			}
 		case diskPage:
-			ui.SearchField(c, &m.diskQuery).Label("Filter files").Placeholder("Filter files").Width(190).Disabled(m.diskSnapshot == nil)
+			ui.SearchField(c, &m.diskQuery).Label(tr("Filter files")).Placeholder(tr("Filter files")).Width(190).Disabled(m.diskSnapshot == nil)
 		case uninstallPage:
-			ui.SearchField(c, &m.uninstQuery).Label("Filter apps").Placeholder("Filter apps").Width(190)
+			ui.SearchField(c, &m.uninstQuery).Label(tr("Filter apps")).Placeholder(tr("Filter apps")).Width(190)
 		case startupPage:
-			ui.SearchField(c, &m.st.query).Label("Filter startup items").Placeholder("Name, publisher or command").Width(190)
+			ui.SearchField(c, &m.st.query).Label(tr("Filter startup items")).Placeholder(tr("Name, publisher or command")).Width(190)
 		default:
-			ui.SearchField(c, &m.reservedQuery).Label("Search").Placeholder("Not available on this page").Width(190).Disabled(true)
+			ui.SearchField(c, &m.reservedQuery).Label(tr("Search")).Placeholder(tr("Not available on this page")).Width(190).Disabled(true)
 		}
 		dark := t.Dark
-		th := m.iconButton(c, map[bool]string{true: "sun", false: "moon"}[dark], map[bool]string{true: "Switch to light theme", false: "Switch to dark theme"}[dark])
+		th := m.iconButton(c, map[bool]string{true: "sun", false: "moon"}[dark], map[bool]string{true: tr("Switch to light theme"), false: tr("Switch to dark theme")}[dark])
 		if th.Clicked() {
 			if dark {
 				m.themeMode = 1
@@ -683,7 +684,7 @@ func (m *Model) topBar(c *ui.Context, t *ui.Theme) {
 			}
 			m.saveSettings()
 		}
-		if m.iconButton(c, "gear", "Settings").Clicked() {
+		if m.iconButton(c, "gear", tr("Settings")).Clicked() {
 			m.settingsOpen = true
 		}
 	})
@@ -786,17 +787,17 @@ func (m *Model) refreshVolumes() {
 // discoverable. Both end actions stay visible — no dropdown.
 func (m *Model) selActs(c *ui.Context, t *ui.Theme) {
 	selected, ok := m.selectedProcess()
-	if m.pactButton(c, "folder", "Open location").Disabled(!ok || selected.Path == "").Clicked() {
+	if m.pactButton(c, "folder", tr("Open location")).Disabled(!ok || selected.Path == "").Clicked() {
 		mygo.Shell.ShowItemInFolder(selected.Path)
 	}
-	if m.pactButton(c, "copy", "Copy path").Disabled(!ok || selected.Path == "").Clicked() {
+	if m.pactButton(c, "copy", tr("Copy path")).Disabled(!ok || selected.Path == "").Clicked() {
 		mygo.Clipboard.WriteText(selected.Path)
 	}
 	det := "chup"
 	if m.showDetails {
 		det = "down"
 	}
-	if m.iconTextButton(c, det, "Details").Clicked() {
+	if m.iconTextButton(c, det, tr("Details")).Clicked() {
 		m.showDetails = !m.showDetails
 	}
 }
@@ -806,23 +807,23 @@ func (m *Model) selActs(c *ui.Context, t *ui.Theme) {
 func (m *Model) selKillActs(c *ui.Context, t *ui.Theme) {
 	selected, ok := m.selectedProcess()
 	exited := ok && selected.Access == "Exited"
-	killTip := "End process"
+	killTip := tr("End process")
 	switch {
 	case !ok:
-		killTip = "Select a process first"
+		killTip = tr("Select a process first")
 	case exited:
-		killTip = "Process already exited"
+		killTip = tr("Process already exited")
 	}
-	if m.dangerButton(c, "x", "End process").Disabled(!ok || selected.PID <= 4 || exited).Tooltip(killTip).Clicked() {
+	if m.dangerButton(c, "x", tr("End process")).Disabled(!ok || selected.PID <= 4 || exited).Tooltip(killTip).Clicked() {
 		m.terminateTarget, m.terminateTree, m.terminateOpen = selected, false, true
 	}
-	treeTip := "End the process and all its descendants"
+	treeTip := tr("End the process and all its descendants")
 	if !ok {
 		treeTip = killTip
 	} else if exited {
 		treeTip = killTip
 	}
-	if m.dangerButton(c, "x", "End process tree").Disabled(!ok || selected.PID <= 4 || exited).Tooltip(treeTip).Clicked() {
+	if m.dangerButton(c, "x", tr("End process tree")).Disabled(!ok || selected.PID <= 4 || exited).Tooltip(treeTip).Clicked() {
 		m.terminateTarget, m.terminateTree, m.terminateOpen = selected, true, true
 	}
 }
@@ -949,65 +950,65 @@ func (m *Model) statusBar(c *ui.Context, t *ui.Theme) {
 	bar := ui.Row(c).FillWidth().Height(26).Shrink(0).PaddingX(12).Gap(12).AlignItems(ui.Center).Background(t.Surface)
 	bar.Draw(func(p *ui.Painter, r ui.Rect) { p.Fill(ui.Rect{X: r.X, Y: r.Y, W: r.W, H: 1}, t.Border, 0) })
 	bar.Children(func() {
-		text := m.status
+		text := tr(m.status)
 		switch m.page {
 		case diskPage:
 			// Once a snapshot exists its numbers live in the view bar; the
 			// status bar only carries idle, scanning and error states.
 			if m.diskSnapshot == nil {
-				text = m.diskStatus
+				text = tr(m.diskStatus)
 			}
 		case computerPage:
-			text = "Live · sampled every second"
+			text = tr("Live · sampled every second")
 		case startupPage:
-			text = m.st.msg
+			text = tr(m.st.msg)
 			if m.st.loading && m.st.msg == "" {
-				text = "Reading startup items…"
+				text = tr("Reading startup items…")
 			}
 		case uninstallPage:
-			text = "Reserved"
+			text = tr("Reserved")
 		}
 		if text == "" {
-			text = "Ready"
+			text = tr("Ready")
 		}
 		st := ui.Text(c, text).SingleLine().MinWidth(0).TextColor(t.TextMuted)
 		if m.page == diskPage && m.diskLive {
-			st.Tooltip("live: the index updates itself through the NTFS change journal — file changes appear as they happen, without rescanning. Click the ⓘ icon for details.")
+			st.Tooltip(tr("live: the index updates itself through the NTFS change journal — file changes appear as they happen, without rescanning. Click the ⓘ icon for details."))
 		}
 		if elevate.SelfElevated() {
-			ui.Text(c, "⛨ admin").FontSize(11).TextColor(t.Warning).Tooltip("running with administrator rights — every operation succeeds without asking")
+			ui.Text(c, tr("⛨ admin")).FontSize(11).TextColor(t.Warning).Tooltip(tr("running with administrator rights — every operation succeeds without asking"))
 		} else if elevate.Active() {
-			ui.Text(c, "⛨ admin").FontSize(11).TextColor(t.Warning).Tooltip("an elevated worker is answering privileged requests for this session — spawned after the UAC prompt, exits with the app or after 10 idle minutes")
+			ui.Text(c, tr("⛨ admin")).FontSize(11).TextColor(t.Warning).Tooltip(tr("an elevated worker is answering privileged requests for this session — spawned after the UAC prompt, exits with the app or after 10 idle minutes"))
 		} else if elevate.ConsentDenied() {
-			d := ui.Row(c).AlignItems(ui.Center).PaddingX(4).Radius(3).Tooltip("admin consent was declined — privileged operations fall back this session. Click to allow the UAC prompt again")
-			d.Children(func() { ui.Text(c, "⛨ denied").FontSize(11).TextColor(t.TextMuted) })
+			d := ui.Row(c).AlignItems(ui.Center).PaddingX(4).Radius(3).Tooltip(tr("admin consent was declined — privileged operations fall back this session. Click to allow the UAC prompt again"))
+			d.Children(func() { ui.Text(c, tr("⛨ denied")).FontSize(11).TextColor(t.TextMuted) })
 			if d.Clicked() {
 				elevate.ResetConsent()
-				m.status = "Admin consent reset — the next privileged operation asks again"
+				m.status = tr("Admin consent reset — the next privileged operation asks again")
 			}
 		}
-		m.statMeter(c, t, "cpu", "CPU", fmt.Sprintf("%.0f%%", m.sys.cpu), m.sys.cpu, fmt.Sprintf("Total CPU usage %.0f%%", m.sys.cpu))
-		m.statMeter(c, t, "mem", "MEM", fmt.Sprintf("%d%%", m.sys.memLoad), float64(m.sys.memLoad), fmt.Sprintf("Memory %.1f of %.1f GB used (%d%%)", float64(m.sys.memUsed)/1073741824, float64(m.sys.memTotal)/1073741824, m.sys.memLoad))
+		m.statMeter(c, t, "cpu", "CPU", fmt.Sprintf("%.0f%%", m.sys.cpu), m.sys.cpu, fmt.Sprintf(tr("Total CPU usage %.0f%%"), m.sys.cpu))
+		m.statMeter(c, t, "mem", "MEM", fmt.Sprintf("%d%%", m.sys.memLoad), float64(m.sys.memLoad), fmt.Sprintf(tr("Memory %.1f of %.1f GB used (%d%%)"), float64(m.sys.memUsed)/1073741824, float64(m.sys.memTotal)/1073741824, m.sys.memLoad))
 		var rd, wr uint64
 		for _, r := range m.processRows {
 			rd += r.ReadRate
 			wr += r.WriteRate
 		}
-		m.rateMeter(c, t, "hdd", "I/O", fmt.Sprintf("Process disk I/O  read %s  ·  write %s", format.Rate(rd), format.Rate(wr)), rd, wr)
-		m.rateMeter(c, t, "net", "NET", fmt.Sprintf("Network  down %s  ·  up %s", format.Rate(m.sys.netInRate), format.Rate(m.sys.netOutRate)), m.sys.netInRate, m.sys.netOutRate)
+		m.rateMeter(c, t, "hdd", "I/O", fmt.Sprintf(tr("Process disk I/O  read %s  ·  write %s"), format.Rate(rd), format.Rate(wr)), rd, wr)
+		m.rateMeter(c, t, "net", "NET", fmt.Sprintf(tr("Network  down %s  ·  up %s"), format.Rate(m.sys.netInRate), format.Rate(m.sys.netOutRate)), m.sys.netInRate, m.sys.netOutRate)
 		ui.Spacer(c)
-		hint := "F5 refresh · Ctrl+1–5 pages"
+		hint := tr("F5 refresh · Ctrl+1–5 pages")
 		switch {
 		case m.page == diskPage:
-			hint = "F5 scan · Backspace up · Ctrl+1–5 pages"
+			hint = tr("F5 scan · Backspace up · Ctrl+1–5 pages")
 		case m.page == computerPage && m.hw.detail != "":
-			hint = "Esc back · Ctrl+1–5 pages"
+			hint = tr("Esc back · Ctrl+1–5 pages")
 		case m.page == computerPage:
-			hint = "Click a card for details · Ctrl+1–5 pages"
+			hint = tr("Click a card for details · Ctrl+1–5 pages")
 		}
 		ui.Text(c, hint).FontSize(11).TextColor(t.TextMuted).Shrink(0)
 		if m.page == diskPage {
-			info := ui.Row(c).Size(20, 20).Center().Radius(4).Label("About scan terms").Tooltip("What skipped, estimates and live mean — click for details")
+			info := ui.Row(c).Size(20, 20).Center().Radius(4).Label(tr("About scan terms")).Tooltip(tr("What skipped, estimates and live mean — click for details"))
 			info.Draw(func(p *ui.Painter, r ui.Rect) {
 				if info.Hovered() {
 					p.Fill(r, t.SurfaceHover, 4)
@@ -1027,17 +1028,17 @@ func (m *Model) statusBar(c *ui.Context, t *ui.Theme) {
 func (m *Model) diskInfoView(c *ui.Context) {
 	ui.Modal(c, &m.diskInfoOpen, func() {
 		ui.Column(c).Width(430).Padding(6, 16, 14, 16).Gap(10).Children(func() {
-			ui.Text(c, "About the Scan Numbers").Bold().FontSize(16)
+			ui.Text(c, tr("About the Scan Numbers")).Bold().FontSize(16)
 			if s := m.diskSnapshot; s != nil && s.Skipped > 0 {
 				other := s.Skipped - s.Reparse - s.Offline - s.Unlinked
-				body := fmt.Sprintf("This scan: %s total\n• %s links — junctions and symlinks (reparse points), skipped by design so nothing counts twice\n• %s cloud placeholders — offline stubs whose data is not on this disk\n• %s orphaned names — records whose parent was deleted or reused: deleted entries still sitting in the MFT\n• %s unreadable — corrupt records, denied folders, items deleted mid-scan",
+				body := fmt.Sprintf(tr("This scan: %s total\n• %s links — junctions and symlinks (reparse points), skipped by design so nothing counts twice\n• %s cloud placeholders — offline stubs whose data is not on this disk\n• %s orphaned names — records whose parent was deleted or reused: deleted entries still sitting in the MFT\n• %s unreadable — corrupt records, denied folders, items deleted mid-scan"),
 					format.Int(s.Skipped), format.Int(s.Reparse), format.Int(s.Offline), format.Int(s.Unlinked), format.Int(other))
-				m.diskInfoItem(c, "What Was Skipped", body)
+				m.diskInfoItem(c, tr("What Was Skipped"), body)
 			}
-			m.diskInfoItem(c, "What Does \"Skipped\" Mean", "Entries the scan saw but did not count: access-denied folders, reparse points (junctions and links, skipped on purpose so nothing counts twice), cloud placeholders whose data is not on this disk, items deleted mid-scan, and records without a usable name. Skipped entries are simply absent — the totals you see only cover what could be read.")
-			m.diskInfoItem(c, "Can They Be Scanned?", "Access-denied items mostly can: run DumpingGround as administrator and scan again. Cloud placeholders cannot — their content lives in the cloud, not on the disk. Reparse points stay skipped by design; scan their target folder instead.")
-			m.diskInfoItem(c, "Estimates", "Files that were indexed but whose on-disk size had to be guessed, because no data attribute could be read. Their size is rounded up to a cluster.")
-			m.diskInfoItem(c, "Live Index", "The index keeps itself current through the NTFS change journal: new, renamed, resized and deleted files update the numbers as they happen — no rescan needed. Live mode needs administrator rights; if the journal wraps under heavy churn the status line says \"Live index lost\" and a rescan restores it.")
+			m.diskInfoItem(c, tr("What Does \"Skipped\" Mean"), tr("Entries the scan saw but did not count: access-denied folders, reparse points (junctions and links, skipped on purpose so nothing counts twice), cloud placeholders whose data is not on this disk, items deleted mid-scan, and records without a usable name. Skipped entries are simply absent — the totals you see only cover what could be read."))
+			m.diskInfoItem(c, tr("Can They Be Scanned?"), tr("Access-denied items mostly can: run DumpingGround as administrator and scan again. Cloud placeholders cannot — their content lives in the cloud, not on the disk. Reparse points stay skipped by design; scan their target folder instead."))
+			m.diskInfoItem(c, tr("Estimates"), tr("Files that were indexed but whose on-disk size had to be guessed, because no data attribute could be read. Their size is rounded up to a cluster."))
+			m.diskInfoItem(c, tr("Live Index"), tr("The index keeps itself current through the NTFS change journal: new, renamed, resized and deleted files update the numbers as they happen — no rescan needed. Live mode needs administrator rights; if the journal wraps under heavy churn the status line says \"Live index lost\" and a rescan restores it."))
 		})
 	})
 }
@@ -1060,7 +1061,7 @@ func (m *Model) reservedView(c *ui.Context, glyphName, title, desc string) {
 		}).Draw(func(p *ui.Painter, r ui.Rect) { p.Stroke(r, t.Border, 14, 1) })
 		ui.Text(c, title).FontSize(15).Bold().PaddingY(4)
 		ui.Row(c).Padding(1, 8).Radius(10).Background(t.Surface).Children(func() {
-			ui.Text(c, "Reserved · planned").FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, tr("Reserved · planned")).FontSize(11).TextColor(t.TextMuted)
 		}).Draw(func(p *ui.Painter, r ui.Rect) { p.Stroke(r, t.Border, 10, 1) })
 		ui.Text(c, desc).Width(420).TextAlign(ui.Center).PaddingY(8).TextColor(t.TextMuted)
 		ui.Spacer(c)

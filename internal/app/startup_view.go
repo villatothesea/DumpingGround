@@ -91,17 +91,17 @@ func (m *Model) startupRows() (rows []*startup.Item, counts [4]int, hidden int) 
 	slices.SortStableFunc(rows, func(a, b *startup.Item) int {
 		var c int
 		switch st.sort.Column {
-		case "Name":
+		case "name":
 			c = cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
-		case "Publisher":
+		case "publisher":
 			c = cmp.Compare(strings.ToLower(a.Publisher), strings.ToLower(b.Publisher))
-		case "Status":
+		case "status":
 			c = cmp.Compare(startupStatusRank(a), startupStatusRank(b))
-		case "Command":
+		case "command":
 			c = cmp.Compare(strings.ToLower(a.Command), strings.ToLower(b.Command))
-		case "Starts":
+		case "starts":
 			c = cmp.Compare(startupStartsLabel(a), startupStartsLabel(b))
-		default: // "Type": apps, services, tasks — switched-on items first within each
+		default: // "category": apps, services, tasks — switched-on items first within each
 			c = cmp.Or(cmp.Compare(startupKindRank(a), startupKindRank(b)), cmp.Compare(b2i(!a.Enabled), b2i(!b.Enabled)))
 		}
 		if c == 0 {
@@ -143,11 +143,11 @@ func startupStatusRank(it *startup.Item) int {
 func startupStartsLabel(it *startup.Item) string {
 	switch it.Kind {
 	case startup.KindService, startup.KindTask:
-		return it.Trigger
+		return tr(it.Trigger)
 	case startup.KindFolder:
-		return "Startup folder · " + it.Scope
+		return tr("Startup folder") + " · " + tr(it.Scope)
 	}
-	return "Run key · " + it.Scope
+	return tr("Run key") + " · " + tr(it.Scope)
 }
 
 // startupCategory is the Category column: what kind of thing this is.
@@ -156,11 +156,11 @@ func startupStartsLabel(it *startup.Item) string {
 func startupCategory(it *startup.Item) string {
 	switch it.Kind {
 	case startup.KindService:
-		return "Service"
+		return tr("Service")
 	case startup.KindTask:
-		return "Task"
+		return tr("Task")
 	}
-	return "App"
+	return tr("App")
 }
 
 func (m *Model) startupView(c *ui.Context, t *ui.Theme) {
@@ -169,7 +169,7 @@ func (m *Model) startupView(c *ui.Context, t *ui.Theme) {
 		m.reloadStartup()
 	}
 	if st.sort.Column == "" {
-		st.sort = ui.SortOrder{Column: "Category"}
+		st.sort = ui.SortOrder{Column: "category"}
 		st.list.Sort = &st.sort
 	}
 	rows, counts, hidden := m.startupRows()
@@ -177,11 +177,11 @@ func (m *Model) startupView(c *ui.Context, t *ui.Theme) {
 		m.startupToolbar(c, t, rows, counts, hidden)
 		switch {
 		case !st.loaded:
-			ui.Text(c, "Reading startup items…").TextColor(t.TextMuted)
+			ui.Text(c, tr("Reading startup items…")).TextColor(t.TextMuted)
 		case len(rows) == 0:
-			msg := "Nothing starts from here."
+			msg := tr("Nothing starts from here.")
 			if st.query != "" {
-				msg = "No startup item matches this filter."
+				msg = tr("No startup item matches this filter.")
 			}
 			ui.Text(c, msg).TextColor(t.TextMuted)
 		default:
@@ -204,27 +204,27 @@ func (m *Model) startupToolbar(c *ui.Context, t *ui.Theme, rows []*startup.Item,
 				off++
 			}
 		}
-		head := "Startup"
+		head := tr("Startup")
 		if st.loaded {
-			head = fmt.Sprintf("Startup — %d on · %d off", on, off)
+			head = fmt.Sprintf(tr("Startup — %d on · %d off"), on, off)
 		}
 		ui.Text(c, head).Bold().Shrink(0)
 		if st.loading {
-			ui.Text(c, "reading…").FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, tr("reading…")).FontSize(11).TextColor(t.TextMuted)
 		}
 		ui.Spacer(c)
 		sel := slices.Index(startupFilters, cmp.Or(st.filter, "All"))
 		labels := make([]string, len(startupFilters))
 		for i, f := range startupFilters {
-			labels[i] = fmt.Sprintf("%s %d", f, counts[i])
+			labels[i] = fmt.Sprintf("%s %d", tr(f), counts[i])
 		}
-		m.segPair(c, t, "Startup source", labels, max(sel, 0), func(i int) { st.filter = startupFilters[i] })
-		label := "Windows components"
+		m.segPair(c, t, tr("Startup source"), labels, max(sel, 0), func(i int) { st.filter = startupFilters[i] })
+		label := tr("Windows components")
 		if hidden > 0 && !st.showWindows {
-			label = fmt.Sprintf("Windows components (+%d)", hidden)
+			label = fmt.Sprintf(tr("Windows components (+%d)"), hidden)
 		}
-		ui.Checkbox(c, &st.showWindows, label).Tooltip("Windows' own services and tasks. They are listed read-only — Windows manages them.")
-		if m.iconButton(c, "refresh", "Re-read startup items (F5)").Clicked() {
+		ui.Checkbox(c, &st.showWindows, label).Tooltip(tr("Windows' own services and tasks. They are listed read-only — Windows manages them."))
+		if m.iconButton(c, "refresh", tr("Re-read startup items (F5)")).Clicked() {
 			m.reloadStartup()
 		}
 	})
@@ -238,12 +238,12 @@ func (m *Model) startupTable(c *ui.Context, t *ui.Theme, rows []*startup.Item) {
 	st.list.Selected = &st.selected
 	cols := []ui.TableColumn{
 		{Title: "", ID: "switch", Width: 64, Fixed: true},
-		{Title: "Name", Sortable: true, MinWidth: 160},
-		{Title: "Category", Width: 86, MinWidth: 60, Sortable: true},
-		{Title: "Publisher", Width: 190, MinWidth: 60, Sortable: true},
-		{Title: "Starts", Width: 170, MinWidth: 60, Sortable: true},
-		{Title: "Status", Width: 150, MinWidth: 60, Sortable: true},
-		{Title: "Command", MinWidth: 220, Sortable: true},
+		{Title: tr("Name"), ID: "name", Sortable: true, MinWidth: 160},
+		{Title: tr("Category"), ID: "category", Width: 86, MinWidth: 60, Sortable: true},
+		{Title: tr("Publisher"), ID: "publisher", Width: 190, MinWidth: 60, Sortable: true},
+		{Title: tr("Starts"), ID: "starts", Width: 170, MinWidth: 60, Sortable: true},
+		{Title: tr("Status"), ID: "status", Width: 150, MinWidth: 60, Sortable: true},
+		{Title: tr("Command"), ID: "command", MinWidth: 220, Sortable: true},
 	}
 	tbl := tableChrome(c, func() ui.Element {
 		return ui.Table(c, &st.list, cols, len(rows), func(row, col int) {
@@ -273,14 +273,14 @@ func (m *Model) startupTable(c *ui.Context, t *ui.Theme, rows []*startup.Item) {
 					}
 					ui.Text(c, it.Name).SingleLine().TextColor(text).Tooltip(it.Name)
 					if it.Locked != "" {
-						icon(c, "lock", 11).TextColor(muted).Tooltip(it.Locked)
+						icon(c, "lock", 11).TextColor(muted).Tooltip(tr(it.Locked))
 					}
 				case 2:
 					ui.Text(c, startupCategory(it)).TextColor(muted).SingleLine()
 				case 3:
 					ui.Text(c, it.Publisher).TextColor(muted).SingleLine().Tooltip(it.Publisher)
 				case 4:
-					ui.Text(c, startupStartsLabel(it)).TextColor(muted).SingleLine().Tooltip(it.Location)
+					ui.Text(c, startupStartsLabel(it)).TextColor(muted).SingleLine().Tooltip(trStartLocation(it.Location))
 				case 5:
 					m.startupStatus(c, t, it, muted)
 				default:
@@ -339,9 +339,9 @@ func (m *Model) startupSwitch(c *ui.Context, t *ui.Theme, it *startup.Item, sele
 	default:
 		sw = sw.Cursor(ui.CursorPointer)
 		if on {
-			sw = sw.Tooltip("Starts with Windows — switch off to stop it")
+			sw = sw.Tooltip(tr("Starts with Windows — switch off to stop it"))
 		} else {
-			sw = sw.Tooltip("Does not start — switch on to start it again")
+			sw = sw.Tooltip(tr("Does not start — switch on to start it again"))
 		}
 	}
 	if sw.Clicked() && !disabled {
@@ -352,14 +352,14 @@ func (m *Model) startupSwitch(c *ui.Context, t *ui.Theme, it *startup.Item, sele
 func (m *Model) startupStatus(c *ui.Context, t *ui.Theme, it *startup.Item, muted ui.Color) {
 	switch {
 	case it.Running && !it.Enabled:
-		ui.Text(c, "Running until restart").TextColor(t.Warning).SingleLine()
+		ui.Text(c, tr("Running until restart")).TextColor(t.Warning).SingleLine()
 	case it.Running:
 		ui.Box(c).Size(7, 7).Radius(4).Background(t.Success).Shrink(0)
-		ui.Text(c, "Running").TextColor(muted).SingleLine()
+		ui.Text(c, tr("Running")).TextColor(muted).SingleLine()
 	case !it.Enabled:
-		ui.Text(c, "Off").TextColor(muted).SingleLine()
+		ui.Text(c, tr("Off")).TextColor(muted).SingleLine()
 	default:
-		ui.Text(c, "Not running").TextColor(muted).SingleLine()
+		ui.Text(c, tr("Not running")).TextColor(muted).SingleLine()
 	}
 }
 
@@ -393,13 +393,13 @@ func (m *Model) applyStartup(it startup.Item, on bool) {
 			st.busy = ""
 			switch {
 			case err != nil:
-				st.msg = fmt.Sprintf("Could not switch %q: %v", it.Name, err)
+				st.msg = fmt.Sprintf(tr("Could not switch %q: %v"), it.Name, err)
 			case on:
-				st.msg = fmt.Sprintf("%q will start with Windows again", it.Name)
+				st.msg = fmt.Sprintf(tr("%q will start with Windows again"), it.Name)
 			case it.Kind == startup.KindService:
-				st.msg = fmt.Sprintf("%q will not start at the next boot — it keeps running until then", it.Name)
+				st.msg = fmt.Sprintf(tr("%q will not start at the next boot — it keeps running until then"), it.Name)
 			default:
-				st.msg = fmt.Sprintf("%q will not start at the next sign-in", it.Name)
+				st.msg = fmt.Sprintf(tr("%q will not start at the next sign-in"), it.Name)
 			}
 			m.reloadStartup()
 		})
@@ -413,8 +413,8 @@ func (m *Model) startupConfirm(c *ui.Context) {
 		return
 	}
 	it := st.confirmItem
-	msg := fmt.Sprintf("%s (%s) will be set to Disabled and will not start at the next boot. Programs that depend on it may stop working. The current setting is remembered, so switching it back on restores it exactly.", it.Name, strings.TrimPrefix(it.Location, "Service "))
-	if choice := ui.AlertDialog(c, &st.confirm, "Turn off this service?", msg, "Cancel", "Turn off"); choice == 1 {
+	msg := fmt.Sprintf(tr("%s (%s) will be set to Disabled and will not start at the next boot. Programs that depend on it may stop working. The current setting is remembered, so switching it back on restores it exactly."), it.Name, strings.TrimPrefix(it.Location, "Service "))
+	if choice := ui.AlertDialog(c, &st.confirm, tr("Turn off this service?"), msg, tr("Cancel"), tr("Turn off")); choice == 1 {
 		m.applyStartup(it, false)
 	}
 }
@@ -433,7 +433,7 @@ func (m *Model) startupDetail(c *ui.Context, t *ui.Theme, rows []*startup.Item) 
 	panel.BorderWidth(1).BorderColor(t.Border)
 	panel.Children(func() {
 		if it == nil {
-			msg := "Select an item to see where it starts from and what switching it does."
+			msg := tr("Select an item to see where it starts from and what switching it does.")
 			if st.msg != "" {
 				msg = st.msg
 			}
@@ -448,8 +448,8 @@ func (m *Model) startupDetail(c *ui.Context, t *ui.Theme, rows []*startup.Item) 
 			ui.Text(c, it.Name).Bold().SingleLine().Shrink(0)
 			ui.Text(c, who).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…").MinWidth(0)
 		})
-		m.startupKV(c, t, "Starts from", it.Location+"  ·  "+it.Scope)
-		m.startupKV(c, t, "Runs", it.Command)
+		m.startupKV(c, t, tr("Starts from"), trStartLocation(it.Location)+"  ·  "+tr(it.Scope))
+		m.startupKV(c, t, tr("Runs"), it.Command)
 		note := startupConsequence(it)
 		ui.Text(c, note).FontSize(11).TextColor(t.TextMuted).MaxLines(2)
 		if st.msg != "" {
@@ -470,25 +470,25 @@ func (m *Model) startupKV(c *ui.Context, t *ui.Theme, k, v string) {
 func startupConsequence(it *startup.Item) string {
 	switch {
 	case it.Locked != "":
-		return it.Locked + ". Use Services or Task Scheduler if you really need to change it."
+		return tr(it.Locked) + tr(". Use Services or Task Scheduler if you really need to change it.")
 	case it.Kind == startup.KindService && it.Enabled:
-		return "Turning it off sets the service to Disabled for the next boot. Anything that depends on it may stop working. The original setting is remembered and restored when you switch it back on."
+		return tr("Turning it off sets the service to Disabled for the next boot. Anything that depends on it may stop working. The original setting is remembered and restored when you switch it back on.")
 	case it.Kind == startup.KindService:
-		return "Disabled. Switching it on restores the start type it had before (automatic, possibly delayed)."
+		return tr("Disabled. Switching it on restores the start type it had before (automatic, possibly delayed).")
 	case it.Kind == startup.KindTask && it.Enabled:
-		return "Turning it off disables the scheduled task. The task and its settings stay in Task Scheduler."
+		return tr("Turning it off disables the scheduled task. The task and its settings stay in Task Scheduler.")
 	case it.Kind == startup.KindTask:
-		return "The task is disabled. Switching it on enables it in Task Scheduler again."
+		return tr("The task is disabled. Switching it on enables it in Task Scheduler again.")
 	case it.Enabled:
-		return "Turning it off stops it from starting at sign-in. Nothing is deleted — the entry stays where it is and you can switch it back on."
+		return tr("Turning it off stops it from starting at sign-in. Nothing is deleted — the entry stays where it is and you can switch it back on.")
 	}
-	return "Switched off — the entry is still there, Windows just skips it at sign-in."
+	return tr("Switched off — the entry is still there, Windows just skips it at sign-in.")
 }
 
 func (m *Model) startupMenu(c *ui.Context, menu *ui.Menu, it *startup.Item) {
-	label := "Turn off"
+	label := tr("Turn off")
 	if !it.Enabled {
-		label = "Turn on"
+		label = tr("Turn on")
 	}
 	if menu.Item(label).Disabled(it.Locked != "" || m.st.busy != "").Chosen() {
 		m.startupToggle(*it, !it.Enabled)
@@ -498,17 +498,17 @@ func (m *Model) startupMenu(c *ui.Context, menu *ui.Menu, it *startup.Item) {
 	if it.Kind == startup.KindFolder {
 		where = it.Location
 	}
-	if menu.Item("Open file location").Disabled(where == "" || m.window == nil).Chosen() {
+	if menu.Item(tr("Open file location")).Disabled(where == "" || m.window == nil).Chosen() {
 		mygo.Shell.ShowItemInFolder(filepath.Clean(where))
 	}
-	if menu.Item("Copy command").Chosen() {
+	if menu.Item(tr("Copy command")).Chosen() {
 		c.WriteClipboard(it.Command)
 	}
-	if menu.Item("Copy details").Chosen() {
-		c.WriteClipboard(fmt.Sprintf("%s — %s\n%s · %s\nStarts from: %s (%s)\nRuns: %s", it.Name, it.Publisher, startupCategory(it), startupStartsLabel(it), it.Location, it.Scope, it.Command))
+	if menu.Item(tr("Copy details")).Chosen() {
+		c.WriteClipboard(fmt.Sprintf(tr("%s — %s\n%s · %s\nStarts from: %s (%s)\nRuns: %s"), it.Name, it.Publisher, startupCategory(it), startupStartsLabel(it), it.Location, it.Scope, it.Command))
 	}
 	menu.Separator()
-	if menu.Item("Open in Registry Editor").Disabled(it.Kind != startup.KindRun && it.Kind != startup.KindService).Chosen() {
+	if menu.Item(tr("Open in Registry Editor")).Disabled(it.Kind != startup.KindRun && it.Kind != startup.KindService).Chosen() {
 		if err := startup.OpenInRegedit(*it); err != nil {
 			m.st.msg = "regedit: " + err.Error()
 		}

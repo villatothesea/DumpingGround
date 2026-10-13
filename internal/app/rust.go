@@ -282,11 +282,11 @@ func (m *Model) rustRows() []rustRow {
 		if n == 0 {
 			continue
 		}
-		label := "items"
+		label := tr("items")
 		if n == 1 {
-			label = "item"
+			label = tr("item")
 		}
-		grouped = append(grouped, rustRow{head: fmt.Sprintf("%s — %s %s · %s",
+		grouped = append(grouped, rustRow{head: fmt.Sprintf(tr("%s — %s %s · %s"),
 			rustRiskLabel(risk), format.Int(uint64(n)), label, format.Bytes(bytes)), cat: -1, risk: risk})
 		if m.rustCollapsed[risk] {
 			continue
@@ -310,7 +310,7 @@ func (m *Model) rustDelete(jobs []disk.RustDir) {
 		return
 	}
 	m.rustBusy = true
-	m.rustMsg = "Deleting…"
+	m.rustMsg = tr("Deleting…")
 	m.rustRmDone, m.rustRmTotal, m.rustRmPath = 0, len(jobs), ""
 	recycle := m.rustRecycle
 	go func() {
@@ -367,12 +367,12 @@ func (m *Model) rustDelete(jobs []disk.RustDir) {
 			m.rustBusy = false
 			m.rustConfirm = -1
 			m.rustRowConfirm = ""
-			m.rustMsg = fmt.Sprintf("Deleted %s items, freed about %s", format.Int(uint64(len(deleted))), format.Bytes(freed))
+			m.rustMsg = fmt.Sprintf(tr("Deleted %s items, freed about %s"), format.Int(uint64(len(deleted))), format.Bytes(freed))
 			if unbinned > 0 {
-				m.rustMsg += fmt.Sprintf(" · %s could not be recycled and were left in place", format.Int(uint64(unbinned)))
+				m.rustMsg += fmt.Sprintf(tr(" · %s could not be recycled and were left in place"), format.Int(uint64(unbinned)))
 			}
 			if failed > 0 && firstErr != nil {
-				m.rustMsg += fmt.Sprintf(" · %s failed: %s", format.Int(uint64(failed)), firstErr)
+				m.rustMsg += fmt.Sprintf(tr(" · %s failed: %s"), format.Int(uint64(failed)), firstErr)
 			}
 			if m.rustReport != nil {
 				m.rustReport.ApplyDeleted(deleted)
@@ -387,7 +387,7 @@ func (m *Model) rustDelete(jobs []disk.RustDir) {
 // rustButton is the toolbar's Rust-artifact scan trigger: icon-only, white
 // glyph on the Rust brand orange.
 func (m *Model) rustButton(c *ui.Context, off bool) ui.Element {
-	e := ui.Row(c).Size(34, 28).Radius(6).Center().Tooltip("Find Cargo target/ dirs and clean them by tier").Label("Rust scan")
+	e := ui.Row(c).Size(34, 28).Radius(6).Center().Tooltip(tr("Find Cargo target/ dirs and clean them by tier")).Label(tr("Rust scan"))
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
 		fill := rustOrange
 		switch {
@@ -416,18 +416,18 @@ func (m *Model) rustAnalyzingView(c *ui.Context, t *ui.Theme) {
 		card.Children(func() {
 			ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
 				icon(c, "rust", 18)
-				ui.Text(c, "Analyzing Rust build artifacts").FontSize(14).Bold()
+				ui.Text(c, tr("Analyzing Rust build artifacts")).FontSize(14).Bold()
 			})
-			frac, detail := -1.0, "Walking the index…"
+			frac, detail := -1.0, tr("Walking the index…")
 			switch m.rustAnStage {
 			case disk.RustStageIndex:
-				detail = fmt.Sprintf("%s nodes · %s targets found",
+				detail = fmt.Sprintf(tr("%s nodes · %s targets found"),
 					format.Int(uint64(m.rustAnVis)), format.Int(uint64(m.rustAnFound)))
 				if m.diskSnapshot != nil && len(m.diskSnapshot.Nodes) > 0 {
 					frac = float64(m.rustAnVis) / float64(len(m.diskSnapshot.Nodes))
 				}
 			case disk.RustStageCaches:
-				detail = fmt.Sprintf("%s targets · measuring Cargo caches & toolchains…",
+				detail = fmt.Sprintf(tr("%s targets · measuring Cargo caches & toolchains…"),
 					format.Int(uint64(m.rustAnFound)))
 			}
 			ui.Text(c, detail).FontSize(11).TextColor(t.TextMuted).SingleLine()
@@ -463,18 +463,18 @@ func rustRiskColor(t *ui.Theme, risk int) ui.Color {
 }
 
 func rustRiskLabel(risk int) string {
-	return []string{"SAFE", "MODERATE", "CAREFUL", "REVIEW"}[risk]
+	return tr([]string{"SAFE", "MODERATE", "CAREFUL", "REVIEW"}[risk])
 }
 
 // rustRiskNote is the group header's explanation — what membership means
 // and what deleting costs.
 func rustRiskNote(risk int) string {
-	return []string{
+	return tr([]string{
 		"re-downloaded or regenerated on demand — nothing to rebuild",
 		"back after the next cargo build or a rustup reinstall",
 		"optimized binaries — the slowest to rebuild; check nothing runs from them",
 		"contains files Cargo may not own — check the paths first",
-	}[risk]
+	}[risk])
 }
 
 // rustConfirmText is the arm prompt for a delete batch — it says "Recycle"
@@ -482,9 +482,9 @@ func rustRiskNote(risk int) string {
 func (m *Model) rustConfirmText(jobs []disk.RustDir) string {
 	n, b := len(jobs), rustJobsBytes(jobs)
 	if m.rustRecycle {
-		return fmt.Sprintf("Recycle %s items (%s)?", format.Int(uint64(n)), format.Bytes(b))
+		return fmt.Sprintf(tr("Recycle %s items (%s)?"), format.Int(uint64(n)), format.Bytes(b))
 	}
-	return fmt.Sprintf("Delete %s items, free %s?", format.Int(uint64(n)), format.Bytes(b))
+	return fmt.Sprintf(tr("Delete %s items, free %s?"), format.Int(uint64(n)), format.Bytes(b))
 }
 
 // rustSectionLabel is a muted caption with a hairline — the page's
@@ -504,26 +504,26 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 	ui.Column(c).Fill().Padding(4, 12).Gap(8).Children(func() {
 		ui.Row(c).FillWidth().Height(30).AlignItems(ui.Center).Gap(8).Children(func() {
 			icon(c, "rust", 18)
-			ui.Text(c, fmt.Sprintf("Rust build artifacts · %s projects", format.Int(uint64(rep.Projects)))).Bold().Shrink(0)
+			ui.Text(c, fmt.Sprintf(tr("Rust build artifacts · %s projects"), format.Int(uint64(rep.Projects)))).Bold().Shrink(0)
 			if m.rustBusy {
-				ui.Text(c, "working…").FontSize(11).TextColor(t.TextMuted)
+				ui.Text(c, tr("working…")).FontSize(11).TextColor(t.TextMuted)
 			} else if m.rustMsg != "" {
 				ui.Text(c, m.rustMsg).FontSize(11).TextColor(t.TextMuted).SingleLine().MinWidth(0)
 			}
 			ui.Spacer(c)
-			ui.Checkbox(c, &m.rustRecycle, "Recycle Bin").Tooltip("Send deletions to the Recycle Bin where possible")
-			sortLabel := "Sort: size"
+			ui.Checkbox(c, &m.rustRecycle, tr("Recycle Bin")).Tooltip(tr("Send deletions to the Recycle Bin where possible"))
+			sortLabel := tr("Sort: size")
 			if m.rustSortIdle {
-				sortLabel = "Sort: idle"
+				sortLabel = tr("Sort: idle")
 			}
 			if ui.Button(c, sortLabel).Clicked() {
 				m.rustSortIdle = !m.rustSortIdle
 			}
-			if m.iconButton(c, "x", "Back to disk view").Clicked() {
+			if m.iconButton(c, "x", tr("Back to disk view")).Clicked() {
 				m.rustMode = false
 			}
 		})
-		rustSectionLabel(c, t, "Pick a plan — or click one to preview what it removes")
+		rustSectionLabel(c, t, tr("Pick a plan — or click one to preview what it removes"))
 		ui.Row(c).FillWidth().Gap(10).Children(func() {
 			for p := range rustPresets {
 				m.rustPresetCard(c, t, p)
@@ -532,30 +532,30 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 		m.rustFilterStrip(c, t)
 		rows := m.rustRows()
 		if len(rows) == 0 {
-			msg := "No Cargo target/ directories in this index."
+			msg := tr("No Cargo target/ directories in this index.")
 			if m.rustFilterCat >= 0 {
-				msg = "No rows match this filter."
+				msg = tr("No rows match this filter.")
 			}
 			ui.Text(c, msg).TextColor(t.TextMuted)
 		} else {
-			rustSectionLabel(c, t, "Items — every cleanable path, one row each")
+			rustSectionLabel(c, t, tr("Items — every cleanable path, one row each"))
 			// Header matching the row layout below.
 			ui.Row(c).FillWidth().Height(24).Shrink(0).Padding(0, 10).Gap(6).AlignItems(ui.Center).Children(func() {
 				ui.Box(c).Width(176).Shrink(0)
 				ui.Row(c).Width(78).Shrink(0).Children(func() {
-					ui.Text(c, "Risk").FontSize(11).Bold().TextColor(t.TextMuted)
+					ui.Text(c, tr("Risk")).FontSize(11).Bold().TextColor(t.TextMuted)
 				})
-				ui.Text(c, "Path").FontSize(11).Bold().TextColor(t.TextMuted).Grow(1).MinWidth(120).SingleLine()
+				ui.Text(c, tr("Path")).FontSize(11).Bold().TextColor(t.TextMuted).Grow(1).MinWidth(120).SingleLine()
 				for _, h := range []string{"Incr", "Debug", "Release", "Total"} {
 					ui.Row(c).Width(92).Shrink(0).Justify(ui.End).Children(func() {
-						ui.Text(c, h).FontSize(11).Bold().TextColor(t.TextMuted)
+						ui.Text(c, tr(h)).FontSize(11).Bold().TextColor(t.TextMuted)
 					})
 				}
 				ui.Row(c).Width(56).Shrink(0).Justify(ui.End).Children(func() {
 					ui.Text(c, "%").FontSize(11).Bold().TextColor(t.TextMuted)
 				})
 				ui.Row(c).Width(52).Shrink(0).Justify(ui.End).Children(func() {
-					ui.Text(c, "Idle").FontSize(11).Bold().TextColor(t.TextMuted)
+					ui.Text(c, tr("Idle")).FontSize(11).Bold().TextColor(t.TextMuted)
 				})
 				ui.Box(c).Width(76).Shrink(0)
 			})
@@ -569,7 +569,7 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 						g = "caret-r"
 					}
 					he := ui.Row(c).FillWidth().Height(26).Padding(0, 10).Gap(6).AlignItems(ui.Center).Radius(4).
-						Cursor(ui.CursorPointer).Label("Toggle group " + r.head)
+						Cursor(ui.CursorPointer).Label(tr("Toggle group ") + r.head)
 					if he.Hovered() {
 						he.Background(t.SurfaceHover)
 					}
@@ -609,14 +609,14 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 							if m.rustFilterCat >= 0 {
 								dim = cat != m.rustFilterCat
 							}
-							tierBadge(c, t, cat+1, dim).Tooltip(rep.Cats[cat].Name)
+							tierBadge(c, t, cat+1, dim).Tooltip(tr(rep.Cats[cat].Name))
 						}
 					})
 					ui.Row(c).Width(78).Shrink(0).Children(func() {
 						ui.Text(c, rustRiskLabel(r.risk)).FontSize(10).Bold().TextColor(rustRiskColor(t, r.risk))
 					})
 					if r.cat >= 0 {
-						ui.Text(c, rep.Cats[r.cat].Name).FontSize(11).TextColor(t.Accent).Shrink(0)
+						ui.Text(c, tr(rep.Cats[r.cat].Name)).FontSize(11).TextColor(t.Accent).Shrink(0)
 						ui.Text(c, r.dir.Path).SingleLine().Tooltip(r.dir.Path).Grow(1).MinWidth(0).TextColor(t.TextMuted)
 					} else {
 						path := filepath.Dir(r.item.Path)
@@ -659,12 +659,12 @@ func (m *Model) rustResultsView(c *ui.Context, t *ui.Theme) {
 func (m *Model) rustFilterStrip(c *ui.Context, t *ui.Theme) {
 	rep := m.rustReport
 	ui.Row(c).FillWidth().Height(26).Gap(6).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "Filter:").FontSize(11).TextColor(t.TextMuted).Shrink(0)
+		ui.Text(c, tr("Filter:")).FontSize(11).TextColor(t.TextMuted).Shrink(0)
 		for cat := 0; cat < disk.RustCatCount; cat++ {
 			cat := cat
 			empty := !m.rustCatHasRows(cat)
 			dim := empty || (m.rustFilterCat >= 0 && m.rustFilterCat != cat)
-			b := tierBadge(c, t, cat+1, dim).Tooltip(rep.Cats[cat].Name + " — filter rows").Cursor(ui.CursorPointer)
+			b := tierBadge(c, t, cat+1, dim).Tooltip(tr(rep.Cats[cat].Name) + tr(" — filter rows")).Cursor(ui.CursorPointer)
 			if b.Clicked() && !empty {
 				if m.rustFilterCat == cat {
 					m.rustFilterCat = -1
@@ -673,14 +673,14 @@ func (m *Model) rustFilterStrip(c *ui.Context, t *ui.Theme) {
 				}
 			}
 		}
-		ui.Checkbox(c, &m.rustGroupSafe, "Group by safety")
+		ui.Checkbox(c, &m.rustGroupSafe, tr("Group by safety"))
 		if m.rustFilterCat >= 0 {
 			cat := m.rustFilterCat
-			ui.Text(c, "· "+rep.Cats[cat].Name).FontSize(11).TextColor(t.TextMuted).Shrink(0)
+			ui.Text(c, "· "+tr(rep.Cats[cat].Name)).FontSize(11).TextColor(t.TextMuted).Shrink(0)
 			if len(rep.Cats[cat].Dirs) > 0 {
 				m.rustPathsLink(c, t, cat)
 			}
-			if m.iconButton(c, "x", "Clear filter").Clicked() {
+			if m.iconButton(c, "x", tr("Clear filter")).Clicked() {
 				m.rustFilterCat = -1
 			}
 		}
@@ -703,27 +703,27 @@ func (m *Model) rustPresetCard(c *ui.Context, t *ui.Theme, p int) {
 	if on {
 		card.BorderColor(t.Accent)
 	}
-	card.Tooltip("Click to highlight the files this plan removes")
+	card.Tooltip(tr("Click to highlight the files this plan removes"))
 	card.Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, pre.name).Bold().FontSize(13)
+			ui.Text(c, tr(pre.name)).Bold().FontSize(13)
 			if p == 0 {
-				ui.Text(c, "recommended").FontSize(10).TextColor(t.Accent)
+				ui.Text(c, tr("recommended")).FontSize(10).TextColor(t.Accent)
 			}
 			ui.Spacer(c)
-			ui.Text(c, pre.tag).FontSize(10).Bold().TextColor(tagColor)
+			ui.Text(c, tr(pre.tag)).FontSize(10).Bold().TextColor(tagColor)
 		})
 		ui.Text(c, format.Bytes(bytes)).FontSize(18).Bold()
 		// The plan as the category badges it bundles — numbers are only
 		// ever categories, nowhere else.
 		ui.Row(c).Gap(3).AlignItems(ui.Center).Children(func() {
 			if pre.allTargets {
-				ui.Text(c, "every target").FontSize(10).Bold().TextColor(t.Text)
+				ui.Text(c, tr("every target")).FontSize(10).Bold().TextColor(t.Text)
 			}
 			for _, cat := range pre.cats {
-				tierBadge(c, t, cat+1, false).Tooltip(m.rustReport.Cats[cat].Name)
+				tierBadge(c, t, cat+1, false).Tooltip(tr(m.rustReport.Cats[cat].Name))
 			}
-			ui.Text(c, "· "+pre.rebuild).FontSize(10).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Tooltip(pre.rebuild)
+			ui.Text(c, "· "+tr(pre.rebuild)).FontSize(10).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Tooltip(tr(pre.rebuild))
 		})
 		// The action row never changes height: Clean arms a confirm that
 		// replaces it in place, and while a delete runs the same spot
@@ -732,20 +732,20 @@ func (m *Model) rustPresetCard(c *ui.Context, t *ui.Theme, p int) {
 			switch {
 			case m.rustConfirm == p && m.rustBusy:
 				ui.Spinner(c)
-				ui.Text(c, fmt.Sprintf("Deleting %d of %d · %s", m.rustRmDone, m.rustRmTotal, m.rustRmPath)).
+				ui.Text(c, fmt.Sprintf(tr("Deleting %d of %d · %s"), m.rustRmDone, m.rustRmTotal, m.rustRmPath)).
 					FontSize(11).TextColor(t.TextMuted).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
 				ui.Progress(c, float64(m.rustRmDone)/float64(max(m.rustRmTotal, 1))).Width(90).Height(4)
 			case m.rustConfirm == p:
 				ui.Text(c, m.rustConfirmText(jobs)).FontSize(11).TextColor(t.Danger).Grow(1).MinWidth(0)
-				if ui.Button(c, "Confirm").Clicked() {
+				if ui.Button(c, tr("Confirm")).Clicked() {
 					m.cleanRustPreset(p)
 				}
-				if ui.Button(c, "Keep").Clicked() {
+				if ui.Button(c, tr("Keep")).Clicked() {
 					m.rustConfirm = -1
 				}
 			default:
 				ui.Spacer(c)
-				if m.dangerButton(c, "trash", "Clean").Disabled(bytes == 0 || m.rustBusy).Clicked() {
+				if m.dangerButton(c, "trash", tr("Clean")).Disabled(bytes == 0 || m.rustBusy).Clicked() {
 					m.rustConfirm = p
 				}
 			}
@@ -764,13 +764,13 @@ func (m *Model) rustPresetCard(c *ui.Context, t *ui.Theme, p int) {
 // path-list modal — a muted text link, not a button.
 func (m *Model) rustPathsLink(c *ui.Context, t *ui.Theme, i int) {
 	cat := &m.rustReport.Cats[i]
-	e := ui.Row(c).Shrink(0).Gap(3).AlignItems(ui.Center).Cursor(ui.CursorPointer).Label("Show paths in " + cat.Name)
+	e := ui.Row(c).Shrink(0).Gap(3).AlignItems(ui.Center).Cursor(ui.CursorPointer).Label(tr("Show paths in ") + tr(cat.Name))
 	e.Children(func() {
-		label := "path"
+		label := tr("path")
 		if len(cat.Dirs) != 1 {
-			label = "paths"
+			label = tr("paths")
 		}
-		ui.Text(c, fmt.Sprintf("%s %s", format.Int(uint64(len(cat.Dirs))), label)).FontSize(11).TextColor(t.Accent)
+		ui.Text(c, fmt.Sprintf(tr("%s %s"), format.Int(uint64(len(cat.Dirs))), label)).FontSize(11).TextColor(t.Accent)
 	})
 	if e.Hovered() {
 		e.Background(t.SurfaceHover)
@@ -791,8 +791,8 @@ func (m *Model) rustCatPathsModal(c *ui.Context, t *ui.Theme) {
 	cat := &m.rustReport.Cats[m.rustPathsCat]
 	ui.Modal(c, &m.rustPathsOpen, func() {
 		ui.Column(c).Width(600).MaxHeight(430).Padding(6, 16, 14, 16).Gap(10).Children(func() {
-			ui.Text(c, cat.Name).Bold().FontSize(16)
-			ui.Text(c, cat.Note).FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, tr(cat.Name)).Bold().FontSize(16)
+			ui.Text(c, tr(cat.Note)).FontSize(11).TextColor(t.TextMuted)
 			ui.List(c, &m.rustPathsList, len(cat.Dirs), func(i int) {
 				d := cat.Dirs[i]
 				ui.Row(c).FillWidth().Height(24).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -815,15 +815,15 @@ func rustIdleText(days int) string {
 	case days < 0:
 		return "—"
 	case days == 0:
-		return "today"
+		return tr("today")
 	case days < 14:
-		return fmt.Sprintf("%dd", days)
+		return fmt.Sprintf(tr("%dd"), days)
 	case days < 60:
-		return fmt.Sprintf("%dw", days/7)
+		return fmt.Sprintf(tr("%dw"), days/7)
 	case days < 365:
-		return fmt.Sprintf("%dmo", days/30)
+		return fmt.Sprintf(tr("%dmo"), days/30)
 	default:
-		return fmt.Sprintf("%dy", days/365)
+		return fmt.Sprintf(tr("%dy"), days/365)
 	}
 }
 
@@ -842,11 +842,11 @@ func (m *Model) rustRowButton(c *ui.Context, t *ui.Theme, r rustRow) {
 		job = []disk.RustDir{{Path: r.item.Path, Bytes: r.item.Total, Base: "target"}}
 	}
 	armed := m.rustRowConfirm == path
-	label, tip := "Clean", "Delete "+path
+	label, tip := tr("Clean"), fmt.Sprintf(tr("Delete %s"), path)
 	if armed {
-		label, tip = "Sure?", "Click again to delete "+path
+		label, tip = tr("Sure?"), fmt.Sprintf(tr("Click again to delete %s"), path)
 	}
-	e := ui.Row(c).Height(22).PaddingX(8).Gap(4).AlignItems(ui.Center).Radius(t.Radius).Label("Clean " + path).Tooltip(tip)
+	e := ui.Row(c).Height(22).PaddingX(8).Gap(4).AlignItems(ui.Center).Radius(t.Radius).Label(tr("Clean ") + path).Tooltip(tip)
 	e.BorderWidth(1).BorderColor(t.Border)
 	if armed {
 		e.Background(t.Danger.Alpha(0.12)).BorderColor(t.Danger)

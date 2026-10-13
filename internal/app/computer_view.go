@@ -26,7 +26,7 @@ func (m *Model) computerView(c *ui.Context, t *ui.Theme) {
 	info := m.hw.info.Load()
 	if info == nil {
 		ui.Column(c).Grow(1).MinHeight(0).Center().Children(func() {
-			ui.Text(c, "Reading hardware…").TextColor(t.TextMuted)
+			ui.Text(c, tr("Reading hardware…")).TextColor(t.TextMuted)
 		})
 		return
 	}
@@ -66,7 +66,7 @@ func (m *Model) computerView(c *ui.Context, t *ui.Theme) {
 		var held bool
 		var dx float32
 		h := ui.Box(c).Absolute().Top(0).Bottom(0).Left(railW - 3).Width(6).
-			Cursor(ui.CursorResizeEW).Label("Resize catalogue")
+			Cursor(ui.CursorResizeEW).Label(tr("Resize catalogue"))
 		h.Draw(func(p *ui.Painter, r ui.Rect) {
 			if held || h.Hovered() {
 				p.Fill(ui.Rect{X: r.X + r.W/2, Y: r.Y, W: 1, H: r.H}, t.Accent.Alpha(0.55), 0)
@@ -165,10 +165,10 @@ func (m *Model) hwHeader(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist []hw
 			})
 			ui.Column(c).AlignItems(ui.End).Shrink(0).Children(func() {
 				if len(hist) > 0 {
-					ui.Text(c, "Up "+durHM(hist[len(hist)-1].Uptime)).SingleLine()
+					ui.Text(c, fmt.Sprintf(tr("Up %s"), durHM(hist[len(hist)-1].Uptime))).SingleLine()
 				}
 				if info.User != "" {
-					ui.Text(c, "Signed in as "+info.User).TextColor(t.TextMuted).SingleLine()
+					ui.Text(c, fmt.Sprintf(tr("Signed in as %s"), info.User)).TextColor(t.TextMuted).SingleLine()
 				}
 			})
 		})
@@ -199,22 +199,26 @@ func hwFacts(info *hwmon.Info) [][2]string {
 	}
 	os := strings.TrimSpace(info.OS + " " + info.OSVersion)
 	if info.OSBuild != "" {
-		os += " (build " + info.OSBuild + ")"
+		os += fmt.Sprintf(tr(" (build %s)"), info.OSBuild)
 	}
-	add("Operating system", os)
-	add("Processor", fmt.Sprintf("%s · %s, %d threads", shortCPU(info.CPU.Name), cpuCores(info.CPU), info.CPU.Threads))
-	add("Installed memory", memSummary(info))
+	add(tr("Operating system"), os)
+	add(tr("Processor"), fmt.Sprintf(tr("%s · %s, %d threads"), shortCPU(info.CPU.Name), cpuCores(info.CPU), info.CPU.Threads))
+	add(tr("Installed memory"), memSummary(info))
 	var gpus []string
 	for _, g := range info.GPUs {
 		gpus = append(gpus, deTM(g.Name))
 	}
-	add("Graphics", strings.Join(gpus, "\n"))
+	add(tr("Graphics"), strings.Join(gpus, "\n"))
 	var size uint64
 	for _, d := range info.Disks {
 		size += d.Size
 	}
 	if len(info.Disks) > 0 {
-		add("Storage", fmt.Sprintf("%d disk%s · %s", len(info.Disks), plural(len(info.Disks)), format.Bytes(size)))
+		count := tr("%d disks · %s")
+		if len(info.Disks) == 1 {
+			count = tr("%d disk · %s")
+		}
+		add(tr("Storage"), fmt.Sprintf(count, len(info.Disks), format.Bytes(size)))
 	}
 	if len(info.NICs) > 0 {
 		n := info.NICs[0]
@@ -222,30 +226,23 @@ func hwFacts(info *hwmon.Info) [][2]string {
 		if len(n.IPs) > 0 {
 			ip = " · " + n.IPs[0]
 		}
-		add("Network", n.Name+ip)
+		add(tr("Network"), n.Name+ip)
 	}
-	add("Motherboard", strings.TrimSpace(info.BoardVendor+" "+info.BoardProduct))
+	add(tr("Motherboard"), strings.TrimSpace(info.BoardVendor+" "+info.BoardProduct))
 	bios := strings.TrimSpace(info.BIOSVendor + " " + info.BIOSVersion)
 	if info.BIOSDate != "" && bios != "" {
 		bios += " · " + info.BIOSDate
 	}
-	add("BIOS", bios)
+	add(tr("BIOS"), bios)
 	return f
-}
-
-func plural(n int) string {
-	if n == 1 {
-		return ""
-	}
-	return "s"
 }
 
 // cpuCores names the core count, spelling out a hybrid P/E split.
 func cpuCores(cpu hwmon.CPUInfo) string {
 	if cpu.PerfCores > 0 || cpu.EffCores > 0 {
-		return fmt.Sprintf("%d cores (%d P + %d E)", cpu.Cores, cpu.PerfCores, cpu.EffCores)
+		return fmt.Sprintf(tr("%d cores (%d P + %d E)"), cpu.Cores, cpu.PerfCores, cpu.EffCores)
 	}
-	return fmt.Sprintf("%d cores", cpu.Cores)
+	return fmt.Sprintf(tr("%d cores"), cpu.Cores)
 }
 
 // capWh renders a battery capacity that the driver reports in mWh.
@@ -253,7 +250,7 @@ func capWh(mwh uint64) string {
 	if mwh == 0 {
 		return ""
 	}
-	return fmt.Sprintf("%.1f Wh", float64(mwh)/1000)
+	return fmt.Sprintf(tr("%.1f Wh"), float64(mwh)/1000)
 }
 
 // sizeInches is a panel's physical diagonal from its width and height in
@@ -262,12 +259,12 @@ func sizeInches(wcm, hcm int) string {
 	if wcm <= 0 || hcm <= 0 {
 		return ""
 	}
-	return fmt.Sprintf("%.1f in", math.Hypot(float64(wcm), float64(hcm))/2.54)
+	return fmt.Sprintf(tr("%.1f in"), math.Hypot(float64(wcm), float64(hcm))/2.54)
 }
 
 func cmPair(w, h int) string {
 	if w <= 0 || h <= 0 {
 		return ""
 	}
-	return fmt.Sprintf("%d × %d cm", w, h)
+	return fmt.Sprintf(tr("%d × %d cm"), w, h)
 }

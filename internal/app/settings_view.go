@@ -20,9 +20,9 @@ func (m *Model) settingsView(c *ui.Context) {
 	ui.Modal(c, &m.settingsOpen, func() {
 		ui.Column(c).Width(760).Height(500).Radius(12).Background(t.Background).Children(func() {
 			ui.Row(c).Padding(16, 16, 4, 16).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, "Settings").Bold().FontSize(15)
+				ui.Text(c, tr("Settings")).Bold().FontSize(15)
 				ui.Spacer(c)
-				if m.iconButton(c, "x", "Close").Clicked() {
+				if m.iconButton(c, "x", tr("Close")).Clicked() {
 					m.settingsOpen = false
 				}
 			})
@@ -64,8 +64,9 @@ func (m *Model) settingsRail(c *ui.Context, t *ui.Theme) {
 	ui.Column(c).Width(190).Shrink(0).Padding(10, 8).Gap(2).Children(func() {
 		for _, it := range settingsItems {
 			it := it
+			label := tr(it.label)
 			on := m.settingsSection == it.id
-			e := ui.Row(c.Key("set:" + it.id)).Height(36).PaddingX(12).Gap(10).AlignItems(ui.Center).Radius(7).Cursor(ui.CursorPointer).Label(it.label)
+			e := ui.Row(c.Key("set:" + it.id)).Height(36).PaddingX(12).Gap(10).AlignItems(ui.Center).Radius(7).Cursor(ui.CursorPointer).Label(label)
 			e.Draw(func(p *ui.Painter, r ui.Rect) {
 				switch {
 				case on:
@@ -77,7 +78,7 @@ func (m *Model) settingsRail(c *ui.Context, t *ui.Theme) {
 			})
 			e.Children(func() {
 				ic := icon(c, it.glyph, 16)
-				tx := ui.Text(c, it.label).FontSize(12).SingleLine()
+				tx := ui.Text(c, label).FontSize(12).SingleLine()
 				if on {
 					ic.TextColor(t.Accent)
 					tx.Bold()
@@ -113,45 +114,54 @@ const settingsSelectW = 150
 func (m *Model) settingsGeneral(c *ui.Context, t *ui.Theme) {
 	// Theme is stored as an int; bridge it through a local Select.
 	themeSel := []string{"System", "Light", "Dark"}[min(2, max(0, m.themeMode))]
-	m.settingsRow(c, t, "Theme", "Light, dark, or follow Windows", func() {
-		if ui.Select(c, &themeSel, []string{"System", "Light", "Dark"}).Width(settingsSelectW).Changed() {
-			m.themeMode = map[string]int{"System": 0, "Light": 1, "Dark": 2}[themeSel]
+	m.settingsRow(c, t, tr("Theme"), tr("Light, dark, or follow Windows"), func() {
+		trSelect(c, themeSel, []string{"System", "Light", "Dark"}, func(v string) {
+			m.themeMode = map[string]int{"System": 0, "Light": 1, "Dark": 2}[v]
 			m.saveSettings()
-		}
+		}).Width(settingsSelectW)
 	})
-	m.settingsRow(c, t, "Tab style", "Look of the page tabs in the top bar", func() {
-		if ui.Select(c, &m.tabStyle, []string{"Pill", "Underline"}).Width(settingsSelectW).Changed() {
+	m.settingsRow(c, t, tr("Tab style"), tr("Look of the page tabs in the top bar"), func() {
+		trSelect(c, m.tabStyle, []string{"Pill", "Underline"}, func(v string) {
+			m.tabStyle = v
 			m.saveSettings()
-		}
+		}).Width(settingsSelectW)
 	})
-	m.settingsRow(c, t, "Computer page", "Sidebar catalogue, or the earlier card grid", func() {
-		if ui.Select(c, &m.computerLayout, []string{"Sidebar", "Cards"}).Width(settingsSelectW).Changed() {
+	m.settingsRow(c, t, tr("Computer page"), tr("Sidebar catalogue, or the earlier card grid"), func() {
+		trSelect(c, m.computerLayout, []string{"Sidebar", "Cards"}, func(v string) {
+			m.computerLayout = v
 			m.saveSettings()
-		}
+		}).Width(settingsSelectW)
 	})
-	m.settingsRow(c, t, "Language", "Interface language — localization is on the way", func() {
-		ui.Select(c, &m.language, []string{"System", "English", "中文"}).Width(settingsSelectW).Disabled(true)
+	m.settingsRow(c, t, tr("Language"), tr("Interface language — applied immediately"), func() {
+		trSelect(c, m.language, langOptions, func(v string) {
+			m.language = v
+			m.applyLanguage()
+			m.saveSettings()
+		}).Width(settingsSelectW)
 	})
 }
 
 func (m *Model) settingsScanning(c *ui.Context, t *ui.Theme) {
-	m.settingsRow(c, t, "Process refresh", "Automatic sampling on the Processes page", func() {
-		if ui.Select(c, &m.processInterval, []string{"1 s", "2 s", "5 s"}).Width(settingsSelectW).Changed() {
+	m.settingsRow(c, t, tr("Process refresh"), tr("Automatic sampling on the Processes page"), func() {
+		trSelect(c, m.processInterval, []string{"1 s", "2 s", "5 s"}, func(v string) {
+			m.processInterval = v
 			m.applySampleInterval()
 			m.saveSettings()
-		}
+		}).Width(settingsSelectW)
 	})
-	m.settingsRow(c, t, "Space metric", "Used by the space map and percent column", func() {
-		if ui.Select(c, &m.diskMetric, []string{"Allocated", "Logical"}).Width(settingsSelectW).Changed() {
+	m.settingsRow(c, t, tr("Space metric"), tr("Used by the space map and percent column"), func() {
+		trSelect(c, m.diskMetric, []string{"Allocated", "Logical"}, func(v string) {
+			m.diskMetric = v
 			m.saveSettings()
-		}
+		}).Width(settingsSelectW)
 	})
-	m.settingsRow(c, t, "Memory after scan", "Return scan buffers to the OS, or keep them for faster rescans", func() {
-		if ui.Select(c, &m.memRelease, []string{"Automatic", "Keep for rescan"}).Width(settingsSelectW).Changed() {
+	m.settingsRow(c, t, tr("Memory after scan"), tr("Return scan buffers to the OS, or keep them for faster rescans"), func() {
+		trSelect(c, m.memRelease, []string{"Automatic", "Keep for rescan"}, func(v string) {
+			m.memRelease = v
 			m.saveSettings()
-		}
+		}).Width(settingsSelectW)
 	})
-	ui.Checkbox(c, &m.animateMap, "Animate map drill-down").Tooltip("Respects Windows reduced motion")
+	ui.Checkbox(c, &m.animateMap, tr("Animate map drill-down")).Tooltip(tr("Respects Windows reduced motion"))
 }
 
 func (m *Model) settingsTray(c *ui.Context, t *ui.Theme) {
@@ -159,26 +169,27 @@ func (m *Model) settingsTray(c *ui.Context, t *ui.Theme) {
 	if info := m.hw.info.Load(); info != nil && hasDiscreteGPU(info) {
 		metrics = []string{"CPU", "Memory", "GPU", "Icon"}
 	}
-	m.settingsRow(c, t, "Tray icon shows", "A live sparkline of this metric in the notification area", func() {
-		if ui.Select(c, &m.trayMetric, metrics).Width(settingsSelectW).Changed() {
-			if m.trayMetric == "Icon" && m.tray != nil {
+	m.settingsRow(c, t, tr("Tray icon shows"), tr("A live sparkline of this metric in the notification area"), func() {
+		trSelect(c, m.trayMetric, metrics, func(v string) {
+			m.trayMetric = v
+			if v == "Icon" && m.tray != nil {
 				_ = m.tray.SetIcon(appIcon, false)
 				m.tray.SetToolTip("DumpingGround")
 			}
 			m.saveSettings()
-		}
+		}).Width(settingsSelectW)
 	})
 	closeSel := "Quit"
 	if m.closeToTray {
 		closeSel = "Minimize to tray"
 	}
-	m.settingsRow(c, t, "Close button", "What the window's close button does", func() {
-		if ui.Select(c, &closeSel, []string{"Quit", "Minimize to tray"}).Width(settingsSelectW).Changed() {
-			m.closeToTray = closeSel == "Minimize to tray"
+	m.settingsRow(c, t, tr("Close button"), tr("What the window's close button does"), func() {
+		trSelect(c, closeSel, []string{"Quit", "Minimize to tray"}, func(v string) {
+			m.closeToTray = v == "Minimize to tray"
 			m.saveSettings()
-		}
+		}).Width(settingsSelectW)
 	})
-	ui.Text(c, "Left-click the tray icon to reopen the window; right-click for Open and Quit.").FontSize(11).TextColor(t.TextMuted).MaxLines(3)
+	ui.Text(c, tr("Left-click the tray icon to reopen the window; right-click for Open and Quit.")).FontSize(11).TextColor(t.TextMuted).MaxLines(3)
 }
 
 func (m *Model) settingsAbout(c *ui.Context, t *ui.Theme) {
@@ -188,17 +199,17 @@ func (m *Model) settingsAbout(c *ui.Context, t *ui.Theme) {
 		})
 		ui.Column(c).Children(func() {
 			ui.Text(c, "DumpingGround").Bold().FontSize(16)
-			ui.Text(c, fmt.Sprintf("Version %s", version)).FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, fmt.Sprintf(tr("Version %s"), version)).FontSize(11).TextColor(t.TextMuted)
 		})
 	})
-	ui.Text(c, "A safe, transparent Windows maintenance tool: process inspection, disk-usage mapping, Rust and Windows junk cleanup, hardware monitoring, software uninstall and startup management.").FontSize(12).TextColor(t.TextMuted).MaxLines(4)
+	ui.Text(c, tr("A safe, transparent Windows maintenance tool: process inspection, disk-usage mapping, Rust and Windows junk cleanup, hardware monitoring, software uninstall and startup management.")).FontSize(12).TextColor(t.TextMuted).MaxLines(4)
 	ui.Divider(c)
-	ui.Text(c, "License").Bold().FontSize(13)
+	ui.Text(c, tr("License")).Bold().FontSize(13)
 	ui.Text(c, "MIT License").TextColor(t.TextMuted)
 	ui.Text(c, "Copyright (c) 2026 DumpingGround contributors").TextColor(t.TextMuted)
 	ui.Text(c, mitNotice).FontSize(11).TextColor(t.TextMuted).MaxLines(0)
 	ui.Divider(c)
-	ui.Text(c, "State & logs").Bold().FontSize(13)
+	ui.Text(c, tr("State & logs")).Bold().FontSize(13)
 	ui.Text(c, appdir.Dir()).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
 }
 

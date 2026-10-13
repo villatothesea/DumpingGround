@@ -1,6 +1,8 @@
 package app
 
 import (
+	"fmt"
+
 	"github.com/dumpingground/dumpingground/internal/hwmon"
 	"github.com/egoist/mygo/ui"
 )
@@ -61,7 +63,7 @@ func (m *Model) hwCardView(c *ui.Context, t *ui.Theme, cd *hwCard, hist []hwmon.
 				if cd.health != "" {
 					ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
 						ui.Box(c).Size(7, 7).Radius(4).Background(hwHealthColor(cd.health, t))
-						ui.Text(c, cd.sub).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Tooltip("Health: " + cd.health)
+						ui.Text(c, cd.sub).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Tooltip(fmt.Sprintf(tr("Health: %s"), tr(cd.health)))
 					})
 				} else {
 					ui.Text(c, cd.sub).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
@@ -83,7 +85,7 @@ func (m *Model) hwCardView(c *ui.Context, t *ui.Theme, cd *hwCard, hist []hwmon.
 			})
 		}
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "Details").FontSize(11).TextColor(t.TextMuted).SingleLine()
+			ui.Text(c, tr("Details")).FontSize(11).TextColor(t.TextMuted).SingleLine()
 			ui.Spacer(c)
 			icon(c, "right", 12).TextColor(t.TextMuted)
 		})

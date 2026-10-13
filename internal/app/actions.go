@@ -14,7 +14,7 @@ func (m *Model) exportDisk() {
 	}
 	snapshot, window := m.diskSnapshot, m.window
 	go func() {
-		path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: window, Title: "Export disk scan", DefaultPath: "DumpingGround.csv", Filters: []mygo.FileFilter{{Name: "CSV", Extensions: []string{"csv"}}}})
+		path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: window, Title: tr("Export disk scan"), DefaultPath: "DumpingGround.csv", Filters: []mygo.FileFilter{{Name: "CSV", Extensions: []string{"csv"}}}})
 		if err == nil && path == "" {
 			return
 		}
@@ -31,9 +31,9 @@ func (m *Model) exportDisk() {
 		}
 		m.post(func() {
 			if err != nil {
-				m.diskStatus = "Export failed: " + err.Error()
+				m.diskStatus = tr("Export failed: ") + err.Error()
 			} else {
-				m.diskStatus = "Exported " + path
+				m.diskStatus = tr("Exported ") + path
 			}
 		})
 	}()
@@ -42,27 +42,27 @@ func (m *Model) processMenu(menu *ui.Menu, r process.Info) {
 	if dbgMenu {
 		dbgLog("processMenu build pid=%d name=%s", r.PID, r.Name)
 	}
-	if menu.Item("Properties").Chosen() {
+	if menu.Item(tr("Properties")).Chosen() {
 		m.showDetails = true
 		m.requestInspection(r.PID)
 	}
-	if menu.Item("Open file location").Disabled(r.Path == "").Chosen() && m.window != nil {
+	if menu.Item(tr("Open file location")).Disabled(r.Path == "").Chosen() && m.window != nil {
 		mygo.Shell.ShowItemInFolder(r.Path)
 	}
-	if menu.Item("Copy path").Disabled(r.Path == "").Chosen() && m.window != nil {
+	if menu.Item(tr("Copy path")).Disabled(r.Path == "").Chosen() && m.window != nil {
 		mygo.Clipboard.WriteText(r.Path)
 	}
-	if menu.Item("Copy PID").Chosen() && m.window != nil {
+	if menu.Item(tr("Copy PID")).Chosen() && m.window != nil {
 		mygo.Clipboard.WriteText(fmt.Sprint(r.PID))
 	}
 	menu.Separator()
 	exited := r.Access == "Exited"
-	if menu.Item("End process…").Disabled(r.PID <= 4 || exited).Chosen() {
+	if menu.Item(tr("End process…")).Disabled(r.PID <= 4 || exited).Chosen() {
 		m.terminateTarget = r
 		m.terminateTree = false
 		m.terminateOpen = true
 	}
-	if menu.Item("End process tree…").Disabled(r.PID <= 4 || exited).Chosen() {
+	if menu.Item(tr("End process tree…")).Disabled(r.PID <= 4 || exited).Chosen() {
 		m.terminateTarget = r
 		m.terminateTree = true
 		m.terminateOpen = true
@@ -74,13 +74,13 @@ func (m *Model) diskMenu(menu *ui.Menu, id int) {
 	}
 	n := m.diskSnapshot.Nodes[id]
 	path := m.diskSnapshot.FullPath(id)
-	if menu.Item("Explore directory").Disabled(!n.Dir).Chosen() {
+	if menu.Item(tr("Explore directory")).Disabled(!n.Dir).Chosen() {
 		m.navigateDisk(id)
 	}
-	if menu.Item("Open file location").Chosen() && m.window != nil {
+	if menu.Item(tr("Open file location")).Chosen() && m.window != nil {
 		mygo.Shell.ShowItemInFolder(path)
 	}
-	if menu.Item("Copy path").Chosen() && m.window != nil {
+	if menu.Item(tr("Copy path")).Chosen() && m.window != nil {
 		mygo.Clipboard.WriteText(path)
 	}
 }

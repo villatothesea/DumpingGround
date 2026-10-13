@@ -25,9 +25,9 @@ func (m *Model) setupTray() {
 	m.tray = tray
 	tray.OnClick(m.showWindow)
 	menu := mygo.NewMenu([]*mygo.MenuItem{
-		{Label: "Open DumpingGround", Click: func(*mygo.MenuItem, *mygo.Window) { m.showWindow() }},
+		{Label: fmt.Sprintf(tr("Open %s"), "DumpingGround"), Click: func(*mygo.MenuItem, *mygo.Window) { m.showWindow() }},
 		mygo.Separator(),
-		{Label: "Quit", Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }},
+		{Label: tr("Quit"), Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }},
 	})
 	tray.OnRightClick(func() {
 		tray.SetMenu(menu)
@@ -72,7 +72,7 @@ func (m *Model) updateTrayIcon(s hwmon.Sample) {
 	if err := m.tray.SetIcon(trayIconPNG(hist, m.trayMetric, col), false); err != nil {
 		return
 	}
-	m.tray.SetToolTip(fmt.Sprintf("DumpingGround — %s %.0f%%", name, pct))
+	m.tray.SetToolTip(fmt.Sprintf(tr("DumpingGround — %s %.0f%%"), tr(name), pct))
 }
 
 // trayValue resolves the configured metric against a sample.

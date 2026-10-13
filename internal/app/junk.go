@@ -208,10 +208,10 @@ func (m *Model) junkRows() []junkRow {
 			var head string
 			headRisk := disk.RustRiskSafe
 			if dim == junkDimCat {
-				head = fmt.Sprintf("%s — %s · %s", rep.Cats[v].Name, junkItemCount(len(sub)), format.Bytes(bytes))
+				head = fmt.Sprintf(tr("%s — %s · %s"), tr(rep.Cats[v].Name), junkItemCount(len(sub)), format.Bytes(bytes))
 				headRisk = rep.Cats[v].Risk
 			} else {
-				head = fmt.Sprintf("%s — %s · %s", rustRiskLabel(v), junkItemCount(len(sub)), format.Bytes(bytes))
+				head = fmt.Sprintf(tr("%s — %s · %s"), rustRiskLabel(v), junkItemCount(len(sub)), format.Bytes(bytes))
 				headRisk = v
 			}
 			key := prefix + dimChar + fmt.Sprint(v)
@@ -232,9 +232,9 @@ func (m *Model) junkRows() []junkRow {
 
 func junkItemCount(n int) string {
 	if n == 1 {
-		return "1 item"
+		return tr("1 item")
 	}
-	return fmt.Sprintf("%d items", n)
+	return fmt.Sprintf(tr("%d items"), n)
 }
 
 // junkDelete removes the jobs off the UI goroutine, then re-measures so
@@ -244,7 +244,7 @@ func (m *Model) junkDelete(jobs []*disk.JunkDir) {
 		return
 	}
 	m.junkBusy = true
-	m.junkMsg = "Cleaning…"
+	m.junkMsg = tr("Cleaning…")
 	m.junkRmDone, m.junkRmTotal, m.junkRmPath = 0, len(jobs), ""
 	go func() {
 		// The process check is minutes stale by now — a browser
@@ -280,15 +280,15 @@ func (m *Model) junkDelete(jobs []*disk.JunkDir) {
 			m.junkRmDone, m.junkRmPath = len(jobs), ""
 			m.junkConfirm, m.junkSel = -1, -1
 			m.junkRowConfirm = ""
-			msg := fmt.Sprintf("Freed %s", format.Bytes(freed))
+			msg := fmt.Sprintf(tr("Freed %s"), format.Bytes(freed))
 			if removed > 0 {
-				msg += fmt.Sprintf(" · %s removed", format.Int(uint64(removed)))
+				msg += fmt.Sprintf(tr(" · %s removed"), format.Int(uint64(removed)))
 			}
 			if skipped > 0 {
-				msg += fmt.Sprintf(" · %s in use, skipped", format.Int(uint64(skipped)))
+				msg += fmt.Sprintf(tr(" · %s in use, skipped"), format.Int(uint64(skipped)))
 			}
 			if failed > 0 && firstErr != nil {
-				msg += fmt.Sprintf(" · %d failed: %s", failed, firstErr)
+				msg += fmt.Sprintf(tr(" · %d failed: %s"), failed, firstErr)
 			}
 			m.junkDoneMsg = msg
 			m.junkScan()
@@ -298,7 +298,7 @@ func (m *Model) junkDelete(jobs []*disk.JunkDir) {
 
 // junkButton is the toolbar's cleanup trigger: white broom on green.
 func (m *Model) junkButton(c *ui.Context, off bool) ui.Element {
-	e := ui.Row(c).Size(34, 28).Radius(6).Center().Tooltip("Clean everyday junk — temp, caches, dumps").Label("Junk cleanup")
+	e := ui.Row(c).Size(34, 28).Radius(6).Center().Tooltip(tr("Clean everyday junk — temp, caches, dumps")).Label(tr("Junk cleanup"))
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
 		fill := junkGreen
 		switch {
@@ -326,13 +326,13 @@ func (m *Model) junkAnalyzingView(c *ui.Context, t *ui.Theme) {
 		card.Children(func() {
 			ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
 				icon(c, "broom", 18)
-				ui.Text(c, "Measuring cleanup locations").FontSize(14).Bold()
+				ui.Text(c, tr("Measuring cleanup locations")).FontSize(14).Bold()
 			})
 			cat := m.junkAnCat
 			if cat >= disk.JunkCatCount {
 				cat = disk.JunkCatCount - 1
 			}
-			ui.Text(c, fmt.Sprintf("%d of %d · %s…", cat+1, disk.JunkCatCount, disk.JunkCatName(cat))).
+			ui.Text(c, fmt.Sprintf(tr("%d of %d · %s…"), cat+1, disk.JunkCatCount, tr(disk.JunkCatName(cat)))).
 				FontSize(11).TextColor(t.TextMuted).SingleLine()
 			ui.Progress(c, float64(cat+1)/float64(disk.JunkCatCount)).FillWidth().Height(4)
 		})
@@ -348,19 +348,19 @@ func (m *Model) junkResultsView(c *ui.Context, t *ui.Theme) {
 	ui.Column(c).Fill().Padding(4, 12).Gap(8).Children(func() {
 		ui.Row(c).FillWidth().Height(30).AlignItems(ui.Center).Gap(8).Children(func() {
 			icon(c, "broom", 18)
-			ui.Text(c, fmt.Sprintf("Cleanup — %s reclaimable", format.Bytes(rep.Bytes))).Bold().Shrink(0)
+			ui.Text(c, fmt.Sprintf(tr("Cleanup — %s reclaimable"), format.Bytes(rep.Bytes))).Bold().Shrink(0)
 			if m.junkBusy {
-				ui.Text(c, "working…").FontSize(11).TextColor(t.TextMuted)
+				ui.Text(c, tr("working…")).FontSize(11).TextColor(t.TextMuted)
 			} else if m.junkMsg != "" {
 				ui.Text(c, m.junkMsg).FontSize(11).TextColor(t.TextMuted).SingleLine().MinWidth(0)
 			}
 			ui.Spacer(c)
-			ui.Text(c, "Fixed, known-safe locations only — nothing is searched for or guessed.").FontSize(11).TextColor(t.TextMuted).SingleLine()
-			if m.iconButton(c, "x", "Back to disk view").Clicked() {
+			ui.Text(c, tr("Fixed, known-safe locations only — nothing is searched for or guessed.")).FontSize(11).TextColor(t.TextMuted).SingleLine()
+			if m.iconButton(c, "x", tr("Back to disk view")).Clicked() {
 				m.junkMode = false
 			}
 		})
-		rustSectionLabel(c, t, "Pick a plan — or click one to preview what it removes")
+		rustSectionLabel(c, t, tr("Pick a plan — or click one to preview what it removes"))
 		ui.Row(c).FillWidth().Gap(10).Children(func() {
 			for p := range junkPresets {
 				m.junkPresetCard(c, t, p)
@@ -368,8 +368,8 @@ func (m *Model) junkResultsView(c *ui.Context, t *ui.Theme) {
 			// REVIEW note card: what never enters a plan.
 			if len(rep.Cats[disk.JunkCatWindowsOld].Dirs) > 0 {
 				ui.Column(c).Grow(1).Padding(10, 12).Gap(4).Background(t.Surface).Radius(8).Children(func() {
-					ui.Text(c, "Not in any plan").FontSize(10).Bold().TextColor(t.TextMuted)
-					ui.Text(c, "Windows.old and upgrade leftovers — deleting removes the rollback option.").
+					ui.Text(c, tr("Not in any plan")).FontSize(10).Bold().TextColor(t.TextMuted)
+					ui.Text(c, tr("Windows.old and upgrade leftovers — deleting removes the rollback option.")).
 						FontSize(11).TextColor(t.TextMuted)
 				}).BorderWidth(1).BorderColor(t.Border)
 			}
@@ -382,24 +382,24 @@ func (m *Model) junkResultsView(c *ui.Context, t *ui.Theme) {
 		m.junkFilterStrip(c, t)
 		rows := m.junkRows()
 		if len(rows) == 0 {
-			msg := "Nothing to clean — every location is empty."
+			msg := tr("Nothing to clean — every location is empty.")
 			if m.junkFilterCat >= 0 {
-				msg = "No rows match this filter."
+				msg = tr("No rows match this filter.")
 			}
 			ui.Text(c, msg).TextColor(t.TextMuted)
 		} else {
-			rustSectionLabel(c, t, "Items — every measured location, one row each")
+			rustSectionLabel(c, t, tr("Items — every measured location, one row each"))
 			ui.Row(c).FillWidth().Height(24).Shrink(0).Padding(0, 10).Gap(6).AlignItems(ui.Center).Children(func() {
 				ui.Box(c).Width(260).Shrink(0)
 				ui.Row(c).Width(78).Shrink(0).Children(func() {
-					ui.Text(c, "Risk").FontSize(11).Bold().TextColor(t.TextMuted)
+					ui.Text(c, tr("Risk")).FontSize(11).Bold().TextColor(t.TextMuted)
 				})
-				ui.Text(c, "Location").FontSize(11).Bold().TextColor(t.TextMuted).Grow(1).MinWidth(120).SingleLine()
+				ui.Text(c, tr("Location")).FontSize(11).Bold().TextColor(t.TextMuted).Grow(1).MinWidth(120).SingleLine()
 				ui.Row(c).Width(64).Shrink(0).Justify(ui.End).Children(func() {
-					ui.Text(c, "Files").FontSize(11).Bold().TextColor(t.TextMuted)
+					ui.Text(c, tr("Files")).FontSize(11).Bold().TextColor(t.TextMuted)
 				})
 				ui.Row(c).Width(92).Shrink(0).Justify(ui.End).Children(func() {
-					ui.Text(c, "Size").FontSize(11).Bold().TextColor(t.TextMuted)
+					ui.Text(c, tr("Size")).FontSize(11).Bold().TextColor(t.TextMuted)
 				})
 				ui.Box(c).Width(76).Shrink(0)
 			})
@@ -412,7 +412,7 @@ func (m *Model) junkResultsView(c *ui.Context, t *ui.Theme) {
 						g = "caret-r"
 					}
 					he := ui.Row(c).FillWidth().Height(26).Padding(0, float32(10+r.depth*24)).Gap(6).AlignItems(ui.Center).Radius(4).
-						Cursor(ui.CursorPointer).Label("Toggle group " + r.head)
+						Cursor(ui.CursorPointer).Label(tr("Toggle group ") + r.head)
 					if he.Hovered() {
 						he.Background(t.SurfaceHover)
 					}
@@ -421,7 +421,7 @@ func (m *Model) junkResultsView(c *ui.Context, t *ui.Theme) {
 						if r.headDim == junkDimCat {
 							tierBadge(c, t, r.cat+1, false)
 							ui.Text(c, r.head).FontSize(11).Bold().TextColor(t.Text).Shrink(0)
-							ui.Text(c, "· "+rep.Cats[r.cat].Note).FontSize(11).TextColor(t.TextMuted).SingleLine().MinWidth(0)
+							ui.Text(c, "· "+tr(rep.Cats[r.cat].Note)).FontSize(11).TextColor(t.TextMuted).SingleLine().MinWidth(0)
 						} else {
 							ui.Text(c, r.head).FontSize(11).Bold().TextColor(rustRiskColor(t, r.risk)).Shrink(0)
 							ui.Text(c, "· "+rustRiskNote(r.risk)).FontSize(11).TextColor(t.TextMuted).SingleLine().MinWidth(0)
@@ -451,15 +451,15 @@ func (m *Model) junkResultsView(c *ui.Context, t *ui.Theme) {
 							if m.junkFilterCat >= 0 {
 								dim = cat != m.junkFilterCat
 							}
-							tierBadge(c, t, cat+1, dim).Tooltip(rep.Cats[cat].Name)
+							tierBadge(c, t, cat+1, dim).Tooltip(tr(rep.Cats[cat].Name))
 						}
 					})
 					ui.Row(c).Width(78).Shrink(0).Children(func() {
 						ui.Text(c, rustRiskLabel(r.risk)).FontSize(10).Bold().TextColor(rustRiskColor(t, r.risk))
 					})
-					note := rep.Cats[r.cat].Note
+					note := tr(rep.Cats[r.cat].Note)
 					if r.d.Warn != "" {
-						note = r.d.Warn
+						note = trWarn(r.d.Warn)
 					}
 					// Every row carries a consequence hint — the marker's
 					// shape and color encode how much it matters.
@@ -471,7 +471,7 @@ func (m *Model) junkResultsView(c *ui.Context, t *ui.Theme) {
 					default:
 						icon(c, "warn", 12).TextColor(t.Warning).Tooltip(note)
 					}
-					ui.Text(c, rep.Cats[r.cat].Name).FontSize(11).TextColor(t.Accent).Shrink(0).
+					ui.Text(c, tr(rep.Cats[r.cat].Name)).FontSize(11).TextColor(t.Accent).Shrink(0).
 						Tooltip(note)
 					ptxt := ui.Text(c, r.d.Path).SingleLine().Tooltip(r.d.Path).Grow(1).MinWidth(0)
 					if r.d.Skip != "" {
@@ -504,8 +504,8 @@ func (m *Model) junkLegendModal(c *ui.Context, t *ui.Theme) {
 	rep := m.junkReport
 	ui.Modal(c, &m.junkLegendOpen, func() {
 		ui.Column(c).Width(800).MaxHeight(520).Padding(6, 16, 14, 16).Gap(10).Children(func() {
-			ui.Text(c, "What the numbers mean").Bold().FontSize(16)
-			ui.Text(c, "Each number is a cleanup category. Every row lights the badge of the category it belongs to; the filter badges above narrow the table to one category.").
+			ui.Text(c, tr("What the numbers mean")).Bold().FontSize(16)
+			ui.Text(c, tr("Each number is a cleanup category. Every row lights the badge of the category it belongs to; the filter badges above narrow the table to one category.")).
 				FontSize(11).TextColor(t.TextMuted)
 			ui.List(c, &m.junkLegendList, disk.JunkCatCount, func(i int) {
 				cat := &rep.Cats[i]
@@ -514,8 +514,8 @@ func (m *Model) junkLegendModal(c *ui.Context, t *ui.Theme) {
 					ui.Row(c).Width(78).Shrink(0).Children(func() {
 						ui.Text(c, rustRiskLabel(cat.Risk)).FontSize(10).Bold().TextColor(rustRiskColor(t, cat.Risk))
 					})
-					ui.Text(c, cat.Name).FontSize(11).Bold().Shrink(0).Width(130)
-					ui.Text(c, cat.Note).FontSize(11).TextColor(t.TextMuted).SingleLine().Grow(1).MinWidth(0).Tooltip(cat.Note)
+					ui.Text(c, tr(cat.Name)).FontSize(11).Bold().Shrink(0).Width(130)
+					ui.Text(c, tr(cat.Note)).FontSize(11).TextColor(t.TextMuted).SingleLine().Grow(1).MinWidth(0).Tooltip(tr(cat.Note))
 				})
 			}).Height(390).FillWidth()
 		})
@@ -527,12 +527,12 @@ func (m *Model) junkLegendModal(c *ui.Context, t *ui.Theme) {
 func (m *Model) junkFilterStrip(c *ui.Context, t *ui.Theme) {
 	rep := m.junkReport
 	ui.Row(c).FillWidth().Height(26).Gap(6).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "Filter:").FontSize(11).TextColor(t.TextMuted).Shrink(0)
+		ui.Text(c, tr("Filter:")).FontSize(11).TextColor(t.TextMuted).Shrink(0)
 		for cat := 0; cat < disk.JunkCatCount; cat++ {
 			cat := cat
 			empty := len(rep.Cats[cat].Dirs) == 0
 			dim := empty || (m.junkFilterCat >= 0 && m.junkFilterCat != cat)
-			b := tierBadge(c, t, cat+1, dim).Tooltip(rep.Cats[cat].Name + " — " + rep.Cats[cat].Note).Cursor(ui.CursorPointer)
+			b := tierBadge(c, t, cat+1, dim).Tooltip(tr(rep.Cats[cat].Name) + " — " + tr(rep.Cats[cat].Note)).Cursor(ui.CursorPointer)
 			if b.Clicked() && !empty {
 				if m.junkFilterCat == cat {
 					m.junkFilterCat = -1
@@ -542,7 +542,7 @@ func (m *Model) junkFilterStrip(c *ui.Context, t *ui.Theme) {
 			}
 		}
 		q := ui.Row(c).Size(16, 16).Shrink(0).Radius(8).BorderWidth(1).BorderColor(t.TextMuted.Alpha(0.5)).
-			Center().Cursor(ui.CursorPointer).Tooltip("What do the numbers mean?").Label("Category legend")
+			Center().Cursor(ui.CursorPointer).Tooltip(tr("What do the numbers mean?")).Label(tr("Category legend"))
 		q.Children(func() {
 			ui.Text(c, "?").FontSize(10).Bold().TextColor(t.TextMuted)
 		})
@@ -552,13 +552,13 @@ func (m *Model) junkFilterStrip(c *ui.Context, t *ui.Theme) {
 		if q.Clicked() {
 			m.junkLegendOpen = true
 		}
-		ui.Text(c, "Group:").FontSize(11).TextColor(t.TextMuted).Shrink(0)
-		ui.Checkbox(c, &m.junkGroupRisk, "Risk").Tooltip("Group rows under risk-level headers")
-		ui.Checkbox(c, &m.junkGroupCat, "Category").Tooltip("Group rows under category headers")
+		ui.Text(c, tr("Group:")).FontSize(11).TextColor(t.TextMuted).Shrink(0)
+		ui.Checkbox(c, &m.junkGroupRisk, tr("Risk")).Tooltip(tr("Group rows under risk-level headers"))
+		ui.Checkbox(c, &m.junkGroupCat, tr("Category")).Tooltip(tr("Group rows under category headers"))
 		if m.junkGroupRisk && m.junkGroupCat {
-			order := "Risk → Category"
+			order := tr("Risk → Category")
 			if m.junkCatFirst {
-				order = "Category → Risk"
+				order = tr("Category → Risk")
 			}
 			if ui.Button(c, "⇄ "+order).Height(20).Clicked() {
 				m.junkCatFirst = !m.junkCatFirst
@@ -566,9 +566,9 @@ func (m *Model) junkFilterStrip(c *ui.Context, t *ui.Theme) {
 		}
 		if m.junkFilterCat >= 0 {
 			cat := m.junkFilterCat
-			ui.Text(c, "· "+rep.Cats[cat].Name).FontSize(11).TextColor(t.TextMuted).Shrink(0)
+			ui.Text(c, "· "+tr(rep.Cats[cat].Name)).FontSize(11).TextColor(t.TextMuted).Shrink(0)
 			m.junkPathsLink(c, t, cat)
-			if m.iconButton(c, "x", "Clear filter").Clicked() {
+			if m.iconButton(c, "x", tr("Clear filter")).Clicked() {
 				m.junkFilterCat = -1
 			}
 		}
@@ -588,25 +588,25 @@ func (m *Model) junkPresetCard(c *ui.Context, t *ui.Theme, p int) {
 	if on {
 		card.BorderColor(t.Accent)
 	}
-	card.Tooltip("Click to highlight the files this plan removes")
+	card.Tooltip(tr("Click to highlight the files this plan removes"))
 	card.Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, pre.name).Bold().FontSize(13)
+			ui.Text(c, tr(pre.name)).Bold().FontSize(13)
 			if p == 0 {
-				ui.Text(c, "recommended").FontSize(10).TextColor(t.Accent)
+				ui.Text(c, tr("recommended")).FontSize(10).TextColor(t.Accent)
 			}
 			ui.Spacer(c)
-			ui.Text(c, pre.tag).FontSize(10).Bold().TextColor(rustRiskColor(t, p))
+			ui.Text(c, tr(pre.tag)).FontSize(10).Bold().TextColor(rustRiskColor(t, p))
 		})
 		ui.Text(c, format.Bytes(bytes)).FontSize(18).Bold()
 		ui.Row(c).Gap(3).AlignItems(ui.Center).Children(func() {
 			for cat := 0; cat < disk.JunkCatCount; cat++ {
 				if pre.covers(cat) {
-					tierBadge(c, t, cat+1, len(m.junkReport.Cats[cat].Dirs) == 0).Tooltip(m.junkReport.Cats[cat].Name)
+					tierBadge(c, t, cat+1, len(m.junkReport.Cats[cat].Dirs) == 0).Tooltip(tr(m.junkReport.Cats[cat].Name))
 				}
 			}
 		})
-		ui.Text(c, pre.note).FontSize(10).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Tooltip(pre.note)
+		ui.Text(c, tr(pre.note)).FontSize(10).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Tooltip(tr(pre.note))
 		// Cost line and the action share one row that never grows: the
 		// confirm question and then the live progress take the text's
 		// slot, the buttons take Clean's.
@@ -614,21 +614,21 @@ func (m *Model) junkPresetCard(c *ui.Context, t *ui.Theme, p int) {
 			switch {
 			case m.junkConfirm == p && m.junkBusy:
 				ui.Spinner(c)
-				ui.Text(c, fmt.Sprintf("Cleaning %d of %d · %s", m.junkRmDone, m.junkRmTotal, m.junkRmPath)).
+				ui.Text(c, fmt.Sprintf(tr("Cleaning %d of %d · %s"), m.junkRmDone, m.junkRmTotal, m.junkRmPath)).
 					FontSize(10).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Grow(1).MinWidth(0)
 				ui.Progress(c, float64(m.junkRmDone)/float64(max(m.junkRmTotal, 1))).Width(90).Height(4)
 			case m.junkConfirm == p:
-				ui.Text(c, fmt.Sprintf("Delete %d locations, free %s?", len(jobs), format.Bytes(bytes))).
+				ui.Text(c, fmt.Sprintf(tr("Delete %d locations, free %s?"), len(jobs), format.Bytes(bytes))).
 					FontSize(10).TextColor(t.Danger).SingleLine().Ellipsis("…").Grow(1).MinWidth(0)
-				if ui.Button(c, "Confirm").Clicked() {
+				if ui.Button(c, tr("Confirm")).Clicked() {
 					m.junkDelete(jobs)
 				}
-				if ui.Button(c, "Keep").Clicked() {
+				if ui.Button(c, tr("Keep")).Clicked() {
 					m.junkConfirm = -1
 				}
 			default:
-				ui.Text(c, pre.cost).FontSize(10).TextColor(t.Warning).SingleLine().Ellipsis("…").Grow(1).MinWidth(0).Tooltip(pre.cost)
-				if m.dangerButton(c, "broom", "Clean").Disabled(bytes == 0 || m.junkBusy).Clicked() {
+				ui.Text(c, tr(pre.cost)).FontSize(10).TextColor(t.Warning).SingleLine().Ellipsis("…").Grow(1).MinWidth(0).Tooltip(tr(pre.cost))
+				if m.dangerButton(c, "broom", tr("Clean")).Disabled(bytes == 0 || m.junkBusy).Clicked() {
 					m.junkConfirm = p
 				}
 			}
@@ -652,18 +652,18 @@ func (m *Model) junkDownloadsCard(c *ui.Context, t *ui.Theme, dl *disk.JunkDir) 
 	card.BorderWidth(1).BorderColor(t.Border)
 	card.Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "Downloads").Bold().FontSize(13)
+			ui.Text(c, tr("Downloads")).Bold().FontSize(13)
 			ui.Spacer(c)
-			ui.Text(c, "your call").FontSize(10).Bold().TextColor(t.Warning)
+			ui.Text(c, tr("your call")).FontSize(10).Bold().TextColor(t.Warning)
 		})
 		ui.Text(c, format.Bytes(dl.Bytes)).FontSize(18).Bold()
-		ui.Text(c, fmt.Sprintf("%s files", format.Int(uint64(dl.Files)))).
+		ui.Text(c, fmt.Sprintf(tr("%s files"), format.Int(uint64(dl.Files)))).
 			FontSize(10).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
-		ui.Text(c, "No plan touches this — your call").FontSize(10).TextColor(t.Warning).
-			SingleLine().Ellipsis("…").Tooltip("Your files — no plan touches this; look and decide yourself")
+		ui.Text(c, tr("No plan touches this — your call")).FontSize(10).TextColor(t.Warning).
+			SingleLine().Ellipsis("…").Tooltip(tr("Your files — no plan touches this; look and decide yourself"))
 		ui.Row(c).FillWidth().Justify(ui.End).Gap(8).AlignItems(ui.Center).Children(func() {
 			op := ui.Row(c).Height(24).PaddingX(10).Gap(5).AlignItems(ui.Center).Radius(t.Radius).
-				Cursor(ui.CursorPointer).Label("Open Downloads").Tooltip("Open in Explorer")
+				Cursor(ui.CursorPointer).Label(tr("Open Downloads")).Tooltip(tr("Open in Explorer"))
 			op.BorderWidth(1).BorderColor(t.Border).Background(t.Surface)
 			op.Draw(func(p *ui.Painter, r ui.Rect) {
 				if op.Pressed() {
@@ -674,19 +674,19 @@ func (m *Model) junkDownloadsCard(c *ui.Context, t *ui.Theme, dl *disk.JunkDir) 
 			})
 			op.Children(func() {
 				icon(c, "folder", 12).TextColor(t.Accent)
-				ui.Text(c, "Open").FontSize(11).TextColor(t.Accent)
+				ui.Text(c, tr("Open")).FontSize(11).TextColor(t.Accent)
 			})
 			if op.Clicked() {
 				_ = exec.Command("explorer", dl.Path).Start()
 			}
 			armed := m.junkRowConfirm == dl.Path
-			label := "Clean"
+			label := tr("Clean")
 			if armed {
-				label = "Sure?"
+				label = tr("Sure?")
 			}
 			cl := ui.Row(c).Height(24).PaddingX(10).Gap(5).AlignItems(ui.Center).Radius(t.Radius).
-				Cursor(ui.CursorPointer).Label("Clean Downloads").
-				Tooltip("Delete everything inside Downloads — the folder itself stays")
+				Cursor(ui.CursorPointer).Label(tr("Clean Downloads")).
+				Tooltip(tr("Delete everything inside Downloads — the folder itself stays"))
 			cl.BorderWidth(1).BorderColor(t.Border).Background(t.Surface)
 			if armed {
 				cl.Background(t.Danger.Alpha(0.12)).BorderColor(t.Danger)
@@ -717,13 +717,13 @@ func (m *Model) junkDownloadsCard(c *ui.Context, t *ui.Theme, dl *disk.JunkDir) 
 // you are about to delete" step.
 func (m *Model) junkPathsLink(c *ui.Context, t *ui.Theme, i int) {
 	cat := &m.junkReport.Cats[i]
-	e := ui.Row(c).Shrink(0).Gap(3).AlignItems(ui.Center).Cursor(ui.CursorPointer).Label("Show paths in " + cat.Name)
+	e := ui.Row(c).Shrink(0).Gap(3).AlignItems(ui.Center).Cursor(ui.CursorPointer).Label(tr("Show paths in ") + tr(cat.Name))
 	e.Children(func() {
-		label := "paths"
+		label := tr("paths")
 		if len(cat.Dirs) == 1 {
-			label = "path"
+			label = tr("path")
 		}
-		ui.Text(c, fmt.Sprintf("%s %s", format.Int(uint64(len(cat.Dirs))), label)).FontSize(11).TextColor(t.Accent)
+		ui.Text(c, fmt.Sprintf(tr("%s %s"), format.Int(uint64(len(cat.Dirs))), label)).FontSize(11).TextColor(t.Accent)
 	})
 	if e.Hovered() {
 		e.Background(t.SurfaceHover)
@@ -743,8 +743,8 @@ func (m *Model) junkCatPathsModal(c *ui.Context, t *ui.Theme) {
 	cat := &m.junkReport.Cats[m.junkPathsCat]
 	ui.Modal(c, &m.junkPathsOpen, func() {
 		ui.Column(c).Width(600).MaxHeight(430).Padding(6, 16, 14, 16).Gap(10).Children(func() {
-			ui.Text(c, cat.Name).Bold().FontSize(16)
-			ui.Text(c, cat.Note).FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, tr(cat.Name)).Bold().FontSize(16)
+			ui.Text(c, tr(cat.Note)).FontSize(11).TextColor(t.TextMuted)
 			ui.List(c, &m.junkPathsList, len(cat.Dirs), func(i int) {
 				d := cat.Dirs[i]
 				ui.Row(c).FillWidth().Height(24).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -755,7 +755,7 @@ func (m *Model) junkCatPathsModal(c *ui.Context, t *ui.Theme) {
 					icon(c, g, 13).TextColor(t.TextMuted)
 					tip := d.Path
 					if d.Warn != "" {
-						tip += " — " + d.Warn
+						tip += " — " + trWarn(d.Warn)
 					}
 					ui.Text(c, d.Path).FontSize(11).SingleLine().Grow(1).MinWidth(0).Tooltip(tip)
 					ui.Text(c, format.Bytes(d.Bytes)).FontSize(11).TextColor(t.TextMuted).Shrink(0)
@@ -769,19 +769,19 @@ func (m *Model) junkCatPathsModal(c *ui.Context, t *ui.Theme) {
 // deletes. Rows blocked by a running app show the reason instead.
 func (m *Model) junkRowButton(c *ui.Context, t *ui.Theme, r junkRow) {
 	if r.d.Skip != "" {
-		ui.Text(c, r.d.Skip).FontSize(10).TextColor(t.Warning).SingleLine().Tooltip("Close the app, then re-scan to clean it")
+		ui.Text(c, trSkip(r.d.Skip)).FontSize(10).TextColor(t.Warning).SingleLine().Tooltip(tr("Close the app, then re-scan to clean it"))
 		return
 	}
 	path := r.d.Path
 	armed := m.junkRowConfirm == path
-	label, tip := "Clean", "Delete "+path
+	label, tip := tr("Clean"), fmt.Sprintf(tr("Delete %s"), path)
 	if r.d.Mode == disk.JunkShell {
-		label, tip = "Empty", "Empty the Recycle Bin on all drives"
+		label, tip = tr("Empty"), tr("Empty the Recycle Bin on all drives")
 	}
 	if armed {
-		label, tip = "Sure?", "Click again to delete "+path
+		label, tip = tr("Sure?"), fmt.Sprintf(tr("Click again to delete %s"), path)
 	}
-	e := ui.Row(c).Height(22).PaddingX(8).Gap(4).AlignItems(ui.Center).Radius(t.Radius).Label("Clean " + path).Tooltip(tip)
+	e := ui.Row(c).Height(22).PaddingX(8).Gap(4).AlignItems(ui.Center).Radius(t.Radius).Label(tr("Clean ") + path).Tooltip(tip)
 	e.BorderWidth(1).BorderColor(t.Border)
 	if armed {
 		e.Background(t.Danger.Alpha(0.12)).BorderColor(t.Danger)

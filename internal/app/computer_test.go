@@ -115,6 +115,7 @@ func TestNewHardwareCards(t *testing.T) {
 	fakeMachine(m)
 	tt := ui.NewTester(m.view, 1180, 1500)
 	tt.SetTitleBar(ui.TitleBar{Height: 40, Right: 138})
+	tt.SetPreferences(ui.Preferences{ReduceMotion: true})
 	tt.Frame()
 	for _, want := range []string{"Display 1", "Display 2", "Audio", "Devices"} {
 		if !tt.HasText(want) {
@@ -175,7 +176,9 @@ func TestNewHardwareCards(t *testing.T) {
 	if err := tt.Click("Collapse all"); err != nil {
 		t.Fatal(err)
 	}
-	tt.Frame()
+	for range 12 {
+		tt.Frame()
+	}
 	if tt.HasText("USB xHCI Compliant Host Controller") {
 		t.Error("Collapse all left a device row visible")
 	}

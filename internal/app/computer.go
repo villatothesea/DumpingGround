@@ -123,23 +123,23 @@ func hwCards(info *hwmon.Info, h []hwmon.Sample) []hwCard {
 	}
 	var cards []hwCard
 
-	mc := hwCard{id: "machine", glyph: "monitor", title: cmp.Or(info.Host, "Computer"), sub: strings.TrimSpace(info.Manufacturer + " " + info.Model), col: hwCPUCol}
+	mc := hwCard{id: "machine", glyph: "monitor", title: cmp.Or(info.Host, tr("Computer")), sub: strings.TrimSpace(info.Manufacturer + " " + info.Model), col: hwCPUCol}
 	if info.Battery {
 		mc.glyph = "laptop"
 	}
 	if last != nil {
-		mc.value = "Up " + durHM(last.Uptime)
+		mc.value = fmt.Sprintf(tr("Up %s"), durHM(last.Uptime))
 	}
 	cards = append(cards, mc)
 
-	cpu := hwCard{id: "cpu", glyph: "cpu", title: "CPU", sub: shortCPU(info.CPU.Name), col: hwCPUCol, value: "—",
+	cpu := hwCard{id: "cpu", glyph: "cpu", title: tr("CPU"), sub: shortCPU(info.CPU.Name), col: hwCPUCol, value: "—",
 		opts: chartOpts{max: 100, col: hwCPUCol, lines: []hwLine{{val: func(s *hwmon.Sample) (float64, bool) { return s.CPU, true }, col: hwCPUCol, fill: true}}}}
 	if last != nil {
 		cpu.value = fmt.Sprintf("%.0f%%", last.CPU)
 	}
 	cards = append(cards, cpu)
 
-	mem := hwCard{id: "mem", glyph: "mem", title: "Memory", sub: memSummary(info), col: hwMemCol, value: "—",
+	mem := hwCard{id: "mem", glyph: "mem", title: tr("Memory"), sub: memSummary(info), col: hwMemCol, value: "—",
 		opts: chartOpts{max: 100, col: hwMemCol, lines: []hwLine{{val: func(s *hwmon.Sample) (float64, bool) { return memPct(s), s.MemTotal > 0 }, col: hwMemCol, fill: true}}}}
 	if last != nil {
 		mem.value = fmt.Sprintf("%.0f%%", memPct(last))
@@ -148,9 +148,9 @@ func hwCards(info *hwmon.Info, h []hwmon.Sample) []hwCard {
 
 	for i, g := range info.GPUs {
 		i := i
-		title := "GPU"
+		title := tr("GPU")
 		if len(info.GPUs) > 1 {
-			title = fmt.Sprintf("GPU %d", i)
+			title = fmt.Sprintf(tr("GPU %d"), i)
 		}
 		c := hwCard{id: fmt.Sprintf("gpu:%d", i), glyph: "gpu", title: title, sub: deTM(g.Name), col: hwGPUCol, value: "—",
 			opts: chartOpts{max: 100, col: hwGPUCol, lines: []hwLine{{val: func(s *hwmon.Sample) (float64, bool) {
@@ -173,7 +173,7 @@ func hwCards(info *hwmon.Info, h []hwmon.Sample) []hwCard {
 
 	for i, d := range info.Disks {
 		i := i
-		title := fmt.Sprintf("Disk %d", d.Index)
+		title := fmt.Sprintf(tr("Disk %d"), d.Index)
 		if len(d.Letters) > 0 {
 			title += " (" + strings.Join(d.Letters, " ") + ")"
 		}
@@ -187,7 +187,7 @@ func hwCards(info *hwmon.Info, h []hwmon.Sample) []hwCard {
 		if last != nil && i < len(last.Disks) {
 			ds := last.Disks[i]
 			c.value = fmt.Sprintf("%.0f%%", ds.Active)
-			c.vsub = "R " + format.Rate(ds.ReadRate) + " · W " + format.Rate(ds.WriteRate)
+			c.vsub = fmt.Sprintf(tr("R %s · W %s"), format.Rate(ds.ReadRate), format.Rate(ds.WriteRate))
 			switch {
 			case ds.Health != nil:
 				c.health, _ = hwmon.JudgeHealth(ds.Health)
@@ -204,14 +204,14 @@ func hwCards(info *hwmon.Info, h []hwmon.Sample) []hwCard {
 		if ns := nicSample(last, n.Index); ns != nil {
 			c.value, c.vsub = "↓ "+format.Rate(ns.InRate), "↑ "+format.Rate(ns.OutRate)
 			if !ns.Up {
-				c.value, c.vsub = "Not connected", ""
+				c.value, c.vsub = tr("Not connected"), ""
 			}
 		}
 		cards = append(cards, c)
 	}
 
 	if info.Battery {
-		c := hwCard{id: "battery", glyph: "battery", title: "Battery", col: hwBatCol, value: "—",
+		c := hwCard{id: "battery", glyph: "battery", title: tr("Battery"), col: hwBatCol, value: "—",
 			opts: chartOpts{max: 100, col: hwBatCol, lines: []hwLine{{val: func(s *hwmon.Sample) (float64, bool) {
 				if s.Battery != nil && s.Battery.Percent >= 0 {
 					return float64(s.Battery.Percent), true
@@ -229,9 +229,9 @@ func hwCards(info *hwmon.Info, h []hwmon.Sample) []hwCard {
 	// list. They have no live series, so their card bodies are plain rows.
 	for i, d := range info.Displays {
 		i := i
-		title := "Display"
+		title := tr("Display")
 		if len(info.Displays) > 1 {
-			title = fmt.Sprintf("Display %d", i+1)
+			title = fmt.Sprintf(tr("Display %d"), i+1)
 		}
 		c := hwCard{id: fmt.Sprintf("display:%d", i), glyph: "monitor", title: title,
 			sub: deTM(d.Manufacturer + " " + d.Model), col: hwDispCol, value: fmt.Sprintf("%d×%d", d.NativeWidth, d.NativeHeight)}
@@ -239,12 +239,12 @@ func hwCards(info *hwmon.Info, h []hwmon.Sample) []hwCard {
 	}
 
 	if len(info.Audio) > 0 {
-		c := hwCard{id: "audio", glyph: "audio", title: "Audio", sub: "adapters and endpoints", col: hwAudCol, value: fmt.Sprint(len(info.Audio))}
+		c := hwCard{id: "audio", glyph: "audio", title: tr("Audio"), sub: tr("adapters and endpoints"), col: hwAudCol, value: fmt.Sprint(len(info.Audio))}
 		cards = append(cards, c)
 	}
 
 	if len(info.Devices) > 0 {
-		c := hwCard{id: "devices", glyph: "chip", title: "Devices", sub: "present hardware", col: hwDevCol, value: fmt.Sprint(len(info.Devices))}
+		c := hwCard{id: "devices", glyph: "chip", title: tr("Devices"), sub: tr("present hardware"), col: hwDevCol, value: fmt.Sprint(len(info.Devices))}
 		counts := map[string]int{}
 		for _, d := range info.Devices {
 			counts[d.Class]++
@@ -257,7 +257,7 @@ func hwCards(info *hwmon.Info, h []hwmon.Sample) []hwCard {
 			}
 		}
 		if top != "" {
-			c.sub = fmt.Sprintf("%s ×%d, %d classes", top, best, len(counts))
+			c.sub = fmt.Sprintf(tr("%s ×%d, %d classes"), top, best, len(counts))
 		}
 		cards = append(cards, c)
 	}
@@ -411,7 +411,7 @@ func diskLink(d hwmon.DiskInfo) string {
 		s += fmt.Sprintf(" ×%d", lanes)
 	}
 	if d.PCIeGen > 0 && d.PCIeGen < gen {
-		s += fmt.Sprintf(" (link now at Gen%d)", d.PCIeGen)
+		s += fmt.Sprintf(tr(" (link now at Gen%d)"), d.PCIeGen)
 	}
 	return s
 }
@@ -420,9 +420,9 @@ func diskLink(d hwmon.DiskInfo) string {
 // integrated one, which has little dedicated memory of its own.
 func gpuMemLine(g hwmon.GPUInfo, s hwmon.GPUSample) string {
 	if g.DedicatedBytes >= 1<<30 {
-		return fmt.Sprintf("VRAM %s / %s", format.Bytes(s.DedicatedUsed), format.Bytes(g.DedicatedBytes))
+		return fmt.Sprintf(tr("VRAM %s / %s"), format.Bytes(s.DedicatedUsed), format.Bytes(g.DedicatedBytes))
 	}
-	return "Shared memory " + format.Bytes(s.SharedUsed+s.DedicatedUsed)
+	return tr("Shared memory") + " " + format.Bytes(s.SharedUsed+s.DedicatedUsed)
 }
 
 func linkSpeed(bps uint64) string {
@@ -438,13 +438,13 @@ func linkSpeed(bps uint64) string {
 func batteryState(b *hwmon.BatterySample) string {
 	switch {
 	case b.Charging:
-		return "Charging"
+		return tr("Charging")
 	case b.OnAC:
-		return "Plugged in"
+		return tr("Plugged in")
 	case b.Remain > 0:
-		return "On battery · " + durHM(b.Remain) + " left"
+		return fmt.Sprintf(tr("On battery · %s left"), durHM(b.Remain))
 	}
-	return "On battery"
+	return tr("On battery")
 }
 
 // durHM renders "2 h 10 min" style spans.
@@ -453,9 +453,9 @@ func durHM(d time.Duration) string {
 	days, h, m := int(d.Hours())/24, int(d.Hours())%24, int(d.Minutes())%60
 	switch {
 	case days > 0:
-		return fmt.Sprintf("%d d %d h %d min", days, h, m)
+		return fmt.Sprintf(tr("%d d %d h %d min"), days, h, m)
 	case h > 0:
-		return fmt.Sprintf("%d h %d min", h, m)
+		return fmt.Sprintf(tr("%d h %d min"), h, m)
 	}
-	return fmt.Sprintf("%d min", m)
+	return fmt.Sprintf(tr("%d min"), m)
 }

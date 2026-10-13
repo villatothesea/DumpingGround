@@ -301,18 +301,18 @@ func (m *Model) processView(c *ui.Context) {
 		selPID = r.PID
 	}
 	ui.Row(c).FillWidth().Height(40).Shrink(0).PaddingX(12).Gap(8).AlignItems(ui.Center).Children(func() {
-		m.modeButton(c, t, "Tree", m.processTreeMode, func() {
+		m.modeButton(c, t, tr("Tree"), m.processTreeMode, func() {
 			m.processTreeMode = true
 			m.processSelected = -1
 		})
-		m.modeButton(c, t, "List", !m.processTreeMode, func() {
+		m.modeButton(c, t, tr("List"), !m.processTreeMode, func() {
 			m.processTreeMode = false
 			m.processSelected = -1
 		})
 		m.selActs(c, t)
 		ui.Spacer(c)
 		if strings.TrimSpace(m.processQuery) != "" {
-			label := fmt.Sprintf("%s of %s match", format.Int(uint64(len(m.processFlat))), format.Int(uint64(len(m.processRows))))
+			label := fmt.Sprintf(tr("%s of %s match"), format.Int(uint64(len(m.processFlat))), format.Int(uint64(len(m.processRows))))
 			ui.Text(c, label).FontSize(11).TextColor(t.TextMuted).Shrink(0)
 		}
 		m.selKillActs(c, t)
@@ -321,12 +321,12 @@ func (m *Model) processView(c *ui.Context) {
 		ui.Text(c, m.lastProcessError).Padding(2, 12).TextColor(t.Danger).SingleLine()
 	}
 	columns := []ui.TableColumn{
-		{ID: "name", Title: "Process", Width: 230, Sortable: true}, {ID: "pid", Title: "PID", Width: 70, Align: ui.End, Sortable: true},
-		{ID: "cpu", Title: "CPU %", Width: 75, Align: ui.End, Sortable: true}, {ID: "memory", Title: "Working set", Width: 104, Align: ui.End, Sortable: true},
-		{ID: "private", Title: "Private bytes", Width: 104, Align: ui.End, Sortable: true}, {ID: "read", Title: "Read /s", Width: 96, Align: ui.End, Sortable: true},
-		{ID: "write", Title: "Write /s", Width: 96, Align: ui.End, Sortable: true}, {ID: "threads", Title: "Threads", Width: 74, Align: ui.End, Sortable: true},
-		{ID: "user", Title: "User", Width: 180, Sortable: true},
-		{ID: "dir", Title: "Directory", MinWidth: 260, Sortable: true},
+		{ID: "name", Title: tr("Process"), Width: 230, Sortable: true}, {ID: "pid", Title: tr("PID"), Width: 70, Align: ui.End, Sortable: true},
+		{ID: "cpu", Title: tr("CPU %"), Width: 75, Align: ui.End, Sortable: true}, {ID: "memory", Title: tr("Working set"), Width: 104, Align: ui.End, Sortable: true},
+		{ID: "private", Title: tr("Private bytes"), Width: 104, Align: ui.End, Sortable: true}, {ID: "read", Title: tr("Read /s"), Width: 96, Align: ui.End, Sortable: true},
+		{ID: "write", Title: tr("Write /s"), Width: 96, Align: ui.End, Sortable: true}, {ID: "threads", Title: tr("Threads"), Width: 74, Align: ui.End, Sortable: true},
+		{ID: "user", Title: tr("User"), Width: 180, Sortable: true},
+		{ID: "dir", Title: tr("Directory"), MinWidth: 260, Sortable: true},
 	}
 	cell := func(id uint32, col int) {
 		r := m.displayProcess(id)
@@ -389,7 +389,7 @@ func (m *Model) processView(c *ui.Context) {
 				m.processTree.List.Sort = &m.processSort
 				tbl := tableChrome(c, func() ui.Element {
 					return ui.OutlineTable(c, &m.processTree, columns, m.processRoots, func(id uint32) []uint32 { return m.processChildren[id] }, cell)
-				}).FillWidth().Grow(1).Label("Process table")
+				}).FillWidth().Grow(1).Label(tr("Process table"))
 				tableRowMenu(tbl, &m.procMenuHits, func(id int, menu *ui.Menu) {
 					m.selectProcessRow(uint32(id))
 					m.processMenu(menu, m.processByPID[uint32(id)])
@@ -406,7 +406,7 @@ func (m *Model) processView(c *ui.Context) {
 				}
 				tbl := tableChrome(c, func() ui.Element {
 					return ui.Table(c, &m.processList, columns, len(m.processFlat), func(row, col int) { cell(m.processFlat[row], col) })
-				}).FillWidth().Grow(1).Label("Process table")
+				}).FillWidth().Grow(1).Label(tr("Process table"))
 				tableRowMenu(tbl, &m.procMenuHits, func(id int, menu *ui.Menu) {
 					m.selectProcessRow(uint32(id))
 					m.processMenu(menu, m.processByPID[uint32(id)])
@@ -539,13 +539,13 @@ func (m *Model) requestInspection(pid uint32) {
 	m.stacks = nil
 	m.handleErr = ""
 	m.stackErr = ""
-	m.inspectError = "Loading…"
+	m.inspectError = tr("Loading…")
 	if m.window == nil {
 		return
 	}
 	inspector, ok := m.processSvc.Inspect()
 	if !ok {
-		m.inspectError = "Unavailable on this platform"
+		m.inspectError = tr("Unavailable on this platform")
 		return
 	}
 	go func() {
@@ -629,7 +629,7 @@ func (m *Model) detailPill(c *ui.Context, t *ui.Theme, name string) {
 		}
 	})
 	e.Children(func() {
-		tx := ui.Text(c, name).SingleLine()
+		tx := ui.Text(c, tr(name)).SingleLine()
 		if on {
 			tx.TextColor(t.AccentText).Bold()
 		} else {
@@ -652,9 +652,9 @@ func (m *Model) processDetails(c *ui.Context) {
 					m.detailPill(c, t, name)
 				}
 			})
-			ui.Text(c, fmt.Sprintf("%s modules · %s threads", format.Int(uint64(len(m.inspectedModules))), format.Int(uint64(len(m.inspectedThreads))))).FontSize(11).TextColor(t.TextMuted).Shrink(0)
+			ui.Text(c, fmt.Sprintf(tr("%s modules · %s threads"), format.Int(uint64(len(m.inspectedModules))), format.Int(uint64(len(m.inspectedThreads))))).FontSize(11).TextColor(t.TextMuted).Shrink(0)
 			ui.Text(c, m.inspectError).SingleLine().Grow(1).MinWidth(0).TextColor(t.TextMuted)
-			if m.iconButton(c, "x", "Close details").Clicked() {
+			if m.iconButton(c, "x", tr("Close details")).Clicked() {
 				m.showDetails = false
 			}
 		})
@@ -662,10 +662,10 @@ func (m *Model) processDetails(c *ui.Context) {
 		if m.detailTab == "Properties" {
 			i := m.inspectedInfo
 			ui.Column(c).Grow(1).Padding(4, 10).Gap(4).Children(func() {
-				ui.Text(c, fmt.Sprintf("User: %s   ·   Elevated: %t   ·   Handles: %d   ·   Priority class: 0x%x", i.User, i.Elevated, i.Handles, i.Priority)).SingleLine()
+				ui.Text(c, fmt.Sprintf(tr("User: %s   ·   Elevated: %t   ·   Handles: %d   ·   Priority class: 0x%x"), i.User, i.Elevated, i.Handles, i.Priority)).SingleLine()
 				ui.Text(c, i.Path).SingleLine().Tooltip(i.Path)
 				ui.Text(c, i.Command).SingleLine().Tooltip(i.Command)
-				if ui.Button(c, "Copy command line").Disabled(i.Command == "").Clicked() {
+				if ui.Button(c, tr("Copy command line")).Disabled(i.Command == "").Clicked() {
 					mygo.Clipboard.WriteText(i.Command)
 				}
 				if i.Access != "" {
@@ -673,7 +673,7 @@ func (m *Model) processDetails(c *ui.Context) {
 				}
 			})
 		} else if m.detailTab == "Modules" {
-			cols := []ui.TableColumn{{Title: "Module", Width: 200}, {Title: "Image size", Width: 100}, {Title: "Path"}}
+			cols := []ui.TableColumn{{Title: tr("Module"), Width: 200}, {Title: tr("Image size"), Width: 100}, {Title: tr("Path")}}
 			tableChrome(c, func() ui.Element {
 				return ui.Table(c, &m.detailList, cols, len(m.inspectedModules), func(i, col int) {
 					r := m.inspectedModules[i]
@@ -687,7 +687,7 @@ func (m *Model) processDetails(c *ui.Context) {
 				})
 			}).Grow(1).FillWidth()
 		} else if m.detailTab == "Threads" {
-			cols := []ui.TableColumn{{Title: "Thread ID", Width: 140}, {Title: "Owner PID", Width: 140}, {Title: "Base priority"}}
+			cols := []ui.TableColumn{{Title: tr("Thread ID"), Width: 140}, {Title: tr("Owner PID"), Width: 140}, {Title: tr("Base priority")}}
 			tableChrome(c, func() ui.Element {
 				return ui.Table(c, &m.detailList, cols, len(m.inspectedThreads), func(i, col int) {
 					r := m.inspectedThreads[i]
@@ -702,13 +702,13 @@ func (m *Model) processDetails(c *ui.Context) {
 			}).Grow(1).FillWidth()
 		} else if m.detailTab == "Handles" {
 			ui.Row(c).Height(30).Shrink(0).PaddingX(10).Gap(6).AlignItems(ui.Center).Children(func() {
-				ui.SearchField(c, &m.handleQuery).Placeholder("Filter type or name").Width(220)
-				if ui.Button(c, "Search handles").Clicked() {
+				ui.SearchField(c, &m.handleQuery).Placeholder(tr("Filter type or name")).Width(220)
+				if ui.Button(c, tr("Search handles")).Clicked() {
 					m.requestHandleSearch(m.inspectedPID)
 				}
-				ui.Text(c, fmt.Sprintf("%s results", format.Int(uint64(len(m.handles))))).TextColor(c.Theme().TextMuted)
+				ui.Text(c, fmt.Sprintf(tr("%s results"), format.Int(uint64(len(m.handles))))).TextColor(c.Theme().TextMuted)
 			})
-			cols := []ui.TableColumn{{Title: "Handle", Width: 90}, {Title: "Type", Width: 130}, {Title: "Name"}, {Title: "Access", Width: 90, Align: ui.End}}
+			cols := []ui.TableColumn{{Title: tr("Handle"), Width: 90}, {Title: tr("Type"), Width: 130}, {Title: tr("Name")}, {Title: tr("Access"), Width: 90, Align: ui.End}}
 			tableChrome(c, func() ui.Element {
 				return ui.Table(c, &m.detailList, cols, len(m.handles), func(i, col int) {
 					h := m.handles[i]
@@ -733,12 +733,12 @@ func (m *Model) processDetails(c *ui.Context) {
 			}
 			frames := m.stacks[threadID]
 			ui.Row(c).Height(30).Shrink(0).PaddingX(10).Gap(6).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, fmt.Sprintf("Thread %d · %d frames", threadID, len(frames)))
-				if ui.Button(c, "Refresh stack").Clicked() {
+				ui.Text(c, fmt.Sprintf(tr("Thread %d · %d frames"), threadID, len(frames)))
+				if ui.Button(c, tr("Refresh stack")).Clicked() {
 					m.requestStack(m.inspectedPID, threadID)
 				}
 			})
-			cols := []ui.TableColumn{{Title: "Address", Width: 150}, {Title: "Symbol"}, {Title: "Offset", Width: 100, Align: ui.End}}
+			cols := []ui.TableColumn{{Title: tr("Address"), Width: 150}, {Title: tr("Symbol")}, {Title: tr("Offset"), Width: 100, Align: ui.End}}
 			tableChrome(c, func() ui.Element {
 				return ui.Table(c, &m.detailList, cols, len(frames), func(i, col int) {
 					f := frames[i]
@@ -746,7 +746,7 @@ func (m *Model) processDetails(c *ui.Context) {
 					if col == 1 {
 						s = f.Symbol
 						if s == "" {
-							s = "(unresolved)"
+							s = tr("(unresolved)")
 						}
 					} else if col == 2 {
 						s = fmt.Sprintf("0x%x", f.Offset)
