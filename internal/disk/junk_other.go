@@ -38,3 +38,8 @@ func junkNewestTime(info os.FileInfo) time.Time { return info.ModTime() }
 
 // junkDirNewestTime mirrors junkNewestTime off Windows.
 func junkDirNewestTime(info os.FileInfo) time.Time { return info.ModTime() }
+
+// Steam, DISM and the component store are Windows-only concepts.
+func steamShaderCaches() []string { return nil }
+func junkWinSxS() (JunkDir, bool) { return JunkDir{}, false }
+func dismCleanup() error          { return nil }

@@ -26,9 +26,9 @@ type junkPreset struct {
 }
 
 var junkPresets = []junkPreset{
-	{name: "Light", tag: "SAFE", note: "seven SAFE categories — temp, caches, reports",
+	{name: "Light", tag: "SAFE", note: "nine SAFE categories — temp, caches, reports, store caches, driver leftovers",
 		cost: "Cost: nothing — everything regenerates or re-downloads on its own",
-		from: 0, to: disk.JunkCatAppCaches, except: []int{disk.JunkCatRecycleBin}},
+		from: 0, to: disk.JunkCatDrvExtract, except: []int{disk.JunkCatRecycleBin}},
 	{name: "Deep", tag: "+ MODERATE", note: "everything in Light, plus update staging, dumps, logs, dev caches",
 		cost: "Cost: re-downloads, one slower update, lost diagnostic logs",
 		from: 0, to: disk.JunkCatDevCaches, except: []int{disk.JunkCatRecycleBin}},

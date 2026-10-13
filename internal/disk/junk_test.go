@@ -182,6 +182,42 @@ func TestJunkCleanWholeRemovesDir(t *testing.T) {
 	}
 }
 
+func TestJunkKidsGuardStampsSkipAndGuard(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "c.bin"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rep := &JunkReport{}
+	rep.junkKidsGuard(JunkCatShader, root, 0, "warn", "app is running", "app.exe")
+	if len(rep.Cats[JunkCatShader].Dirs) != 1 {
+		t.Fatalf("expected one row, got %d", len(rep.Cats[JunkCatShader].Dirs))
+	}
+	d := rep.Cats[JunkCatShader].Dirs[0]
+	if d.Guard != "app.exe" || d.Skip != "app is running" || d.Warn != "warn" {
+		t.Fatalf("row missing stamps: %+v", d)
+	}
+	if _, _, sk, err := JunkClean(d, nil); err != nil || sk != 1 {
+		t.Fatalf("guarded row must skip: err %v skipped %d", err, sk)
+	}
+	if _, err := os.Stat(filepath.Join(root, "c.bin")); err != nil {
+		t.Fatal("guarded row was still deleted")
+	}
+}
+
+func TestJunkCleanDismGuarded(t *testing.T) {
+	// A DISM row blocked by a running servicing transaction must not
+	// launch anything — the guard check runs before the mode switch.
+	d := JunkDir{Path: "DISM component cleanup", Mode: JunkDism, Guard: "tiworker.exe"}
+	_, _, sk, err := JunkClean(d, func(name string) bool { return name == "tiworker.exe" })
+	if err != nil || sk != 1 {
+		t.Fatalf("guarded DISM row must skip: err %v skipped %d", err, sk)
+	}
+	d = JunkDir{Path: "DISM component cleanup", Mode: JunkDism, Skip: "TiWorker is running"}
+	if _, _, sk, err = JunkClean(d, nil); err != nil || sk != 1 {
+		t.Fatalf("skipped DISM row must not run: err %v skipped %d", err, sk)
+	}
+}
+
 func TestJunkCleanShellGuardsSkip(t *testing.T) {
 	// A row marked skipped — e.g. its browser is running — must not be
 	// touched even when asked directly.

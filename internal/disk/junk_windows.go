@@ -3,9 +3,14 @@
 package disk
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 	"unsafe"
@@ -142,6 +147,160 @@ func EmptyRecycleBin() error {
 	hr, _, _ := procSHEmptyRecycle.Call(0, 0, sherbNoUI)
 	if int32(hr) < 0 {
 		return fmt.Errorf("SHEmptyRecycleBin: 0x%08x", uint32(hr))
+	}
+	return nil
+}
+
+// steamPath reads Steam's install dir from the registry — the default
+// C:\Program Files (x86)\Steam is only right on a plain install, and
+// Steam is one of the most relocated apps there is.
+func steamPath() string {
+	var h syscall.Handle
+	p, err := syscall.UTF16PtrFromString(`Software\Valve\Steam`)
+	if err != nil {
+		return ""
+	}
+	if err = syscall.RegOpenKeyEx(syscall.HKEY_CURRENT_USER, p, 0, syscall.KEY_READ, &h); err != nil {
+		return ""
+	}
+	defer syscall.RegCloseKey(h)
+	n, err := syscall.UTF16PtrFromString("SteamPath")
+	if err != nil {
+		return ""
+	}
+	var typ, size uint32
+	r, _, _ := procRegQueryValue.Call(uintptr(h), uintptr(unsafe.Pointer(n)), 0,
+		uintptr(unsafe.Pointer(&typ)), 0, uintptr(unsafe.Pointer(&size)))
+	if r != 0 || (typ != 1 && typ != 2) || size < 4 {
+		return ""
+	}
+	buf := make([]uint16, size/2)
+	r, _, _ = procRegQueryValue.Call(uintptr(h), uintptr(unsafe.Pointer(n)), 0,
+		uintptr(unsafe.Pointer(&typ)), uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&size)))
+	if r != 0 {
+		return ""
+	}
+	return syscall.UTF16ToString(buf)
+}
+
+var procRegQueryValue = syscall.NewLazyDLL("advapi32.dll").NewProc("RegQueryValueExW")
+
+// steamShaderCaches locates the shader cache under the real Steam
+// install plus every secondary library — games moved to another drive
+// keep their shaders beside them, in that library's steamapps.
+func steamShaderCaches() []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(root string) {
+		p := filepath.Join(root, `steamapps\shadercache`)
+		if !seen[strings.ToLower(p)] {
+			seen[strings.ToLower(p)] = true
+			out = append(out, p)
+		}
+	}
+	if root := steamPath(); root != "" {
+		add(root)
+		for _, lib := range steamLibraryFolders(root) {
+			add(lib)
+		}
+	}
+	add(`C:\Program Files (x86)\Steam`) // a leftover install may exist too
+	return out
+}
+
+// steamLibraryFolders parses libraryfolders.vdf's "path" entries — a
+// plain text file, so a line regex is enough.
+var steamLibPathRe = regexp.MustCompile(`"path"\s+"([^"]+)"`)
+
+func steamLibraryFolders(steamRoot string) []string {
+	data, err := os.ReadFile(filepath.Join(steamRoot, `steamapps\libraryfolders.vdf`))
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, m := range steamLibPathRe.FindAllSubmatch(data, -1) {
+		out = append(out, strings.ReplaceAll(string(m[1]), `\\`, `\`))
+	}
+	return out
+}
+
+// dismCmd hides the console window DISM would flash when spawned from a
+// GUI-subsystem process.
+func dismCmd(ctx context.Context, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, "Dism", args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	return cmd
+}
+
+// junkWinSxS asks DISM how much of the component store is reclaimable —
+// the same answer cleanmgr's "Windows Update Cleanup" gives. The row
+// only appears when DISM recommends a cleanup; its Path is a label,
+// not a filesystem location.
+func junkWinSxS() (JunkDir, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	out, err := dismCmd(ctx, "/Online", "/English", "/Cleanup-Image", "/AnalyzeComponentStore").CombinedOutput()
+	if err != nil {
+		return JunkDir{}, false
+	}
+	var reclaim uint64
+	recommended := false
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(line, "Backups and Disabled Features"),
+			strings.HasPrefix(line, "Cache and Temporary Data"):
+			if i := strings.LastIndex(line, ":"); i >= 0 {
+				reclaim += dismBytes(line[i+1:])
+			}
+		case strings.HasPrefix(line, "Component Store Cleanup Recommended"):
+			recommended = strings.HasSuffix(strings.ToLower(line), "yes")
+		}
+	}
+	if !recommended || reclaim == 0 {
+		return JunkDir{}, false
+	}
+	return JunkDir{
+		Path: "DISM component cleanup", Bytes: reclaim, Files: -1,
+		Base: "Component store", Mode: JunkDism,
+		Warn: "Removes superseded Windows components — takes minutes, cannot be undone",
+	}, true
+}
+
+// dismBytes parses DISM's "1.42 GB"-style figures.
+var dismSizeRe = regexp.MustCompile(`([\d.,]+)\s*(Bytes|KB|MB|GB|TB)`)
+
+func dismBytes(s string) uint64 {
+	m := dismSizeRe.FindStringSubmatch(strings.TrimSpace(s))
+	if m == nil {
+		return 0
+	}
+	v, _ := strconv.ParseFloat(strings.ReplaceAll(m[1], ",", ""), 64)
+	switch m[2] {
+	case "TB":
+		v *= 1 << 40
+	case "GB":
+		v *= 1 << 30
+	case "MB":
+		v *= 1 << 20
+	case "KB":
+		v *= 1 << 10
+	}
+	return uint64(v)
+}
+
+// dismCleanup runs cleanmgr's "Windows Update Cleanup" the way it does:
+// the component store shrinks itself — files are never removed by hand.
+func dismCleanup() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+	out, err := dismCmd(ctx, "/Online", "/English", "/Cleanup-Image", "/StartComponentCleanup").CombinedOutput()
+	if err != nil {
+		tail := strings.TrimSpace(string(out))
+		if n := len(tail); n > 300 {
+			tail = tail[n-300:]
+		}
+		return fmt.Errorf("dism StartComponentCleanup: %v — %s", err, tail)
 	}
 	return nil
 }
