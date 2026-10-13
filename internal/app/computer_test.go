@@ -316,16 +316,14 @@ func TestDiskLinkAndCleanup(t *testing.T) {
 	defer m.close() // stops the scan the button starts
 	m.page = computerPage
 	fakeMachine(m)
-	// Tall enough that the Clean up panel is inside the viewport: Tester
-	// clicks at label positions and cannot reach scrolled-away content.
-	tt := ui.NewTester(m.view, 1180, 1700)
+	tt := ui.NewTester(m.view, 1180, 800)
 	m.hw.detail = "disk:0"
 	tt.Frame()
 	if !tt.HasText("PCIe 4.0 ×4 (link now at Gen2)") {
 		t.Fatal("negotiated link not shown")
 	}
 	if !tt.HasText("Scan C:\\ in Disk Usage") || !tt.HasText("Open Uninstall") {
-		t.Fatal("cleanup buttons missing")
+		t.Fatal("cleanup buttons missing from the detail bar")
 	}
 	if err := tt.Click("Open Uninstall"); err != nil {
 		t.Fatal(err)
@@ -336,7 +334,7 @@ func TestDiskLinkAndCleanup(t *testing.T) {
 	}
 	m.page = computerPage
 	m.hw.detail = "disk:0"
-	tt = ui.NewTester(m.view, 1180, 1700)
+	tt = ui.NewTester(m.view, 1180, 800)
 	tt.Frame()
 	m.diskCancel = func() {} // busy: startScan returns early, no real C:\ scan
 	if err := tt.Click("Scan C:\\ in Disk Usage"); err != nil {

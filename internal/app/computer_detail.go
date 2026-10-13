@@ -26,6 +26,21 @@ func (m *Model) hwDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist []hw
 				icon(c, cd.glyph, 20).TextColor(cd.col)
 				ui.Text(c, cd.title).FontSize(18).Bold().SingleLine()
 				ui.Text(c, cd.sub).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Grow(1).MinWidth(0)
+				// Disk pages carry their page-jump actions in the bar.
+				var didx int
+				if sscan(cd.id, "disk:%d", &didx) && didx < len(info.Disks) {
+					for _, l := range info.Disks[didx].Letters {
+						l := l
+						if m.iconTextButton(c, "hdd", "Scan "+l+`\`+" in Disk Usage").Clicked() {
+							m.diskDrive, m.diskPath = l+`\`, l+`\`
+							m.setPage(diskPage)
+							m.startScan()
+						}
+					}
+					if m.iconTextButton(c, "pkg", "Open Uninstall").Clicked() {
+						m.setPage(uninstallPage)
+					}
+				}
 				ui.Column(c).AlignItems(ui.End).Shrink(0).Children(func() {
 					ui.Text(c, cd.value).FontSize(22).Bold().SingleLine()
 					if cd.vsub != "" {
@@ -534,24 +549,6 @@ func (m *Model) hwDiskDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist 
 		{"Partition style", d.PartitionStyle},
 		{"Drive letters", strings.Join(d.Letters, "  ")},
 		{"Physical drive", fmt.Sprintf(`\\.\PhysicalDrive%d`, d.Index)},
-	})
-	// Actions that take the drive's volumes elsewhere in the app.
-	m.hwPanel(c, t, func() {
-		ui.Text(c, "Clean up").Bold().FontSize(13)
-		ui.Row(c).Gap(8).Children(func() {
-			for _, l := range d.Letters {
-				l := l
-				if m.iconTextButton(c, "hdd", "Scan "+l+`\`+" in Disk Usage").Clicked() {
-					m.diskDrive, m.diskPath = l+`\`, l+`\`
-					m.setPage(diskPage)
-					m.startScan()
-				}
-			}
-			if m.iconTextButton(c, "pkg", "Open Uninstall").Clicked() {
-				m.setPage(uninstallPage)
-			}
-		})
-		ui.Text(c, "Disk Usage maps what's taking space on a volume; Uninstall removes software and its leftovers.").FontSize(12).TextColor(t.TextMuted)
 	})
 }
 

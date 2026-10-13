@@ -11,10 +11,12 @@ import (
 )
 
 const (
-	hwPad   = 16  // page padding
-	hwGap   = 12  // gap between panels
-	hwRailW = 300 // catalogue column width
-	hwRowH  = 54  // one catalogue entry
+	hwPad     = 16  // page padding
+	hwGap     = 12  // gap between panels
+	hwRailW   = 300 // default catalogue width
+	hwRailMin = 225 // drag limits: ¾ below and ⅓ above the default
+	hwRailMax = 400
+	hwRowH    = 52 // one catalogue entry
 )
 
 // computerView is the Computer page: a catalogue rail on the left, the
@@ -45,33 +47,57 @@ func (m *Model) computerView(c *ui.Context, t *ui.Theme) {
 		m.hw.detail = "" // the hardware went away (a disk was ejected)
 		cd = &cards[0]
 	}
+	railW := m.hw.railW
+	if railW <= 0 {
+		railW = hwRailW
+	}
 	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-		m.hwRail(c, t, cards, cd.id, hist)
-		ui.Box(c).Width(1).FillHeight().Background(t.Border)
+		m.hwRail(c, t, cards, cd.id, hist, railW)
 		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
 			m.hwDetail(c, t, info, hist, cd)
 		})
+		// The seam is an invisible drag strip: hovering shows a resize
+		// cursor and a faint accent hairline; dragging resizes the
+		// catalogue within its limits.
+		var held bool
+		var dx float32
+		h := ui.Box(c).Absolute().Top(0).Bottom(0).Left(railW - 3).Width(6).
+			Cursor(ui.CursorResizeEW).Label("Resize catalogue")
+		h.Draw(func(p *ui.Painter, r ui.Rect) {
+			if held || h.Hovered() {
+				p.Fill(ui.Rect{X: r.X + r.W/2, Y: r.Y, W: 1, H: r.H}, t.Accent.Alpha(0.55), 0)
+			}
+		})
+		dx, _, held = h.Dragged()
+		if held {
+			m.hw.railW = min(hwRailMax, max(hwRailMin, railW+dx))
+		}
 	})
 }
 
 // hwRail is the left catalogue: one compact row per card, the machine
 // entry first.
-func (m *Model) hwRail(c *ui.Context, t *ui.Theme, cards []hwCard, selID string, hist []hwmon.Sample) {
-	ui.Column(c).Width(hwRailW).Shrink(0).MinHeight(0).Children(func() {
+func (m *Model) hwRail(c *ui.Context, t *ui.Theme, cards []hwCard, selID string, hist []hwmon.Sample, railW float32) {
+	ui.Column(c).Width(railW).Shrink(0).MinHeight(0).Children(func() {
 		ui.Scroll(c.Key("hw-rail")).Grow(1).MinHeight(0).Children(func() {
 			ui.Column(c).Padding(hwPad, 10).Gap(6).AlignItems(ui.Stretch).Children(func() {
 				for i := range cards {
-					m.hwRailRow(c, t, &cards[i], hist, cards[i].id == selID)
+					m.hwRailRow(c, t, &cards[i], hist, cards[i].id == selID, railW)
 				}
 			})
 		})
 	})
 }
 
-// hwRailRow is one catalogue entry: glyph, name, a one-line summary and
-// either the current figure or a thumbnail of its live chart.
-func (m *Model) hwRailRow(c *ui.Context, t *ui.Theme, cd *hwCard, hist []hwmon.Sample, selected bool) {
-	e := ui.Row(c.Key("rail:"+cd.id)).Height(hwRowH).Padding(10, 0).Gap(10).AlignItems(ui.Center).Radius(8).Cursor(ui.CursorPointer).Label(cd.title)
+// hwRailRow is one catalogue entry: glyph, name and the live figure on
+// the left half, a wide chart thumbnail filling the right half. The
+// selected row's edge bar sits clear of the glyph.
+func (m *Model) hwRailRow(c *ui.Context, t *ui.Theme, cd *hwCard, hist []hwmon.Sample, selected bool, railW float32) {
+	metric := cd.value
+	if cd.vsub != "" {
+		metric = strings.TrimSpace(metric + "  " + cd.vsub)
+	}
+	e := ui.Row(c.Key("rail:"+cd.id)).Height(hwRowH).Padding(0, 10, 0, 14).Gap(10).AlignItems(ui.Center).Radius(8).Cursor(ui.CursorPointer).Label(cd.title)
 	e.Draw(func(p *ui.Painter, r ui.Rect) {
 		switch {
 		case selected:
@@ -82,26 +108,21 @@ func (m *Model) hwRailRow(c *ui.Context, t *ui.Theme, cd *hwCard, hist []hwmon.S
 		}
 	})
 	e.Children(func() {
-		icon(c, cd.glyph, 20).TextColor(cd.col)
-		ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
+		icon(c, cd.glyph, 22).TextColor(cd.col)
+		ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
 			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, cd.title).Bold().FontSize(12).SingleLine().Ellipsis("…")
 				if cd.health != "" {
 					ui.Box(c).Size(7, 7).Radius(4).Background(hwHealthColor(cd.health, t))
 				}
 			})
-			ui.Text(c, cd.sub).FontSize(10).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
-		})
-		ui.Column(c).AlignItems(ui.End).Shrink(0).Gap(2).Children(func() {
-			if cd.value != "" {
-				ui.Text(c, cd.value).FontSize(11).Bold().SingleLine()
-			}
-			if len(cd.opts.lines) > 0 {
-				ui.Box(c).Size(58, 18).Draw(func(p *ui.Painter, r ui.Rect) { drawChart(p, r, t, hist, cd.opts) })
-			} else if cd.vsub != "" {
-				ui.Text(c, cd.vsub).FontSize(10).TextColor(t.TextMuted).SingleLine()
+			if metric != "" {
+				ui.Text(c, metric).FontSize(10).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
 			}
 		})
+		if len(cd.opts.lines) > 0 {
+			ui.Box(c).Width(max(48, (railW-20)/2)).Height(30).Shrink(0).Draw(func(p *ui.Painter, r ui.Rect) { drawChart(p, r, t, hist, cd.opts) })
+		}
 	})
 	if e.Clicked() {
 		m.hw.detail = cd.id

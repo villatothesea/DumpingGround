@@ -44,6 +44,7 @@ type computerState struct {
 	detail  string         // id of the open card, "" for the overview
 	visible atomic.Bool    // the Computer page is on screen
 	running atomic.Bool    // the window is not minimized
+	railW   float32        // catalogue width the user dragged it to, 0 = default
 	grid    ui.GridState
 }
 
