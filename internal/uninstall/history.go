@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/dumpingground/dumpingground/internal/appdir"
 )
 
 // uninstalledRecord remembers one app whose uninstaller ran. The name
@@ -26,11 +28,7 @@ type uninstalledRecord struct {
 }
 
 func historyPath() string {
-	dir := os.Getenv("LOCALAPPDATA")
-	if dir == "" {
-		dir = os.TempDir()
-	}
-	return filepath.Join(dir, "DumpingGround", "uninstalled.json")
+	return filepath.Join(appdir.Dir(), "uninstalled.json")
 }
 
 func readHistory() []uninstalledRecord {

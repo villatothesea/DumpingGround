@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/dumpingground/dumpingground/internal/appdir"
 )
 
 // pendingReview is one app's unfinished leftover review: the app
@@ -19,11 +21,7 @@ type pendingReview struct {
 }
 
 func pendingPath() string {
-	dir := os.Getenv("LOCALAPPDATA")
-	if dir == "" {
-		dir = os.TempDir()
-	}
-	return filepath.Join(dir, "DumpingGround", "pending-sweep.json")
+	return filepath.Join(appdir.Dir(), "pending-sweep.json")
 }
 
 func readPending() []pendingReview {

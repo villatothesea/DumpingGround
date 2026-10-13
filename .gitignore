@@ -6,8 +6,10 @@ build/
 shots/
 *~
 
-# Runtime state — logs, uninstall history and registry backups live
-# under %LOCALAPPDATA% but must never be committed if they land here
+# Runtime state — the portable ".data" folder next to the exe (or
+# %LOCALAPPDATA%\DumpingGround when that isn't writable) must never
+# be committed if it lands here
+.data/
 *.log
 uninstalled.json
 backups/

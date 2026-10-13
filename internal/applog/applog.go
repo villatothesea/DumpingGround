@@ -3,8 +3,10 @@
 // junk deletion, leftover removal, registry edits — writes lines here
 // so the operation can be reviewed or reconstructed afterwards.
 //
-// Logs live under %LOCALAPPDATA%\DumpingGround\logs and are pruned to
-// a fixed retention window; logging itself never fails an operation.
+// Logs live under <state dir>\logs — the portable ".data" folder next
+// to the exe, or %LOCALAPPDATA%\DumpingGround when that isn't writable —
+// and are pruned to a fixed retention window; logging itself never
+// fails an operation.
 package applog
 
 import (
@@ -14,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dumpingground/dumpingground/internal/appdir"
 )
 
 // retainDays is the retention window — files older than this are
@@ -33,11 +37,7 @@ func Dir() string {
 		return testDir
 	}
 	if dir == "" {
-		base, err := os.UserCacheDir()
-		if err != nil {
-			base = os.TempDir()
-		}
-		dir = filepath.Join(base, "DumpingGround", "logs")
+		dir = filepath.Join(appdir.Dir(), "logs")
 		_ = os.MkdirAll(dir, 0o755)
 	}
 	return dir

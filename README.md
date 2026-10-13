@@ -53,6 +53,18 @@ boundary is the feature, not a limitation.
 - `--scan=<drive or folder>` — open the disk page and start scanning.
 - `--renderer=cpu|gpu` — software rendering (default) or D3D11.
 
+### State and logs
+
+Everything the app remembers — the audit log of every change, the
+service-start-type undo records, uninstall history and pending leftover
+reviews — lives in a `.data` folder next to `DumpingGround.exe`, so the
+whole folder is portable: copy it to a USB stick or another machine and
+the state travels with it. If the folder beside the exe cannot be
+created or written (read-only media, a protected location), the app
+falls back to `%LOCALAPPDATA%\DumpingGround` instead. The first time a
+`.data` folder is created it adopts any state an earlier version left
+in `%LOCALAPPDATA%`, so nothing is abandoned.
+
 Pages are also on Ctrl+1 Computer, Ctrl+2 Processes, Ctrl+3 Disk Usage,
 Ctrl+4 Uninstall, Ctrl+5 Startup.
 

@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"testing"
 	"unicode/utf16"
+
+	"github.com/dumpingground/dumpingground/internal/appdir"
 )
 
 func utf16le(s string) []byte {
@@ -213,9 +215,8 @@ func TestLockedItemsRefuse(t *testing.T) {
 }
 
 func TestUndoStoreKeepsFirstOriginal(t *testing.T) {
-	dir := t.TempDir()
-	os.Setenv("LOCALAPPDATA", dir)
-	defer os.Unsetenv("LOCALAPPDATA")
+	appdir.SetDir(t.TempDir())
+	defer appdir.SetDir("")
 	if err := remember("service|X", serviceState{Start: 2, Delayed: true}); err != nil {
 		t.Skip(err)
 	}

@@ -118,6 +118,14 @@ func SetEnabled(it Item, on bool) error {
 	if it.Locked != "" {
 		return errors.New(it.Locked)
 	}
+	// Every listed item records where its switch lives in value (the
+	// StartupApproved value name, the service name, the task key). An
+	// Item built by hand — or copied before that field existed — has no
+	// switch location; without this check it would sail through to the
+	// OS and fail with a meaningless handle error.
+	if it.value == "" {
+		return fmt.Errorf("%q has no switch location", it.Name)
+	}
 	var err error
 	switch it.Kind {
 	case KindRun, KindFolder:

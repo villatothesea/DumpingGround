@@ -45,6 +45,15 @@ lsass、杀毒软件）一律够不着——杀掉它们会直接蓝屏，而读
 - `--scan=<盘符或文件夹>`——打开磁盘页并开始扫描。
 - `--renderer=cpu|gpu`——软件绘制（默认）或 D3D11。
 
+### 状态与日志
+
+应用记住的一切——每次改动的审计日志、服务启动类型的撤销记录、
+卸载历史和未完成的残留复查——都放在 `DumpingGround.exe` 旁边的
+`.data` 文件夹里，整个目录可以直接携带：拷到 U 盘或另一台机器，
+状态跟着走。如果 exe 旁边的文件夹无法创建或写入（只读介质、受保护
+位置），则退回 `%LOCALAPPDATA%\DumpingGround`。`.data` 首次创建时
+会把旧版本留在 `%LOCALAPPDATA%` 的状态全部迁过来，不会丢东西。
+
 页面快捷键：Ctrl+1 Computer、Ctrl+2 Processes、Ctrl+3 Disk Usage、
 Ctrl+4 Uninstall、Ctrl+5 Startup。
 

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/dumpingground/dumpingground/internal/appdir"
 )
 
 // serviceState is what a service looked like before DumpingGround
@@ -20,11 +22,7 @@ type serviceState struct {
 var undoMu sync.Mutex
 
 func undoPath() string {
-	base, err := os.UserCacheDir()
-	if err != nil {
-		base = os.TempDir()
-	}
-	return filepath.Join(base, "DumpingGround", "startup-undo.json")
+	return filepath.Join(appdir.Dir(), "startup-undo.json")
 }
 
 func undoLoad() map[string]serviceState {

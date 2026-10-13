@@ -67,7 +67,7 @@ func (m *Model) uninstallView(c *ui.Context, t *ui.Theme) {
 			}
 		})
 		// A leftover review that outlived the previous run reopens
-		// once — the file under %LOCALAPPDATA% is written when the
+		// once — the file in the state dir is written when the
 		// modal opens and cleared only by Remove or "Keep leftovers".
 		if m.uninstLoaded && !m.sweepRestored {
 			m.sweepRestored = true
