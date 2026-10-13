@@ -107,44 +107,47 @@ func (m *Model) settingsRow(c *ui.Context, t *ui.Theme, title, note string, cont
 	})
 }
 
+// settingsSelectW keeps every dropdown in the window one width.
+const settingsSelectW = 150
+
 func (m *Model) settingsGeneral(c *ui.Context, t *ui.Theme) {
 	// Theme is stored as an int; bridge it through a local Select.
 	themeSel := []string{"System", "Light", "Dark"}[min(2, max(0, m.themeMode))]
 	m.settingsRow(c, t, "Theme", "Light, dark, or follow Windows", func() {
-		if ui.Select(c, &themeSel, []string{"System", "Light", "Dark"}).Width(110).Changed() {
+		if ui.Select(c, &themeSel, []string{"System", "Light", "Dark"}).Width(settingsSelectW).Changed() {
 			m.themeMode = map[string]int{"System": 0, "Light": 1, "Dark": 2}[themeSel]
 			m.saveSettings()
 		}
 	})
 	m.settingsRow(c, t, "Tab style", "Look of the page tabs in the top bar", func() {
-		if ui.Select(c, &m.tabStyle, []string{"Pill", "Underline"}).Width(110).Changed() {
+		if ui.Select(c, &m.tabStyle, []string{"Pill", "Underline"}).Width(settingsSelectW).Changed() {
 			m.saveSettings()
 		}
 	})
 	m.settingsRow(c, t, "Computer page", "Sidebar catalogue, or the earlier card grid", func() {
-		if ui.Select(c, &m.computerLayout, []string{"Sidebar", "Cards"}).Width(110).Changed() {
+		if ui.Select(c, &m.computerLayout, []string{"Sidebar", "Cards"}).Width(settingsSelectW).Changed() {
 			m.saveSettings()
 		}
 	})
 	m.settingsRow(c, t, "Language", "Interface language — localization is on the way", func() {
-		ui.Select(c, &m.language, []string{"System", "English", "中文"}).Width(110).Disabled(true)
+		ui.Select(c, &m.language, []string{"System", "English", "中文"}).Width(settingsSelectW).Disabled(true)
 	})
 }
 
 func (m *Model) settingsScanning(c *ui.Context, t *ui.Theme) {
 	m.settingsRow(c, t, "Process refresh", "Automatic sampling on the Processes page", func() {
-		if ui.Select(c, &m.processInterval, []string{"1 s", "2 s", "5 s"}).Width(80).Changed() {
+		if ui.Select(c, &m.processInterval, []string{"1 s", "2 s", "5 s"}).Width(settingsSelectW).Changed() {
 			m.applySampleInterval()
 			m.saveSettings()
 		}
 	})
 	m.settingsRow(c, t, "Space metric", "Used by the space map and percent column", func() {
-		if ui.Select(c, &m.diskMetric, []string{"Allocated", "Logical"}).Width(110).Changed() {
+		if ui.Select(c, &m.diskMetric, []string{"Allocated", "Logical"}).Width(settingsSelectW).Changed() {
 			m.saveSettings()
 		}
 	})
 	m.settingsRow(c, t, "Memory after scan", "Return scan buffers to the OS, or keep them for faster rescans", func() {
-		if ui.Select(c, &m.memRelease, []string{"Automatic", "Keep for rescan"}).Width(130).Changed() {
+		if ui.Select(c, &m.memRelease, []string{"Automatic", "Keep for rescan"}).Width(settingsSelectW).Changed() {
 			m.saveSettings()
 		}
 	})
@@ -157,7 +160,7 @@ func (m *Model) settingsTray(c *ui.Context, t *ui.Theme) {
 		metrics = []string{"CPU", "Memory", "GPU", "Icon"}
 	}
 	m.settingsRow(c, t, "Tray icon shows", "A live sparkline of this metric in the notification area", func() {
-		if ui.Select(c, &m.trayMetric, metrics).Width(110).Changed() {
+		if ui.Select(c, &m.trayMetric, metrics).Width(settingsSelectW).Changed() {
 			if m.trayMetric == "Icon" && m.tray != nil {
 				_ = m.tray.SetIcon(appIcon, false)
 				m.tray.SetToolTip("DumpingGround")
@@ -170,7 +173,7 @@ func (m *Model) settingsTray(c *ui.Context, t *ui.Theme) {
 		closeSel = "Minimize to tray"
 	}
 	m.settingsRow(c, t, "Close button", "What the window's close button does", func() {
-		if ui.Select(c, &closeSel, []string{"Quit", "Minimize to tray"}).Width(150).Changed() {
+		if ui.Select(c, &closeSel, []string{"Quit", "Minimize to tray"}).Width(settingsSelectW).Changed() {
 			m.closeToTray = closeSel == "Minimize to tray"
 			m.saveSettings()
 		}

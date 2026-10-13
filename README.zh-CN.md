@@ -1,6 +1,6 @@
 # DumpingGround
 
-[English](README.md)
+[English](README.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · [한국어](README.ko.md)
 
 Windows 原生维护工具，Go + [MyGo](https://github.com/egoist/mygo) 原生 UI——
 实时硬件总览、进程查看、磁盘空间分析、启动项管理，以及**安全**清理（Rust
