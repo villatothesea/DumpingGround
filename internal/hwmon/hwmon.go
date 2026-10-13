@@ -119,6 +119,10 @@ type DiskInfo struct {
 	Kind           string // "SSD", "HDD" or ""
 	Size           uint64
 	Letters        []string // "C:", "D:"
+	PCIeGen        int      // negotiated link generation (1 = Gen1); 0 unknown
+	PCIeLanes      int      // negotiated link width
+	PCIeGenMax     int      // what the slot can do
+	PCIeLanesMax   int
 }
 
 type NICInfo struct {

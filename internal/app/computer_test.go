@@ -25,8 +25,8 @@ func fakeMachine(m *Model) {
 		}},
 		GPUs: []hwmon.GPUInfo{{Name: "NVIDIA GeForce RTX 4070", Vendor: "NVIDIA", DedicatedBytes: 12 << 30, SharedBytes: 32 << 30, Driver: "32.0.15.6094", DriverDate: "2024-10-01"}},
 		Disks: []hwmon.DiskInfo{
-			{Index: 0, Model: "Samsung 990 PRO 2TB", Serial: "S6Z1NJ0T123456", Firmware: "4B2QJXD7", PartitionStyle: "GPT", Bus: "NVMe", Kind: "SSD", Size: 2000 << 30, Letters: []string{"C:"}},
-			{Index: 1, Model: "Crucial MX500 4TB", Serial: "2201E5A0B1C2", Firmware: "M3CR045", PartitionStyle: "MBR", Bus: "SATA", Kind: "SSD", Size: 4000 << 30, Letters: []string{"D:"}},
+			{Index: 0, Model: "Samsung 990 PRO 2TB", Serial: "S6Z1NJ0T123456", Firmware: "4B2QJXD7", PartitionStyle: "GPT", Bus: "NVMe", Kind: "SSD", Size: 2000 << 30, Letters: []string{"C:"}, PCIeGen: 2, PCIeLanes: 4, PCIeGenMax: 4, PCIeLanesMax: 4},
+			{Index: 1, Model: "Crucial MX500 4TB", Serial: "2201E5A0B1C2", Firmware: "M3CR045", PartitionStyle: "MBR", Bus: "SATA", Kind: "SSD", Size: 4000 << 30, Letters: []string{"D:"}, PCIeGen: 3, PCIeLanes: 2, PCIeGenMax: 3, PCIeLanesMax: 2},
 			{Index: 2, Model: "SanDisk Extreme 1TB", Serial: "SDX12345678", Firmware: "1.00", PartitionStyle: "GPT", Bus: "USB", Kind: "SSD", Size: 1000 << 30, Letters: []string{"E:"}},
 		},
 		NICs:    []hwmon.NICInfo{{Index: 10, Name: "WLAN", Description: "Intel Wi-Fi 7 BE211", Kind: "Wi-Fi", MAC: "E0-C9-32-AD-FF-B1", MTU: 1500, IPs: []string{"192.168.1.20", "2001:db8::1"}}},
@@ -306,6 +306,45 @@ func TestChartScale(t *testing.T) {
 		if got := niceCeil(tc.in); got != tc.want {
 			t.Errorf("niceCeil(%v) = %v, want %v", tc.in, got, tc.want)
 		}
+	}
+}
+
+// TestDiskLinkAndCleanup verifies the negotiated-link row and the
+// page-jump buttons on a disk's detail.
+func TestDiskLinkAndCleanup(t *testing.T) {
+	m := New()
+	defer m.close() // stops the scan the button starts
+	m.page = computerPage
+	fakeMachine(m)
+	// Tall enough that the Clean up panel is inside the viewport: Tester
+	// clicks at label positions and cannot reach scrolled-away content.
+	tt := ui.NewTester(m.view, 1180, 1700)
+	m.hw.detail = "disk:0"
+	tt.Frame()
+	if !tt.HasText("PCIe 4.0 ×4 (link now at Gen2)") {
+		t.Fatal("negotiated link not shown")
+	}
+	if !tt.HasText("Scan C:\\ in Disk Usage") || !tt.HasText("Open Uninstall") {
+		t.Fatal("cleanup buttons missing")
+	}
+	if err := tt.Click("Open Uninstall"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if m.page != uninstallPage {
+		t.Fatalf("Open Uninstall landed on page %d", m.page)
+	}
+	m.page = computerPage
+	m.hw.detail = "disk:0"
+	tt = ui.NewTester(m.view, 1180, 1700)
+	tt.Frame()
+	m.diskCancel = func() {} // busy: startScan returns early, no real C:\ scan
+	if err := tt.Click("Scan C:\\ in Disk Usage"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if m.page != diskPage || m.diskPath != `C:\` {
+		t.Fatalf("scan jump landed on page %d path %q", m.page, m.diskPath)
 	}
 }
 

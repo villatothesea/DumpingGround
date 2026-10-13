@@ -18,6 +18,7 @@ var (
 	pdhDLL   = syscall.NewLazyDLL("pdh.dll")
 	dxgiDLL  = syscall.NewLazyDLL("dxgi.dll")
 	setupapi = syscall.NewLazyDLL("setupapi.dll")
+	cfgmgr32 = syscall.NewLazyDLL("cfgmgr32.dll")
 	user32   = syscall.NewLazyDLL("user32.dll")
 
 	procGetSystemFirmwareTable   = k32.NewProc("GetSystemFirmwareTable")
@@ -41,6 +42,9 @@ var (
 	procSetupDiGetDeviceRegistryProp = setupapi.NewProc("SetupDiGetDeviceRegistryPropertyW")
 	procSetupDiGetDeviceInstanceID   = setupapi.NewProc("SetupDiGetDeviceInstanceIdW")
 	procSetupDiDestroyDeviceInfoList = setupapi.NewProc("SetupDiDestroyDeviceInfoList")
+
+	procCMGetDevNodeProp = cfgmgr32.NewProc("CM_Get_DevNode_PropertyW")
+	procCMGetParent      = cfgmgr32.NewProc("CM_Get_Parent")
 
 	procEnumDisplaySettings = user32.NewProc("EnumDisplaySettingsW")
 )

@@ -63,6 +63,7 @@ func openNoAccess(path string) (syscall.Handle, error) {
 }
 
 func (p *platform) loadDisks(info *Info) {
+	insts := diskDevInsts()      // drive number → devnode, for the link query
 	byNumber := map[uint32]int{} // physical drive number → index in info.Disks
 	for i := 0; i < 32; i++ {
 		h, err := openNoAccess(fmt.Sprintf(`\\.\PhysicalDrive%d`, i))
@@ -81,6 +82,9 @@ func (p *platform) loadDisks(info *Info) {
 		d.Model, d.Bus, d.Firmware, d.Serial = storageDescriptor(h)
 		d.Kind = diskKind(h, d.Bus)
 		d.PartitionStyle = diskPartitionStyle(h)
+		if inst, ok := insts[uint32(i)]; ok {
+			d.PCIeGen, d.PCIeLanes, d.PCIeGenMax, d.PCIeLanesMax = pcieLink(inst)
+		}
 		byNumber[uint32(i)] = len(info.Disks)
 		info.Disks = append(info.Disks, d)
 		dh := &diskHandle{h: h}

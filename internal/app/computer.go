@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 	"strings"
@@ -361,8 +362,9 @@ func shortCPU(n string) string {
 	return n
 }
 
-// memSummary reads "64 GB · LPDDR5 7467 MT/s" off the SMBIOS module list,
-// falling back to the OS-visible total when the firmware gave none.
+// memSummary reads "64 GB · LPDDR5 7467 MT/s · 8 × 8 GB" off the SMBIOS
+// module list, falling back to the OS-visible total when the firmware
+// gave none.
 func memSummary(info *hwmon.Info) string {
 	if len(info.Mem.Modules) == 0 {
 		return format.Bytes(info.Mem.Total)
@@ -382,6 +384,53 @@ func memSummary(info *hwmon.Info) string {
 		if speed > 0 {
 			s += fmt.Sprintf(" %d MT/s", speed)
 		}
+	}
+	if cfg := memConfig(info.Mem.Modules); cfg != "" {
+		s += " · " + cfg
+	}
+	return s
+}
+
+// memConfig condenses the DIMM list to "8 × 8 GB" — "2 × 16 GB + 2 × 8 GB"
+// when capacities are mixed — so a 64 GB total reads as one or several
+// modules at a glance.
+func memConfig(mods []hwmon.DIMM) string {
+	if len(mods) == 0 {
+		return ""
+	}
+	counts := map[uint64]int{}
+	var sizes []uint64
+	for _, d := range mods {
+		if counts[d.Size] == 0 {
+			sizes = append(sizes, d.Size)
+		}
+		counts[d.Size]++
+	}
+	slices.SortFunc(sizes, func(a, b uint64) int { return cmp.Compare(b, a) })
+	var parts []string
+	for _, sz := range sizes {
+		parts = append(parts, fmt.Sprintf("%d × %s", counts[sz], format.Bytes(sz)))
+	}
+	return strings.Join(parts, " + ")
+}
+
+// diskLink renders the PCI link the drive hangs off: the slot's top
+// generation and width, with the power-managed current negotiation noted
+// when it sits lower.
+func diskLink(d hwmon.DiskInfo) string {
+	gen, lanes := d.PCIeGenMax, d.PCIeLanesMax
+	if gen == 0 {
+		gen, lanes = d.PCIeGen, d.PCIeLanes
+	}
+	if gen == 0 {
+		return ""
+	}
+	s := fmt.Sprintf("PCIe %d.0", gen)
+	if lanes > 0 {
+		s += fmt.Sprintf(" ×%d", lanes)
+	}
+	if d.PCIeGen > 0 && d.PCIeGen < gen {
+		s += fmt.Sprintf(" (link now at Gen%d)", d.PCIeGen)
 	}
 	return s
 }
