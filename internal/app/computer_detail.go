@@ -26,6 +26,15 @@ func (m *Model) hwDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist []hw
 				icon(c, cd.glyph, 20).TextColor(cd.col)
 				ui.Text(c, cd.title).FontSize(18).Bold().SingleLine()
 				ui.Text(c, cd.sub).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Grow(1).MinWidth(0)
+				// The live figure sits in a fixed-width box between the
+				// title and the actions: its digits can change width
+				// without pushing the buttons around.
+				ui.Column(c).Width(200).AlignItems(ui.Center).Shrink(0).Children(func() {
+					ui.Text(c, cd.value).FontSize(22).Bold().SingleLine()
+					if cd.vsub != "" {
+						ui.Text(c, cd.vsub).FontSize(12).TextColor(t.TextMuted)
+					}
+				})
 				// Disk pages carry their page-jump actions in the bar.
 				var didx int
 				if sscan(cd.id, "disk:%d", &didx) && didx < len(info.Disks) {
@@ -41,12 +50,6 @@ func (m *Model) hwDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist []hw
 						m.setPage(uninstallPage)
 					}
 				}
-				ui.Column(c).AlignItems(ui.End).Shrink(0).Children(func() {
-					ui.Text(c, cd.value).FontSize(22).Bold().SingleLine()
-					if cd.vsub != "" {
-						ui.Text(c, cd.vsub).FontSize(12).TextColor(t.TextMuted)
-					}
-				})
 			})
 		}
 		topPad := float32(0)
