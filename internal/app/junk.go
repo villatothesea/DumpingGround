@@ -87,7 +87,6 @@ func (m *Model) junkScan() {
 	m.junkAnPath.Store("")
 	m.junkAnFiles.Store(0)
 	m.junkAnBytes.Store(0)
-	m.junkScanList = ui.ListState{}
 	// Capture UI state before the goroutine — model fields are not
 	// safe to read off-thread. Orphan-data ownership needs the
 	// installed list, so an unread or incomplete inventory never
@@ -385,10 +384,10 @@ func (m *Model) junkAnalyzingView(c *ui.Context, t *ui.Theme) {
 			ui.Progress(c, float64(cat+1)/float64(disk.JunkCatCount)).FillWidth().Height(4)
 			curPath, _ := m.junkAnPath.Load().(string)
 			curFiles, curBytes := m.junkAnFiles.Load(), uint64(m.junkAnBytes.Load())
-			ui.Box(c).Height(340).Children(func() {
-				ui.List(c, &m.junkScanList, disk.JunkCatCount, func(i int) {
+			ui.Column(c).FillWidth().Children(func() {
+				for i := 0; i < disk.JunkCatCount; i++ {
 					m.junkScanRow(c, t, i, cat, curPath, curFiles, curBytes)
-				})
+				}
 			})
 		})
 		ui.Spacer(c)
@@ -401,43 +400,35 @@ func (m *Model) junkAnalyzingView(c *ui.Context, t *ui.Theme) {
 func (m *Model) junkScanRow(c *ui.Context, t *ui.Theme, i, running int, curPath string, curFiles int64, curBytes uint64) {
 	switch {
 	case i < running:
-		ui.Column(c).FillWidth().MinHeight(30).Padding(3, 4).Justify(ui.Center).Children(func() {
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				icon(c, "check", 14).TextColor(t.Accent)
-				ui.Text(c, tr(disk.JunkCatName(i))).FontSize(12).Width(170).Shrink(0).SingleLine()
-				st := m.junkAnDone[i]
-				status := tr("no items found")
-				if st.dirs > 0 {
-					status = fmt.Sprintf(tr("%d locations · %s files · %s"),
-						st.dirs, format.Int(uint64(st.files)), format.Bytes(st.bytes))
-				}
-				ui.Text(c, status).FontSize(11).TextColor(t.TextMuted).SingleLine().MinWidth(0)
-			})
+		ui.Row(c).FillWidth().Height(26).Padding(0, 4).Gap(8).AlignItems(ui.Center).Children(func() {
+			icon(c, "check", 14).TextColor(t.Accent)
+			ui.Text(c, tr(disk.JunkCatName(i))).FontSize(12).Width(170).Shrink(0).SingleLine()
+			st := m.junkAnDone[i]
+			status := tr("no items found")
+			if st.dirs > 0 {
+				status = fmt.Sprintf(tr("%d locations · %s files · %s"),
+					st.dirs, format.Int(uint64(st.files)), format.Bytes(st.bytes))
+			}
+			ui.Text(c, status).FontSize(11).TextColor(t.TextMuted).SingleLine().MinWidth(0)
 		})
 	case i == running:
-		ui.Column(c).FillWidth().MinHeight(30).Padding(3, 4).Justify(ui.Center).Children(func() {
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				icon(c, "refresh", 14).TextColor(t.Accent)
-				ui.Text(c, tr(disk.JunkCatName(i))).FontSize(12).Bold().Width(170).Shrink(0).SingleLine()
-				status := tr("scanning…")
-				if curFiles > 0 || curBytes > 0 {
-					status = fmt.Sprintf(tr("%s files · %s"), format.Int(uint64(curFiles)), format.Bytes(curBytes))
-				}
-				ui.Text(c, status).FontSize(11).TextColor(t.Accent).SingleLine().MinWidth(0)
-			})
+		ui.Row(c).FillWidth().Height(26).Padding(0, 4).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Spinner(c).Width(14).Shrink(0)
+			ui.Text(c, tr(disk.JunkCatName(i))).FontSize(12).Bold().Width(170).Shrink(0).SingleLine()
+			status := tr("scanning…")
+			if curFiles > 0 || curBytes > 0 {
+				status = fmt.Sprintf(tr("%s files · %s"), format.Int(uint64(curFiles)), format.Bytes(curBytes))
+			}
+			ui.Text(c, status).FontSize(11).TextColor(t.Accent).Shrink(0).SingleLine()
 			if curPath != "" {
-				ui.Row(c).Padding(0, 0, 0, 22).Children(func() {
-					ui.Text(c, curPath).FontSize(10).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Tooltip(curPath).MinWidth(0)
-				})
+				ui.Text(c, curPath).FontSize(10).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Tooltip(curPath).MinWidth(0)
 			}
 		}).Background(t.SurfaceHover).Radius(6)
 	default:
-		ui.Column(c).FillWidth().MinHeight(30).Padding(3, 4).Justify(ui.Center).Children(func() {
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				icon(c, "dot", 14).TextColor(t.TextMuted)
-				ui.Text(c, tr(disk.JunkCatName(i))).FontSize(12).TextColor(t.TextMuted).Width(170).Shrink(0).SingleLine()
-				ui.Text(c, tr("pending")).FontSize(11).TextColor(t.TextMuted).SingleLine()
-			})
+		ui.Row(c).FillWidth().Height(26).Padding(0, 4).Gap(8).AlignItems(ui.Center).Children(func() {
+			icon(c, "dot", 14).TextColor(t.TextMuted)
+			ui.Text(c, tr(disk.JunkCatName(i))).FontSize(12).TextColor(t.TextMuted).Width(170).Shrink(0).SingleLine()
+			ui.Text(c, tr("pending")).FontSize(11).TextColor(t.TextMuted).SingleLine()
 		})
 	}
 }

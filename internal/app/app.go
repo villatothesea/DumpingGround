@@ -120,6 +120,7 @@ type Model struct {
 	protected                       []string // user whitelist — cleanup never touches these paths
 	powerPrice                      string   // user's electricity price per kWh, free text — parsed for display only
 	energy                          *energyLedger
+	energySel                       string // month pinned in the heatmap — "2006-01" or "" for everything
 	quitting                        bool // a real quit is underway — don't divert window closes to the tray
 	settingsOpen                    bool
 	settingsSection                 string
@@ -225,7 +226,6 @@ type Model struct {
 	junkAnPath     atomic.Value // string — path being measured right now
 	junkAnFiles    atomic.Int64 // running totals of the current directory
 	junkAnBytes    atomic.Int64
-	junkScanList   ui.ListState
 	junkPathsCat   int // category whose path list the modal shows, -1 none
 	junkPathsOpen  bool
 	junkPathsList  ui.ListState

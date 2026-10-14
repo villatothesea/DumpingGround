@@ -761,17 +761,34 @@ func (m *Model) hwEnergyPanel(c *ui.Context, t *ui.Theme) {
 	if m.energy == nil {
 		return
 	}
-	tot := m.energy.totals(time.Now())
+	now := time.Now()
+	tot := m.energy.totals(now)
+	days := m.energy.dayMap()
 	price, priceErr := strconv.ParseFloat(strings.TrimSpace(m.powerPrice), 64)
 	cost := func(wh float64) string {
 		if priceErr != nil || price <= 0 {
 			return ""
 		}
-		return " · " + fmt.Sprintf(tr("≈ %.3f"), wh*price/1000)
+		return " · " + fmt.Sprintf("≈ %.3f", wh*price/1000)
 	}
 	period := func(wh float64) string {
 		return fmt.Sprintf(tr("%.2f kWh"), wh/1000) + cost(wh)
 	}
+	// Month buckets, newest first — the left rail. The current month is
+	// always listed so the view has a stable top entry.
+	months := map[string]float64{}
+	for k, wh := range days {
+		months[k[:7]] += wh
+	}
+	if _, ok := months[now.Format("2006-01")]; !ok {
+		months[now.Format("2006-01")] = 0
+	}
+	monthKeys := make([]string, 0, len(months))
+	for k := range months {
+		monthKeys = append(monthKeys, k)
+	}
+	slices.Sort(monthKeys)
+	slices.Reverse(monthKeys)
 	m.hwPanel(c, t, func() {
 		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, tr("Energy use")).Bold().FontSize(13)
@@ -780,6 +797,10 @@ func (m *Model) hwEnergyPanel(c *ui.Context, t *ui.Theme) {
 			if ui.TextInput(c, &m.powerPrice).Width(80).Placeholder("0.60").Changed() {
 				m.saveSettings()
 			}
+		})
+		ui.Row(c).FillWidth().Gap(16).Children(func() {
+			m.energyMonthRail(c, t, monthKeys, months, price, priceErr)
+			m.energyHeatmap(c, t, days, now)
 		})
 		ui.Grid(c).ColumnTracks(ui.Fixed(120), ui.Fr(1)).GapX(16).GapY(8).Children(func() {
 			for _, r := range [][2]string{
@@ -794,6 +815,109 @@ func (m *Model) hwEnergyPanel(c *ui.Context, t *ui.Theme) {
 		})
 		ui.Text(c, tr("Estimated from the battery's own discharge telemetry — only time on battery counts.")).
 			FontSize(10).TextColor(t.TextMuted)
+	})
+}
+
+// energyMonthRail is the left third: one row per recorded month plus
+// the running one. Clicking a month pins it — the heatmap keeps its
+// days lit and dims the rest; clicking again releases the pin.
+func (m *Model) energyMonthRail(c *ui.Context, t *ui.Theme, keys []string, months map[string]float64, price float64, priceErr error) {
+	ui.Column(c).Width(190).Shrink(0).Gap(2).Children(func() {
+		ui.Text(c, tr("Pick a month to spotlight it")).FontSize(10).TextColor(t.TextMuted).Padding(0, 0, 4, 0)
+		for _, mo := range keys {
+			wh := months[mo]
+			label := mo // "2006-01" — locale-neutral
+			val := fmt.Sprintf(tr("%.2f kWh"), wh/1000)
+			if priceErr == nil && price > 0 {
+				val += fmt.Sprintf(" · ≈%.2f", wh*price/1000)
+			}
+			row := ui.Row(c).FillWidth().Height(24).Padding(0, 8).Gap(8).AlignItems(ui.Center).
+				Cursor(ui.CursorPointer).Label(fmt.Sprintf(tr("Spotlight %s"), label)).Radius(4)
+			sel := m.energySel == mo
+			row.Children(func() {
+				if sel {
+					ui.Text(c, label).FontSize(12).Bold().TextColor(t.Accent)
+				} else {
+					ui.Text(c, label).FontSize(12)
+				}
+				ui.Spacer(c)
+				ui.Text(c, val).FontSize(10).TextColor(t.TextMuted).SingleLine()
+			})
+			if sel || row.Hovered() {
+				row.Background(t.SurfaceHover)
+			}
+			if row.Clicked() {
+				if sel {
+					m.energySel = ""
+				} else {
+					m.energySel = mo
+				}
+			}
+		}
+	})
+}
+
+// energyHeatmap is the right two-thirds: GitHub-style week columns of
+// seven square day cells (Monday on top), tinted by how much the pack
+// spent that day. Hover shows the date and the Wh. With a month pinned,
+// outside days fade to a ghost so the month's footprint reads at a
+// glance.
+func (m *Model) energyHeatmap(c *ui.Context, t *ui.Theme, days map[string]float64, now time.Time) {
+	const cell, gap = 11.0, 3.0
+	w, _ := c.Size()
+	cols := int((w + gap) / (cell + gap)) // cells the pane actually fits
+	if cols < 4 {
+		cols = 4
+	}
+	if cols > 53 {
+		cols = 53
+	}
+	// Anchor on the Monday of this week; columns walk back from it so
+	// the newest day is always bottom-right.
+	wd := int(now.Weekday())
+	if wd == 0 {
+		wd = 7
+	}
+	thisMon := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, -(wd - 1))
+	start := thisMon.AddDate(0, 0, -(cols-1)*7)
+	var maxWh float64
+	for _, wh := range days {
+		if wh > maxWh {
+			maxWh = wh
+		}
+	}
+	levels := []ui.Color{t.Border.Alpha(0.5), t.Accent.Alpha(0.35), t.Accent.Alpha(0.6), t.Accent.Alpha(0.85), t.Accent}
+	ui.Row(c).Gap(gap).Children(func() {
+		for col := 0; col < cols; col++ {
+			ui.Column(c).Gap(gap).Children(func() {
+				for row := 0; row < 7; row++ {
+					day := start.AddDate(0, 0, col*7+row)
+					key := day.Format("2006-01-02")
+					wh, ok := days[key]
+					future := day.After(now)
+					cellEl := ui.Box(c).Size(cell, cell).Radius(2)
+					switch {
+					case future:
+						cellEl.Background(ui.RGBA(0, 0, 0, 0)) // not happened yet
+					case ok && wh > 0:
+						lvl := int(wh/maxWh*3.999) + 1 // 1..4
+						cellEl.Background(levels[lvl])
+					default:
+						cellEl.Background(levels[0])
+					}
+					if !future {
+						tip := key + " · " + tr("no data")
+						if ok && wh > 0 {
+							tip = key + " · " + fmt.Sprintf(tr("%.1f Wh"), wh)
+						}
+						cellEl.Tooltip(tip)
+						if m.energySel != "" && key[:7] != m.energySel {
+							cellEl.Opacity(0.25)
+						}
+					}
+				}
+			})
+		}
 	})
 }
 

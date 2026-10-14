@@ -107,6 +107,18 @@ type energyTotals struct {
 	Day, Week, Month, Year float64
 }
 
+// dayMap returns a copy of the per-day Wh buckets — the heatmap reads
+// it off-lock so drawing never blocks the sampler.
+func (e *energyLedger) dayMap() map[string]float64 {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	out := make(map[string]float64, len(e.days))
+	for k, v := range e.days {
+		out[k] = v
+	}
+	return out
+}
+
 // totals aggregates the ledger: today, the rolling last 7 days, the
 // current calendar month and the current calendar year.
 func (e *energyLedger) totals(now time.Time) energyTotals {

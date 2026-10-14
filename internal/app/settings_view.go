@@ -14,7 +14,7 @@ import (
 
 // version tracks the app version; bump it together with mygo.json at
 // release time.
-const version = "0.7.0"
+const version = "0.7.1"
 
 // settingsView is the settings window: a large modal with a borderless
 // catalogue rail on the left, in the same style as the Computer page,
