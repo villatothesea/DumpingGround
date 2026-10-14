@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -713,16 +714,24 @@ func (m *Model) hwNetDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist [
 
 func (m *Model) hwBatteryDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hist []hwmon.Sample, cd *hwCard) {
 	m.hwChartPanel(c, t, hist, "Charge level", "100%", cd.opts, 200, hwLegend{"Charge", hwBatCol})
-	stats := [][2]string{{"Charge", "—"}, {"State", "—"}, {"Time remaining", "—"}}
+	stats := [][2]string{{"Charge", "—"}, {"State", "—"}, {"Power", "—"}, {"Time remaining", "—"}}
 	if last := lastSample(hist); last != nil && last.Battery != nil {
 		b := last.Battery
-		remain := "—"
+		remain, power := "—", "—"
 		if b.Remain > 0 {
 			remain = durHM(b.Remain)
 		}
-		stats = [][2]string{{"Charge", fmt.Sprintf("%d%%", b.Percent)}, {"State", batteryState(b)}, {"Time remaining", remain}}
+		if b.RateMW != 0 {
+			w := float64(b.RateMW)
+			if w < 0 {
+				w = -w
+			}
+			power = fmt.Sprintf("%.1f W", w/1000)
+		}
+		stats = [][2]string{{"Charge", fmt.Sprintf("%d%%", b.Percent)}, {"State", batteryState(b)}, {"Power", power}, {"Time remaining", remain}}
 	}
 	m.hwStatGrid(c, t, stats)
+	m.hwEnergyPanel(c, t)
 	// The pack's own identity: wear comes from the firmware, not from the
 	// charge percentage.
 	if b := info.Batt; b != nil {
@@ -741,6 +750,51 @@ func (m *Model) hwBatteryDetail(c *ui.Context, t *ui.Theme, info *hwmon.Info, hi
 			{"Chemistry", b.Chemistry},
 		})
 	}
+}
+
+// hwEnergyPanel is the accumulated battery draw: watt-hours the pack
+// spent today, over the last 7 days, this month and this year, plus the
+// bill those numbers imply at the user's own unit price. The ledger
+// integrates the driver's discharge telemetry — an estimate, labelled
+// as one, since the wall socket is what the meter actually measures.
+func (m *Model) hwEnergyPanel(c *ui.Context, t *ui.Theme) {
+	if m.energy == nil {
+		return
+	}
+	tot := m.energy.totals(time.Now())
+	price, priceErr := strconv.ParseFloat(strings.TrimSpace(m.powerPrice), 64)
+	cost := func(wh float64) string {
+		if priceErr != nil || price <= 0 {
+			return ""
+		}
+		return " · " + fmt.Sprintf(tr("≈ %.3f"), wh*price/1000)
+	}
+	period := func(wh float64) string {
+		return fmt.Sprintf(tr("%.2f kWh"), wh/1000) + cost(wh)
+	}
+	m.hwPanel(c, t, func() {
+		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, tr("Energy use")).Bold().FontSize(13)
+			ui.Spacer(c)
+			ui.Text(c, tr("Price per kWh")).FontSize(11).TextColor(t.TextMuted)
+			if ui.TextInput(c, &m.powerPrice).Width(80).Placeholder("0.60").Changed() {
+				m.saveSettings()
+			}
+		})
+		ui.Grid(c).ColumnTracks(ui.Fixed(120), ui.Fr(1)).GapX(16).GapY(8).Children(func() {
+			for _, r := range [][2]string{
+				{"Today", period(tot.Day)},
+				{"Last 7 days", period(tot.Week)},
+				{"This month", period(tot.Month)},
+				{"This year", period(tot.Year)},
+			} {
+				ui.Text(c, tr(r[0])).TextColor(t.TextMuted)
+				ui.Text(c, r[1])
+			}
+		})
+		ui.Text(c, tr("Estimated from the battery's own discharge telemetry — only time on battery counts.")).
+			FontSize(10).TextColor(t.TextMuted)
+	})
 }
 
 // hwDisplayDetail shows what the monitor itself reports over its link

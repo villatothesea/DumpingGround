@@ -200,6 +200,13 @@ type BatterySample struct {
 	Charging bool
 	OnAC     bool
 	Remain   time.Duration // 0 when unknown
+	// RateMW is the battery driver's raw power reading in milliwatts —
+	// drivers disagree on sign, so read the magnitude together with
+	// OnAC/Charging, never the sign alone. 0 means the driver didn't
+	// report. CapMWH is the pack's remaining capacity in mWh, 0 unknown;
+	// it backs energy accounting when the driver reports no rate.
+	RateMW int
+	CapMWH int
 }
 
 // Monitor owns the platform state Sample needs between ticks (previous

@@ -118,7 +118,9 @@ type Model struct {
 	trayMetric                      string // "CPU" | "Memory" | "GPU" | "Icon"
 	closeToTray                     bool
 	protected                       []string // user whitelist — cleanup never touches these paths
-	quitting                        bool     // a real quit is underway — don't divert window closes to the tray
+	powerPrice                      string   // user's electricity price per kWh, free text — parsed for display only
+	energy                          *energyLedger
+	quitting                        bool // a real quit is underway — don't divert window closes to the tray
 	settingsOpen                    bool
 	settingsSection                 string
 	diskInfoOpen                    bool
@@ -216,50 +218,58 @@ type Model struct {
 	junkCatFirst                    bool            // when both groupings are on, category is the outer level
 	junkCollapsed                   map[string]bool // collapsed group headers, keyed by group path
 	junkAnCat                       int             // category currently being measured
-	junkPathsCat                    int             // category whose path list the modal shows, -1 none
-	junkPathsOpen                   bool
-	junkPathsList                   ui.ListState
-	junkLegendOpen                  bool // the badge-legend modal
-	junkLegendList                  ui.ListState
-	junkMsg                         string
-	junkDoneMsg                     string // outcome of the last clean, shown once the re-measure lands
-	junkList                        ui.ListState
-	uninstRows                      []uninstall.Entry
-	uninstLoaded                    bool // the registry list has been read at least once
-	uninstComplete                  bool // false = some uninstall keys unreadable; leftover removal is locked
-	uninstLoading                   bool
-	uninstQuery                     string
-	uninstSort                      ui.SortOrder       // the Table header drives this directly
-	uninstArmed                     string             // entry name armed for the second-click confirm
-	uninstBusy                      string             // entry whose uninstaller is still running — one at a time
-	uninstCancel                    context.CancelFunc // retires a stale entry watch on retry
-	uninstMsg                       string
-	uninstList                      ui.ListState
-	uninstSelected                  int // keeps a row lit while its context menu is open
-	uninstMenuHits                  []menuHit
-	sweepName                       string // entry whose leftover scan the modal shows
-	sweepItems                      []uninstall.Item
-	sweepSel                        []bool
-	sweepOpen                       bool
-	sweepArmed                      bool
-	sweepLiveApp                    bool // "Find leftovers" ran on an app that is still installed
-	sweepRestored                   bool // pending review was offered once this launch
-	sweepList                       ui.ListState
-	historyList                     ui.ListState
-	sweepPhase                      int    // review / scanning / removing / done
-	sweepScanText                   string // stage label under the scan progress bar
-	sweepScanFrac                   float64
-	sweepRmDone                     int // removal progress: items finished…
-	sweepRmTotal                    int // …out of this many
-	sweepRmPath                     string
-	rustRmDone                      int // rust delete progress, same contract
-	rustRmTotal                     int
-	rustRmPath                      string
-	junkRmDone                      int // junk delete progress, same contract
-	junkRmTotal                     int
-	junkRmPath                      string
-	sweepDoneMsg                    string // result text of the confirm-close alert
-	orphanScanning                  bool   // leftover scan for already-removed apps in flight
+	junkAnDone                      [disk.JunkCatCount]struct {
+		dirs, files int
+		bytes       uint64
+	} // finished totals per category, filled by the Done callback
+	junkAnPath     atomic.Value // string — path being measured right now
+	junkAnFiles    atomic.Int64 // running totals of the current directory
+	junkAnBytes    atomic.Int64
+	junkScanList   ui.ListState
+	junkPathsCat   int // category whose path list the modal shows, -1 none
+	junkPathsOpen  bool
+	junkPathsList  ui.ListState
+	junkLegendOpen bool // the badge-legend modal
+	junkLegendList ui.ListState
+	junkMsg        string
+	junkDoneMsg    string // outcome of the last clean, shown once the re-measure lands
+	junkList       ui.ListState
+	uninstRows     []uninstall.Entry
+	uninstLoaded   bool // the registry list has been read at least once
+	uninstComplete bool // false = some uninstall keys unreadable; leftover removal is locked
+	uninstLoading  bool
+	uninstQuery    string
+	uninstSort     ui.SortOrder       // the Table header drives this directly
+	uninstArmed    string             // entry name armed for the second-click confirm
+	uninstBusy     string             // entry whose uninstaller is still running — one at a time
+	uninstCancel   context.CancelFunc // retires a stale entry watch on retry
+	uninstMsg      string
+	uninstList     ui.ListState
+	uninstSelected int // keeps a row lit while its context menu is open
+	uninstMenuHits []menuHit
+	sweepName      string // entry whose leftover scan the modal shows
+	sweepItems     []uninstall.Item
+	sweepSel       []bool
+	sweepOpen      bool
+	sweepArmed     bool
+	sweepLiveApp   bool // "Find leftovers" ran on an app that is still installed
+	sweepRestored  bool // pending review was offered once this launch
+	sweepList      ui.ListState
+	historyList    ui.ListState
+	sweepPhase     int    // review / scanning / removing / done
+	sweepScanText  string // stage label under the scan progress bar
+	sweepScanFrac  float64
+	sweepRmDone    int // removal progress: items finished…
+	sweepRmTotal   int // …out of this many
+	sweepRmPath    string
+	rustRmDone     int // rust delete progress, same contract
+	rustRmTotal    int
+	rustRmPath     string
+	junkRmDone     int // junk delete progress, same contract
+	junkRmTotal    int
+	junkRmPath     string
+	sweepDoneMsg   string // result text of the confirm-close alert
+	orphanScanning bool   // leftover scan for already-removed apps in flight
 
 	// CaptureDir writes only this application's frames during explicit diagnostics.
 	CaptureDir  string
@@ -340,7 +350,12 @@ func (m *Model) Run() error {
 		m.setupTray()
 		// App.Quit closes every window; a close that arrived through that
 		// path must not be diverted into the tray or Quit would stall.
-		mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { m.quitting = true })
+		mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
+			m.quitting = true
+			if m.energy != nil {
+				m.energy.flush()
+			}
+		})
 		m.window.OnClose(func(e *mygo.CloseEvent) {
 			if m.closeToTray && !m.quitting {
 				e.PreventDefault()

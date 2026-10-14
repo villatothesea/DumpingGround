@@ -26,6 +26,10 @@ type settings struct {
 	// Protected is the user's path whitelist — cleanup never lists or
 	// touches these folders or anything under them.
 	Protected []string `json:"protected"`
+	// PowerPrice is the electricity unit price the user types on the
+	// battery page — kept as text so any currency/format survives a
+	// round trip; only its parsed value feeds cost estimates.
+	PowerPrice string `json:"powerPrice"`
 }
 
 // defaults returns the settings a fresh install starts with: the
@@ -62,6 +66,7 @@ func (m *Model) loadSettings() {
 	m.trayMetric = s.TrayMetric
 	m.closeToTray = s.CloseToTray
 	m.protected = append(m.protected[:0], s.Protected...)
+	m.powerPrice = s.PowerPrice
 	m.applySampleInterval()
 	m.applyLanguage()
 }
@@ -87,7 +92,8 @@ func (m *Model) saveSettings() {
 		Language: m.language, ProcessInterval: m.processInterval, DiskMetric: m.diskMetric,
 		MemRelease: m.memRelease, AnimateMap: m.animateMap,
 		TrayMetric: m.trayMetric, CloseToTray: m.closeToTray,
-		Protected: m.protected,
+		Protected:  m.protected,
+		PowerPrice: m.powerPrice,
 	}
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {

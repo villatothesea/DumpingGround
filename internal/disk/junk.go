@@ -101,6 +101,11 @@ type JunkReport struct {
 	// protected is the whitelist snapshot the scan ran with —
 	// normProtected output, consulted by junkAdd before a row exists.
 	protected []string
+	// cur/curCat/lastRep drive the live "now measuring" callback —
+	// reportPath throttles itself so per-file reporting stays cheap.
+	cur     func(cat int, path string, files int, bytes uint64)
+	curCat  int
+	lastRep time.Time
 }
 
 // JunkOpts feeds FindJunk. Running reports whether an exe name (lower
@@ -112,6 +117,12 @@ type JunkReport struct {
 type JunkOpts struct {
 	Running  func(name string) (running, known bool)
 	Progress func(cat int)
+	// Current, when set, receives the path being measured right now
+	// plus the running file/byte totals of that directory — throttled
+	// to ~25 updates a second. Done reports one category's finished
+	// totals (rows, files, bytes) before the next category starts.
+	Current func(cat int, path string, files int, bytes uint64)
+	Done    func(cat int, dirs, files int, bytes uint64)
 	// Protected is the user's path whitelist — absolute paths cleanup
 	// never lists or touches. Checked at discovery and again at
 	// deletion; case-insensitive, a path covers everything under it.
@@ -156,7 +167,7 @@ func JunkCatName(cat int) string { return junkCatDefs[cat].name }
 // same approach cleanmgr's handlers and BleachBit's CleanerML take —
 // so nothing is ever matched heuristically.
 func FindJunk(opts JunkOpts) *JunkReport {
-	rep := &JunkReport{protected: normProtected(opts.Protected)}
+	rep := &JunkReport{protected: normProtected(opts.Protected), cur: opts.Current}
 	for i, n := range junkCatDefs {
 		rep.Cats[i].Name, rep.Cats[i].Note, rep.Cats[i].Risk = n.name, n.note, n.risk
 	}
@@ -169,10 +180,18 @@ func FindJunk(opts JunkOpts) *JunkReport {
 	home, _ := os.UserHomeDir()
 
 	run := func(cat int, fn func()) {
+		rep.curCat = cat
 		if opts.Progress != nil {
 			opts.Progress(cat)
 		}
 		fn()
+		if opts.Done != nil {
+			dirs, files := len(rep.Cats[cat].Dirs), 0
+			for _, d := range rep.Cats[cat].Dirs {
+				files += d.Files
+			}
+			opts.Done(cat, dirs, files, rep.Cats[cat].Bytes)
+		}
 	}
 	run(JunkCatUserTemp, func() { rep.junkKids(JunkCatUserTemp, saneTempDir(os.TempDir()), junkTempAge) })
 	run(JunkCatWinTemp, func() { rep.junkKids(JunkCatWinTemp, absJoin(windir, "Temp"), junkTempAge) })
@@ -382,7 +401,7 @@ func FindJunk(opts JunkOpts) *JunkReport {
 	run(JunkCatOrphanData, func() { rep.junkOrphanData(roaming, local, opts.AppNames) })
 	run(JunkCatInstallers, func() { rep.junkInstallers(home) })
 	if dl := DownloadsDir(); dl != "" && saneUserDir(dl) {
-		if bytes, files := junkDirStats(dl); files > 0 {
+		if bytes, files := junkDirStats(dl, rep); files > 0 {
 			rep.Downloads = &JunkDir{Path: dl, Bytes: bytes, Files: files,
 				Base: filepath.Base(dl), Mode: JunkKids, Recycle: true}
 		}
@@ -449,11 +468,11 @@ func (rep *JunkReport) junkOrphanData(roaming, local string, appNames []string) 
 				continue
 			}
 			p := filepath.Join(root, kid.Name())
-			last := dirLastActive(p)
+			last := dirLastActive(p, rep)
 			if last.IsZero() || !last.Before(cutoff) {
 				continue
 			}
-			bytes, files := junkDirStats(p)
+			bytes, files := junkDirStats(p, rep)
 			if files == 0 {
 				continue
 			}
@@ -482,6 +501,7 @@ func (rep *JunkReport) junkInstallers(home string) {
 		}
 		for _, pat := range []string{"*.msi", "*.exe", "setup*.*", "install*.*"} {
 			for _, p := range globNoErr(filepath.Join(root, pat)) {
+				rep.reportPath(p, 0, 0)
 				if seen[strings.ToLower(p)] {
 					continue
 				}
@@ -503,13 +523,14 @@ func (rep *JunkReport) junkInstallers(home string) {
 // dirLastActive is the newest modification time anywhere in a tree,
 // bounded at 20k entries — a folder whose contents stopped changing
 // sixty days ago is quiet even though its own timestamp may lag.
-func dirLastActive(root string) time.Time {
+func dirLastActive(root string, rep *JunkReport) time.Time {
 	var last time.Time
 	visited := 0
 	filepath.WalkDir(root, func(p string, e os.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
+		rep.reportPath(p, visited, 0)
 		if visited++; visited > 20000 {
 			return filepath.SkipAll
 		}
@@ -523,6 +544,21 @@ func dirLastActive(root string) time.Time {
 		return nil
 	})
 	return last
+}
+
+// reportPath feeds the live progress callback, throttled to ~25 calls
+// a second — walking calls it per entry, so the throttle keeps callback
+// cost negligible. A nil report is fine: tests pass no callback.
+func (rep *JunkReport) reportPath(p string, files int, bytes uint64) {
+	if rep == nil || rep.cur == nil {
+		return
+	}
+	now := time.Now()
+	if now.Sub(rep.lastRep) < 40*time.Millisecond {
+		return
+	}
+	rep.lastRep = now
+	rep.cur(rep.curCat, p, files, bytes)
 }
 
 // junkNorm reduces a name to lowercase letters and digits — the same
@@ -595,6 +631,7 @@ func (rep *JunkReport) junkKidsW(cat int, root string, age time.Duration, warn s
 			denied = denied || elevate.IsAccessDenied(err)
 			return nil
 		}
+		rep.reportPath(p, files, bytes)
 		if junkReparse(d) {
 			if d.IsDir() {
 				return filepath.SkipDir
@@ -645,6 +682,7 @@ func junkDumpWarn(base string) string {
 // junkGlob adds every file matching a whitelist glob as its own row.
 func (rep *JunkReport) junkGlob(cat int, pattern string) {
 	for _, p := range globNoErr(pattern) {
+		rep.reportPath(p, 0, 0)
 		info, err := os.Lstat(p) // a symlink's target size is not the entry's
 		if err != nil || info.IsDir() || info.Size() == 0 {
 			continue
@@ -884,7 +922,7 @@ func (rep *JunkReport) junkBrowsers(local, roaming string, running func(string) 
 				if fi, err := os.Stat(p); err != nil || !fi.IsDir() {
 					continue
 				}
-				bytes, files := junkDirStats(p)
+				bytes, files := junkDirStats(p, rep)
 				if files == 0 {
 					continue
 				}
@@ -903,7 +941,7 @@ func (rep *JunkReport) junkBrowsers(local, roaming string, running func(string) 
 	for _, prof := range globNoErr(filepath.Join(profDir, "*")) {
 		for _, sub := range []string{"cache2", "startupCache", "shader-cache"} {
 			p := filepath.Join(cacheRoot, filepath.Base(prof), sub)
-			bytes, files := junkDirStats(p)
+			bytes, files := junkDirStats(p, rep)
 			if files == 0 {
 				continue
 			}
@@ -955,7 +993,7 @@ func (rep *JunkReport) junkApps(roaming string, running func(string) (bool, bool
 			if fi, err := os.Stat(p); err != nil || !fi.IsDir() {
 				continue
 			}
-			bytes, files := junkDirStats(p)
+			bytes, files := junkDirStats(p, rep)
 			if files == 0 {
 				continue
 			}
@@ -970,11 +1008,12 @@ func (rep *JunkReport) junkApps(roaming string, running func(string) (bool, bool
 
 // junkDirStats sums file sizes and count under a dir, skipping reparse
 // points so a junction can never leak measurement or deletion elsewhere.
-func junkDirStats(root string) (bytes uint64, files int) {
+func junkDirStats(root string, rep *JunkReport) (bytes uint64, files int) {
 	filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
+		rep.reportPath(p, files, bytes)
 		if junkReparse(d) {
 			if d.IsDir() {
 				return filepath.SkipDir

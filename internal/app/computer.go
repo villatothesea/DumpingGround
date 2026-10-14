@@ -54,6 +54,7 @@ type computerState struct {
 // the UI thread.
 func (m *Model) startHardware() {
 	m.hw.mon = hwmon.New()
+	m.energy = loadEnergy()
 	m.hw.running.Store(true)
 	go func() {
 		m.hw.info.Store(m.hw.mon.Load())
@@ -80,6 +81,7 @@ func (m *Model) startHardware() {
 			// A GPU tray icon needs the utilization counter even while
 			// the Computer page is hidden.
 			s := m.hw.mon.Sample(vis || m.trayMetric == "GPU")
+			m.energy.add(s.Battery, time.Now())
 			m.hw.mu.Lock()
 			m.hw.hist = append(m.hw.hist, s)
 			if len(m.hw.hist) > hwKeep {

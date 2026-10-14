@@ -11,8 +11,12 @@ import (
 
 const (
 	// Battery class driver IOCTLs (FILE_DEVICE_BATTERY, FILE_READ_ACCESS).
-	ioctlBatteryQueryTag  = 0x294040 // IOCTL_BATTERY_QUERY_TAG
-	ioctlBatteryQueryInfo = 0x294044 // IOCTL_BATTERY_QUERY_INFORMATION
+	ioctlBatteryQueryTag    = 0x294040 // IOCTL_BATTERY_QUERY_TAG
+	ioctlBatteryQueryInfo   = 0x294044 // IOCTL_BATTERY_QUERY_INFORMATION
+	ioctlBatteryQueryStatus = 0x29404C // IOCTL_BATTERY_QUERY_STATUS
+
+	batteryUnknownRate     = -0x80000000 // BATTERY_UNKNOWN_RATE
+	batteryUnknownCapacity = 0xFFFFFFFF  // BATTERY_UNKNOWN_CAPACITY
 
 	digcfPresent         = 0x02
 	digcfDeviceInterface = 0x10
@@ -42,12 +46,12 @@ type spDeviceInterfaceDetailData struct {
 // battery wear is measured: the fraction of the original capacity the cell
 // still holds, from the firmware rather than inferred from the charge
 // percentage.
-func readBatteryInfo() *BatteryInfo {
+func readBatteryInfo() (*BatteryInfo, string) {
 	// There can be several battery devices (some laptops expose a bridge
 	// battery as well); the first one that answers is the main pack.
 	hdevinfo, _, _ := procSetupDiGetClassDevs.Call(uintptr(unsafe.Pointer(&guidDeviceBattery)), 0, 0, digcfPresent|digcfDeviceInterface)
 	if hdevinfo == invalidHandleValue || hdevinfo == 0 {
-		return nil
+		return nil, ""
 	}
 	defer procSetupDiDestroyDeviceInfoList.Call(hdevinfo)
 
@@ -59,7 +63,7 @@ func readBatteryInfo() *BatteryInfo {
 		did := spDeviceInterfaceData{cbSize: didSize}
 		r, _, _ := procSetupDiEnumDeviceInterfaces.Call(hdevinfo, 0, uintptr(unsafe.Pointer(&guidDeviceBattery)), uintptr(i), uintptr(unsafe.Pointer(&did)))
 		if r == 0 {
-			return nil
+			return nil, ""
 		}
 		var needed uint32
 		procSetupDiGetDeviceInterfaceDet.Call(hdevinfo, uintptr(unsafe.Pointer(&did)), 0, 0, uintptr(unsafe.Pointer(&needed)), 0)
@@ -71,8 +75,9 @@ func readBatteryInfo() *BatteryInfo {
 		if r, _, _ := procSetupDiGetDeviceInterfaceDet.Call(hdevinfo, uintptr(unsafe.Pointer(&did)), uintptr(unsafe.Pointer(&detail[0])), uintptr(needed), 0, 0); r == 0 {
 			continue
 		}
-		if b := readBatteryPath(utf16Bytes(detail[pathOff:])); b != nil {
-			return b
+		path := utf16Bytes(detail[pathOff:])
+		if b := readBatteryPath(path); b != nil {
+			return b, path
 		}
 	}
 }
@@ -117,4 +122,43 @@ func readBatteryPath(path string) *BatteryInfo {
 		CycleCount:     uint64(le32(out[32:])),
 		Chemistry:      string(bytes.TrimRight(out[8:12], "\x00")),
 	}
+}
+
+// readBatteryStatus asks the driver for BATTERY_STATUS — the live rate
+// (mW, negative while discharging) and remaining capacity (mWh). This is
+// the firmware's own power telemetry; rate 0 / capacity 0 mean "the
+// driver didn't say", not zero draw.
+func readBatteryStatus(path string) (rateMW, capMWH int) {
+	if path == "" {
+		return 0, 0
+	}
+	p, err := syscall.UTF16PtrFromString(path)
+	if err != nil {
+		return 0, 0
+	}
+	h, err := syscall.CreateFile(p, syscall.GENERIC_READ|syscall.GENERIC_WRITE, syscall.FILE_SHARE_READ|syscall.FILE_SHARE_WRITE, nil, syscall.OPEN_EXISTING, 0, 0)
+	if err != nil {
+		return 0, 0
+	}
+	defer syscall.CloseHandle(h)
+
+	tagOut := make([]byte, 4)
+	if _, err := ioctl(h, ioctlBatteryQueryTag, make([]byte, 4), tagOut); err != nil {
+		return 0, 0
+	}
+	// BATTERY_WAIT_STATUS_DATA: tag, timeout 0 (don't wait), power-state
+	// and capacity thresholds ignored when the timeout is 0.
+	wait := make([]byte, 20)
+	copy(wait, tagOut)
+	out := make([]byte, 16) // BATTERY_STATUS: PowerState, Capacity, Voltage, Rate
+	if _, err := ioctl(h, ioctlBatteryQueryStatus, wait, out); err != nil {
+		return 0, 0
+	}
+	if cap32 := le32(out[4:]); cap32 != batteryUnknownCapacity {
+		capMWH = int(cap32)
+	}
+	if rate := int32(le32(out[12:])); rate != batteryUnknownRate {
+		rateMW = int(rate)
+	}
+	return rateMW, capMWH
 }

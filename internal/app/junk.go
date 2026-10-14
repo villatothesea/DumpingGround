@@ -80,6 +80,14 @@ func (m *Model) junkScan() {
 	}
 	m.junkBusy = true
 	m.junkAnCat = 0
+	m.junkAnDone = [disk.JunkCatCount]struct {
+		dirs, files int
+		bytes       uint64
+	}{}
+	m.junkAnPath.Store("")
+	m.junkAnFiles.Store(0)
+	m.junkAnBytes.Store(0)
+	m.junkScanList = ui.ListState{}
 	// Capture UI state before the goroutine — model fields are not
 	// safe to read off-thread. Orphan-data ownership needs the
 	// installed list, so an unread or incomplete inventory never
@@ -98,7 +106,28 @@ func (m *Model) junkScan() {
 			Protected: protected,
 			AppNames:  appNames,
 			Progress: func(cat int) {
-				m.post(func() { m.junkAnCat = cat })
+				m.post(func() {
+					m.junkAnCat = cat
+					m.junkAnPath.Store("")
+					m.junkAnFiles.Store(0)
+					m.junkAnBytes.Store(0)
+				})
+			},
+			// The disk layer already throttles to ~25 reports a second;
+			// atomics carry the live numbers, a light post just asks for
+			// a repaint so the list stays honest without flooding.
+			Current: func(cat int, path string, files int, bytes uint64) {
+				m.junkAnPath.Store(path)
+				m.junkAnFiles.Store(int64(files))
+				m.junkAnBytes.Store(int64(bytes))
+				m.post(func() {})
+			},
+			Done: func(cat, dirs, files int, bytes uint64) {
+				m.post(func() {
+					m.junkAnDone[cat].dirs = dirs
+					m.junkAnDone[cat].files = files
+					m.junkAnDone[cat].bytes = bytes
+				})
 			},
 		})
 		m.post(func() {
@@ -333,12 +362,14 @@ func (m *Model) junkButton(c *ui.Context, off bool) ui.Element {
 	return e.Disabled(off)
 }
 
-// junkAnalyzingView is the placeholder while locations are measured —
-// the per-category progress callback feeds the live counter.
+// junkAnalyzingView is the live scan ledger — every category is a row
+// with its own status: done shows what it found, the running one shows
+// the file being measured right now, the rest wait. Nothing is a black
+// box: the totals the report lands with are built here in the open.
 func (m *Model) junkAnalyzingView(c *ui.Context, t *ui.Theme) {
 	ui.Column(c).Grow(1).MinHeight(0).AlignItems(ui.Center).Children(func() {
 		ui.Spacer(c)
-		card := ui.Column(c).Width(440).Padding(16, 20).Gap(10).Background(t.Surface).Radius(8)
+		card := ui.Column(c).Width(600).Padding(16, 20).Gap(10).Background(t.Surface).Radius(8)
 		card.BorderWidth(1).BorderColor(t.Border)
 		card.Children(func() {
 			ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
@@ -352,9 +383,63 @@ func (m *Model) junkAnalyzingView(c *ui.Context, t *ui.Theme) {
 			ui.Text(c, fmt.Sprintf(tr("%d of %d · %s…"), cat+1, disk.JunkCatCount, tr(disk.JunkCatName(cat)))).
 				FontSize(11).TextColor(t.TextMuted).SingleLine()
 			ui.Progress(c, float64(cat+1)/float64(disk.JunkCatCount)).FillWidth().Height(4)
+			curPath, _ := m.junkAnPath.Load().(string)
+			curFiles, curBytes := m.junkAnFiles.Load(), uint64(m.junkAnBytes.Load())
+			ui.Box(c).Height(340).Children(func() {
+				ui.List(c, &m.junkScanList, disk.JunkCatCount, func(i int) {
+					m.junkScanRow(c, t, i, cat, curPath, curFiles, curBytes)
+				})
+			})
 		})
 		ui.Spacer(c)
 	})
+}
+
+// junkScanRow draws one category row in the scan ledger. Status is
+// derived purely from the category index: below the running index is
+// done, on it is live, above it waits.
+func (m *Model) junkScanRow(c *ui.Context, t *ui.Theme, i, running int, curPath string, curFiles int64, curBytes uint64) {
+	switch {
+	case i < running:
+		ui.Column(c).FillWidth().MinHeight(30).Padding(3, 4).Justify(ui.Center).Children(func() {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				icon(c, "check", 14).TextColor(t.Accent)
+				ui.Text(c, tr(disk.JunkCatName(i))).FontSize(12).Width(170).Shrink(0).SingleLine()
+				st := m.junkAnDone[i]
+				status := tr("no items found")
+				if st.dirs > 0 {
+					status = fmt.Sprintf(tr("%d locations · %s files · %s"),
+						st.dirs, format.Int(uint64(st.files)), format.Bytes(st.bytes))
+				}
+				ui.Text(c, status).FontSize(11).TextColor(t.TextMuted).SingleLine().MinWidth(0)
+			})
+		})
+	case i == running:
+		ui.Column(c).FillWidth().MinHeight(30).Padding(3, 4).Justify(ui.Center).Children(func() {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				icon(c, "refresh", 14).TextColor(t.Accent)
+				ui.Text(c, tr(disk.JunkCatName(i))).FontSize(12).Bold().Width(170).Shrink(0).SingleLine()
+				status := tr("scanning…")
+				if curFiles > 0 || curBytes > 0 {
+					status = fmt.Sprintf(tr("%s files · %s"), format.Int(uint64(curFiles)), format.Bytes(curBytes))
+				}
+				ui.Text(c, status).FontSize(11).TextColor(t.Accent).SingleLine().MinWidth(0)
+			})
+			if curPath != "" {
+				ui.Row(c).Padding(0, 0, 0, 22).Children(func() {
+					ui.Text(c, curPath).FontSize(10).TextColor(t.TextMuted).SingleLine().Ellipsis("…").Tooltip(curPath).MinWidth(0)
+				})
+			}
+		}).Background(t.SurfaceHover).Radius(6)
+	default:
+		ui.Column(c).FillWidth().MinHeight(30).Padding(3, 4).Justify(ui.Center).Children(func() {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				icon(c, "dot", 14).TextColor(t.TextMuted)
+				ui.Text(c, tr(disk.JunkCatName(i))).FontSize(12).TextColor(t.TextMuted).Width(170).Shrink(0).SingleLine()
+				ui.Text(c, tr("pending")).FontSize(11).TextColor(t.TextMuted).SingleLine()
+			})
+		})
+	}
 }
 
 // junkResultsView fills the disk page with the cleanup report: preset

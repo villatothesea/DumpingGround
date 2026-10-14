@@ -193,7 +193,7 @@ func (p *platform) sample(s *Sample, info *Info, heavy bool) {
 			p.sampleGPU(s, info)
 		}
 	}
-	s.Battery = sampleBattery(info.Battery)
+	s.Battery = sampleBattery(info.Battery, p.battPath)
 }
 
 // sampleCPU reads per-processor busy time. SystemProcessorPerformance-
@@ -250,7 +250,7 @@ func batteryPresent() bool {
 	return b[1] != 128 && b[1] != 255 // no system battery / unknown status
 }
 
-func sampleBattery(present bool) *BatterySample {
+func sampleBattery(present bool, battPath string) *BatterySample {
 	if !present {
 		return nil
 	}
@@ -265,5 +265,6 @@ func sampleBattery(present bool) *BatterySample {
 	if secs := le32(b[4:]); secs != 0xFFFFFFFF {
 		bs.Remain = time.Duration(secs) * time.Second
 	}
+	bs.RateMW, bs.CapMWH = readBatteryStatus(battPath)
 	return bs
 }

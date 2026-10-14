@@ -59,6 +59,7 @@ type platform struct {
 	perf     perfInfo // GetPerformanceInfo walks the process list: refreshed every perfEvery
 	perfAt   time.Time
 	healthAt time.Time // last NVMe health refresh
+	battPath string    // the pack's device interface path, for per-sample status reads
 }
 
 func (p *platform) load(info *Info) {
@@ -71,7 +72,7 @@ func (p *platform) load(info *Info) {
 	p.loadNICs(info)
 	info.Battery = batteryPresent()
 	if info.Battery {
-		info.Batt = readBatteryInfo()
+		info.Batt, p.battPath = readBatteryInfo()
 	}
 	loadDisplays(info, loadDevices(info))
 }
