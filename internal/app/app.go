@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime"
+	"runtime/debug"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -122,6 +124,7 @@ type Model struct {
 	energy                          *energyLedger
 	energySel                       string // month pinned in the heatmap — "2006-01" or "" for everything
 	quitting                        bool // a real quit is underway — don't divert window closes to the tray
+	frameStamp                      atomic.Int64 // ns timestamp of the frame being built, 0 idle — watchUI reads it
 	settingsOpen                    bool
 	settingsSection                 string
 	diskInfoOpen                    bool
@@ -513,7 +516,44 @@ var dbgFrames = os.Getenv("DG_DEBUG_FRAMES") != ""
 
 func dbgLog(format string, args ...any) { log.Printf(format, args...) }
 
+// watchUI flags a frame whose build ran past five seconds — that is what
+// a frozen window with a live message pump looks like: the build thread
+// is wedged while Windows still answers. Dumping every goroutine's stack
+// turns the user's "it froze" into a bug report we can read.
+func (m *Model) watchUI() {
+	tk := time.NewTicker(3 * time.Second)
+	defer tk.Stop()
+	for {
+		select {
+		case <-m.ctx.Done():
+			return
+		case <-tk.C:
+		}
+		stamp := m.frameStamp.Load()
+		if stamp == 0 {
+			continue
+		}
+		if age := time.Since(time.Unix(0, stamp)); age > 5*time.Second {
+			buf := make([]byte, 256<<10)
+			n := runtime.Stack(buf, true)
+			applog.Logf("ui hang: frame build stuck for %v\n%s", age, buf[:n])
+			m.frameStamp.Store(0) // report each hang once
+		}
+	}
+}
+
 func (m *Model) view(c *ui.Context) {
+	// A panic inside a frame kills the build loop while the message pump
+	// keeps running — the window looks alive, ignores every click and
+	// loses its caption buttons. Recover so the next frame gets a chance,
+	// and log the stack so the bug is findable instead of silent.
+	defer func() {
+		m.frameStamp.Store(0)
+		if r := recover(); r != nil {
+			applog.Logf("ui panic: %v\n%s", r, debug.Stack())
+		}
+	}()
+	m.frameStamp.Store(time.Now().UnixNano())
 	frameStart := time.Now()
 	m.drain()
 	if dbgFrames {

@@ -778,12 +778,16 @@ func (m *Model) hwEnergyPanel(c *ui.Context, t *ui.Theme) {
 	// current one gets a row of twelve cells.
 	months := map[string]float64{}
 	for k, wh := range days {
-		months[k[:7]] += wh
+		if len(k) >= 7 {
+			months[k[:7]] += wh
+		}
 	}
 	years := map[int]bool{now.Year(): true}
 	for k := range days {
-		y, _ := strconv.Atoi(k[:4])
-		years[y] = true
+		if len(k) >= 4 {
+			y, _ := strconv.Atoi(k[:4])
+			years[y] = true
+		}
 	}
 	yearKeys := make([]int, 0, len(years))
 	for y := range years {
