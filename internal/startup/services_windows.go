@@ -132,27 +132,54 @@ func setServiceEnabled(it Item, on bool) error {
 		return fmt.Errorf("service manager: %w", e)
 	}
 	defer procCloseServiceHandle.Call(scm)
-	name, err := syscall.UTF16PtrFromString(it.value)
+	h, err := openService(scm, it.value, serviceQueryConfig|serviceChangeConfig)
+	var origSDDL, sid string
+	hardened := false
 	if err != nil {
-		return err
+		if err != syscall.Errno(5) { // ERROR_ACCESS_DENIED
+			return fmt.Errorf("open service %s: %w", it.value, err)
+		}
+		// The DACL denies everyone config writes — a deliberately hardened
+		// service. Save its descriptor first; the enable path puts it back.
+		var e2 error
+		if origSDDL, e2 = serviceSDDL(scm, it.value); e2 != nil {
+			return fmt.Errorf("security descriptor of %s: %w", it.value, e2)
+		}
+		hardened = true
 	}
-	h, _, e := procOpenService.Call(scm, uintptr(unsafe.Pointer(name)), serviceQueryConfig|serviceChangeConfig)
-	if h == 0 {
-		return fmt.Errorf("open service %s: %w", it.value, e)
-	}
-	defer procCloseServiceHandle.Call(h)
 
 	start, delayed := uint32(serviceDisabled), false
+	prev, hadPrev := recall(it.Key)
 	if on {
 		start = serviceAutoStart
-		if s, ok := recall(it.Key); ok {
-			start, delayed = s.Start, s.Delayed
+		if hadPrev {
+			start, delayed = prev.Start, prev.Delayed
 		}
-	} else if err := remember(it.Key, serviceState{Start: it.start, Delayed: it.delayed}); err != nil {
+	} else if err := remember(it.Key, serviceState{Start: it.start, Delayed: it.delayed, SDDL: origSDDL}); err != nil {
 		// Without a record Enable could not restore delayed start — refuse
 		// rather than lose the original silently.
 		return fmt.Errorf("could not save the original start type: %w", err)
 	}
+	if hardened {
+		// Take ownership (the privilege grants WRITE_OWNER regardless of
+		// the DACL), then append an ACE that lets our SID change config.
+		if sid, err = currentUserSID(); err != nil {
+			return err
+		}
+		if err := enableOwnerPrivileges(); err != nil {
+			return fmt.Errorf("unlock %s: %w", it.value, err)
+		}
+		if err := takeServiceOwnership(scm, it.value, sid); err != nil {
+			return fmt.Errorf("take ownership of %s: %w", it.value, err)
+		}
+		if err := grantSelfConfigControl(scm, it.value, sid, origSDDL); err != nil {
+			return fmt.Errorf("grant change-config on %s: %w", it.value, err)
+		}
+		if h, err = openService(scm, it.value, serviceQueryConfig|serviceChangeConfig); err != nil {
+			return fmt.Errorf("open service %s after unlock: %w", it.value, err)
+		}
+	}
+	defer procCloseServiceHandle.Call(h)
 	if r, _, e := procChangeServiceConfig.Call(h, serviceNoChange, uintptr(start), serviceNoChange, 0, 0, 0, 0, 0, 0, 0); r == 0 {
 		return fmt.Errorf("change start type of %s: %w", it.value, e)
 	}
@@ -166,6 +193,22 @@ func setServiceEnabled(it Item, on bool) error {
 		}
 	}
 	if on {
+		// Put back the saved descriptor — the injected ACE and our
+		// ownership both disappear. Saved when we hardened the path;
+		// origSDDL covers a descriptor we read this call.
+		sddl := prev.SDDL
+		if sddl == "" {
+			sddl = origSDDL
+		}
+		if sddl != "" {
+			// WRITE_OWNER comes from the take-ownership privilege — a
+			// fresh process has not enabled it yet. If enabling fails the
+			// restore's own error still surfaces.
+			_ = enableOwnerPrivileges()
+			if err := restoreServiceSD(scm, it.value, sddl); err != nil {
+				return fmt.Errorf("restore security of %s: %w", it.value, err)
+			}
+		}
 		forget(it.Key)
 	}
 	return nil

@@ -17,6 +17,11 @@ type serviceState struct {
 	Start   uint32    `json:"start"`
 	Delayed bool      `json:"delayed"`
 	When    time.Time `json:"when"`
+	// SDDL is the service's original security descriptor when disabling
+	// had to take ownership and inject an access-control entry — the
+	// hardened-service path in svcacl_windows.go. Restored on enable so
+	// the service's own hardening is left untouched.
+	SDDL string `json:"sddl,omitempty"`
 }
 
 var undoMu sync.Mutex
