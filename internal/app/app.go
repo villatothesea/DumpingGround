@@ -122,8 +122,8 @@ type Model struct {
 	protected                       []string // user whitelist — cleanup never touches these paths
 	powerPrice                      string   // user's electricity price per kWh, free text — parsed for display only
 	energy                          *energyLedger
-	energySel                       string // month pinned in the heatmap — "2006-01" or "" for everything
-	quitting                        bool // a real quit is underway — don't divert window closes to the tray
+	energySel                       string       // month pinned in the heatmap — "2006-01" or "" for everything
+	quitting                        bool         // a real quit is underway — don't divert window closes to the tray
 	frameStamp                      atomic.Int64 // ns timestamp of the frame being built, 0 idle — watchUI reads it
 	settingsOpen                    bool
 	settingsSection                 string

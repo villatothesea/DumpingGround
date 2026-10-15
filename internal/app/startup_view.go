@@ -243,6 +243,7 @@ func (m *Model) startupTable(c *ui.Context, t *ui.Theme, rows []*startup.Item) {
 		{Title: tr("Publisher"), ID: "publisher", Width: 190, MinWidth: 60, Sortable: true},
 		{Title: tr("Starts"), ID: "starts", Width: 170, MinWidth: 60, Sortable: true},
 		{Title: tr("Status"), ID: "status", Width: 150, MinWidth: 60, Sortable: true},
+		{Title: tr("Suggestion"), ID: "advice", Width: 96, MinWidth: 60},
 		{Title: tr("Command"), ID: "command", MinWidth: 220, Sortable: true},
 	}
 	tbl := tableChrome(c, func() ui.Element {
@@ -283,6 +284,18 @@ func (m *Model) startupTable(c *ui.Context, t *ui.Theme, rows []*startup.Item) {
 					ui.Text(c, startupStartsLabel(it)).TextColor(muted).SingleLine().Tooltip(trStartLocation(it.Location))
 				case 5:
 					m.startupStatus(c, t, it, muted)
+				case 6:
+					a := startup.AdviceFor(*it)
+					col := muted
+					switch a.Level {
+					case startup.AdviceSafeOff:
+						col = t.Accent
+					case startup.AdviceCaution:
+						col = t.Warning
+					case startup.AdviceKeep:
+						col = t.Success
+					}
+					ui.Text(c, tr(adviceLabel[a.Level])).TextColor(col).SingleLine().Tooltip(tr(a.Reason))
 				default:
 					ui.Text(c, it.Command).TextColor(muted).SingleLine().Tooltip(it.Command)
 				}
@@ -363,6 +376,16 @@ func (m *Model) startupStatus(c *ui.Context, t *ui.Theme, it *startup.Item, mute
 	}
 }
 
+// adviceLabel maps an advice level to its display label — the column's
+// short verdict; the tooltip carries the consequence.
+var adviceLabel = map[int]string{
+	startup.AdviceKeep:     "Keep",
+	startup.AdviceOptional: "Optional",
+	startup.AdviceSafeOff:  "Safe to turn off",
+	startup.AdviceCaution:  "Be careful",
+	startup.AdviceUnknown:  "Unknown",
+}
+
 func startupGlyph(it *startup.Item) string {
 	switch it.Kind {
 	case startup.KindService:
@@ -414,6 +437,9 @@ func (m *Model) startupConfirm(c *ui.Context) {
 	}
 	it := st.confirmItem
 	msg := fmt.Sprintf(tr("%s (%s) will be set to Disabled and will not start at the next boot. Programs that depend on it may stop working. The current setting is remembered, so switching it back on restores it exactly."), it.Name, strings.TrimPrefix(it.Location, "Service "))
+	if a := startup.AdviceFor(it); a.Level == startup.AdviceSafeOff || a.Level == startup.AdviceCaution {
+		msg += "\n\n" + tr("What we know: ") + tr(a.Reason)
+	}
 	if choice := ui.AlertDialog(c, &st.confirm, tr("Turn off this service?"), msg, tr("Cancel"), tr("Turn off")); choice == 1 {
 		m.applyStartup(it, false)
 	}

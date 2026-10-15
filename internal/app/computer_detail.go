@@ -839,7 +839,7 @@ func (m *Model) energyMonthGrid(c *ui.Context, t *ui.Theme, years []int, months 
 		}
 	}
 	levels := []ui.Color{t.Border.Alpha(0.5), t.Accent.Alpha(0.35), t.Accent.Alpha(0.6), t.Accent.Alpha(0.85), t.Accent}
-	ui.Column(c).Width(34+12*(cell+gap)).Shrink(0).Gap(8).Children(func() {
+	ui.Column(c).Width(34 + 12*(cell+gap)).Shrink(0).Gap(8).Children(func() {
 		ui.Text(c, tr("Pick a month to spotlight it")).FontSize(10).TextColor(t.TextMuted)
 		for _, y := range years {
 			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
