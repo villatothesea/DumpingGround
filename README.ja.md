@@ -2,12 +2,28 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md) · [한국어](README.ko.md)
 
+[![Listed on Awesome MyGo](https://awesomemygo.dev/badge.svg)](https://awesomemygo.dev/apps/dumpingground)
+
 Windows ネイティブのメンテナンスユーティリティ。Go + [MyGo](https://github.com/egoist/mygo)
 ネイティブ UI で、ライブのハードウェア概要、プロセス監視、ディスク使用量
 分析、スタートアップ管理、そして**安全な**クリーンアップ（Rust ビルド
 成果物、Windows のジャンク、残留物レビュー付きの完全アンインストール）
 を提供します。Task Manager / Process Explorer / WizTree / Autoruns の
 日常的なワークフローを目指しています。
+
+## スクリーンショット
+
+![Computer——ライブハードウェア概要](docs/img/screenshot-computer.png)
+
+![Processes——CPU と I/O 列付きのプロセスツリー](docs/img/screenshot-processes.png)
+
+![Disk usage——フォルダー表とツリーマップ](docs/img/screenshot-disk.png)
+
+![Uninstall——サイズと最終使用日時付きのインストール済みアプリ](docs/img/screenshot-uninstall.png)
+
+![Startup——アプリ・サービス・タスクのオン/オフスイッチ](docs/img/screenshot-startup.png)
+
+![Cleanup——Rust ビルド成果物のクリーンアッププラン](docs/img/screenshot-cleanup.png)
 
 ## 安全性モデル
 

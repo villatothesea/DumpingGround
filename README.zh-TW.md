@@ -2,10 +2,26 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [한국어](README.ko.md)
 
+[![Listed on Awesome MyGo](https://awesomemygo.dev/badge.svg)](https://awesomemygo.dev/apps/dumpingground)
+
 Windows 原生維護工具，Go + [MyGo](https://github.com/egoist/mygo) 原生 UI——
 即時硬體總覽、處理程序檢視、磁碟空間分析、啟動項目管理，以及**安全**清理
 （Rust 建置產物、Windows 垃圾、附殘留檢閱的完整解除安裝）。以 Task
 Manager / Process Explorer / WizTree / Autoruns 的常用工作流程為目標。
+
+## 截圖
+
+![電腦——即時硬體總覽](docs/img/screenshot-computer.png)
+
+![處理程序——含 CPU 與 I/O 欄的處理程序樹](docs/img/screenshot-processes.png)
+
+![磁碟——目錄表與空間佔用圖](docs/img/screenshot-disk.png)
+
+![解除安裝——已安裝應用程式（含大小與最近使用時間）](docs/img/screenshot-uninstall.png)
+
+![啟動項目——應用程式、服務與排程工作的開關](docs/img/screenshot-startup.png)
+
+![清理——Rust 建置產物清理方案](docs/img/screenshot-cleanup.png)
 
 ## 安全模型
 

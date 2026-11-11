@@ -2,11 +2,27 @@
 
 [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · [한국어](README.ko.md)
 
+[![Listed on Awesome MyGo](https://awesomemygo.dev/badge.svg)](https://awesomemygo.dev/apps/dumpingground)
+
 A Windows-native maintenance utility in Go + [MyGo](https://github.com/egoist/mygo)
 native UI — a live hardware overview, process inspection, disk-usage
 analysis, startup management, and *safe* cleanup (Rust build artifacts,
 Windows junk, full uninstall with leftover review). Aims at the everyday
 Task Manager / Process Explorer / WizTree / Autoruns workflows.
+
+## Screenshots
+
+![Computer — live hardware overview](docs/img/screenshot-computer.png)
+
+![Processes — process tree with CPU and I/O columns](docs/img/screenshot-processes.png)
+
+![Disk usage — folder table and treemap](docs/img/screenshot-disk.png)
+
+![Uninstall — installed apps with size and last-active date](docs/img/screenshot-uninstall.png)
+
+![Startup — on/off switches for apps, services and tasks](docs/img/screenshot-startup.png)
+
+![Cleanup — Rust build artifact plans](docs/img/screenshot-cleanup.png)
 
 ## Safety model
 

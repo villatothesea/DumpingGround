@@ -2,11 +2,27 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md)
 
+[![Listed on Awesome MyGo](https://awesomemygo.dev/badge.svg)](https://awesomemygo.dev/apps/dumpingground)
+
 Go + [MyGo](https://github.com/egoist/mygo) 네이티브 UI로 만든 Windows
 네이티브 유지 관리 유틸리티——실시간 하드웨어 개요, 프로세스 검사, 디스크
 사용량 분석, 시작 프로그램 관리, 그리고 **안전한** 정리(Rust 빌드 아티팩트,
 Windows 정크, 잔여물 검토가 포함된 완전 제거)를 제공합니다. Task Manager /
 Process Explorer / WizTree / Autoruns의 일상적인 워크플로를 목표로 합니다.
+
+## 스크린샷
+
+![Computer——실시간 하드웨어 개요](docs/img/screenshot-computer.png)
+
+![Processes——CPU 및 I/O 열이 있는 프로세스 트리](docs/img/screenshot-processes.png)
+
+![Disk usage——폴더 표와 트리맵](docs/img/screenshot-disk.png)
+
+![Uninstall——크기와 마지막 사용일이 표시된 설치된 앱](docs/img/screenshot-uninstall.png)
+
+![Startup——앱·서비스·작업의 켜기/끄기 스위치](docs/img/screenshot-startup.png)
+
+![Cleanup——Rust 빌드 아티팩트 정리 플랜](docs/img/screenshot-cleanup.png)
 
 ## 안전 모델
 
