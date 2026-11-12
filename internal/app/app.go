@@ -306,6 +306,7 @@ func (m *Model) Run() error {
 		}
 	}
 	m.loadSettings()
+	go m.watchUI()
 	m.diskStatus = tr("Choose a drive or folder to scan")
 	mygo.App.WhenReady(func() {
 		switch m.InitialPage {
@@ -329,7 +330,7 @@ func (m *Model) Run() error {
 		if err := m.window.SetIcon(appIcon); err != nil {
 			log.Print("window icon:", err)
 		}
-		mygo.App.OnSecondInstance(func(_ []string, _ string) { m.window.Restore(); m.window.Show(); m.window.Focus() })
+		mygo.App.OnSecondInstance(func(_ []string, _ string) { m.showWindow() })
 		m.window.OnMinimize(func() {
 			m.minimized = true
 			m.samplerActive.Store(false)

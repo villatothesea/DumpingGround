@@ -46,9 +46,25 @@ func (m *Model) showWindow() {
 	m.minimized = false
 	m.hw.running.Store(true)
 	m.samplerActive.Store(m.page == processPage)
-	m.window.Show()
-	m.window.Restore()
-	m.window.Focus()
+	revealWindow(m.window)
+}
+
+type nativeWindow interface {
+	IsMinimized() bool
+	Restore()
+	Show()
+	Focus()
+}
+
+// revealWindow restores only a minimized window: Restore also takes a
+// visible maximized window out of maximized on Windows.
+func revealWindow(w nativeWindow) {
+	if w.IsMinimized() {
+		w.Restore()
+	} else {
+		w.Show()
+	}
+	w.Focus()
 }
 
 // updateTrayIcon redraws the tray from the latest sample: a sparkline

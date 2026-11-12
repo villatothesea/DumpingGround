@@ -25,27 +25,28 @@ var (
 )
 
 var (
-	clsidShellLink  = syscall.GUID{0x00021401, 0x0000, 0x0000, [8]byte{0xC0, 0, 0, 0, 0, 0, 0, 0x46}}
-	iidIShellLinkW  = syscall.GUID{0x000214F9, 0x0000, 0x0000, [8]byte{0xC0, 0, 0, 0, 0, 0, 0, 0x46}}
-	iidIPersistFile = syscall.GUID{0x0000010B, 0x0000, 0x0000, [8]byte{0xC0, 0, 0, 0, 0, 0, 0, 0x46}}
+	clsidShellLink  = syscall.GUID{Data1: 0x00021401, Data2: 0x0000, Data3: 0x0000, Data4: [8]byte{0xC0, 0, 0, 0, 0, 0, 0, 0x46}}
+	iidIShellLinkW  = syscall.GUID{Data1: 0x000214F9, Data2: 0x0000, Data3: 0x0000, Data4: [8]byte{0xC0, 0, 0, 0, 0, 0, 0, 0x46}}
+	iidIPersistFile = syscall.GUID{Data1: 0x0000010B, Data2: 0x0000, Data3: 0x0000, Data4: [8]byte{0xC0, 0, 0, 0, 0, 0, 0, 0x46}}
 )
 
+type comObject struct{ vtable *[512]uintptr }
+
 // comVtable calls the COM method at index on object ppv.
-func comVtable(ppv uintptr, index uintptr, args ...uintptr) uintptr {
-	vt := *(*uintptr)(unsafe.Pointer(ppv))
-	fn := *(*uintptr)(unsafe.Pointer(vt + index*unsafe.Sizeof(uintptr(0))))
-	all := append([]uintptr{ppv}, args...)
+func comVtable(ppv unsafe.Pointer, index uintptr, args ...uintptr) uintptr {
+	fn := (*comObject)(ppv).vtable[index]
+	all := append([]uintptr{uintptr(ppv)}, args...)
 	r, _, _ := syscall.SyscallN(fn, all...)
 	return r
 }
 
-func comRelease(ppv uintptr) { comVtable(ppv, 2) }
+func comRelease(ppv unsafe.Pointer) { comVtable(ppv, 2) }
 
 // linkResolver holds one COM-initialized thread for a batch of link
 // checks — CoInitialize once per scan, not once per file.
 type linkResolver struct {
-	shell uintptr // IShellLinkW*
-	pers  uintptr // IPersistFile*
+	shell unsafe.Pointer // IShellLinkW*
+	pers  unsafe.Pointer // IPersistFile*
 	live  bool
 }
 
@@ -61,23 +62,23 @@ func newLinkResolver() *linkResolver {
 	if hr, _, _ := procCoCreateInstance.Call(
 		uintptr(unsafe.Pointer(&clsidShellLink)), 0, 1,
 		uintptr(unsafe.Pointer(&iidIShellLinkW)),
-		uintptr(unsafe.Pointer(&r.shell))); hr != 0 || r.shell == 0 {
+		uintptr(unsafe.Pointer(&r.shell))); hr != 0 || r.shell == nil {
 		return r
 	}
 	// QueryInterface for IPersistFile — method 0.
 	if comVtable(r.shell, 0, uintptr(unsafe.Pointer(&iidIPersistFile)),
-		uintptr(unsafe.Pointer(&r.pers))) != 0 || r.pers == 0 {
+		uintptr(unsafe.Pointer(&r.pers))) != 0 || r.pers == nil {
 		comRelease(r.shell)
-		r.shell = 0
+		r.shell = nil
 	}
 	return r
 }
 
 func (r *linkResolver) close() {
-	if r.pers != 0 {
+	if r.pers != nil {
 		comRelease(r.pers)
 	}
-	if r.shell != 0 {
+	if r.shell != nil {
 		comRelease(r.shell)
 	}
 	if r.live {
@@ -91,7 +92,7 @@ func (r *linkResolver) close() {
 // means Windows itself found the target — the strongest possible "not
 // dead" signal. inconclusive means the check could not run at all.
 func (r *linkResolver) resolve(path string) (target string, resolved, inconclusive bool) {
-	if r.shell == 0 || r.pers == 0 {
+	if r.shell == nil || r.pers == nil {
 		return "", false, true
 	}
 	up, err := syscall.UTF16PtrFromString(path)
