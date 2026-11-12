@@ -3,6 +3,7 @@ package appdir
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -103,5 +104,51 @@ func TestSetDirPinsAndRestores(t *testing.T) {
 	SetDir("")
 	if got := Dir(); got == "" {
 		t.Fatal("Dir did not resolve after restore")
+	}
+}
+
+// Remembered data folders let a copy at a new path recover settings made
+// by a previous copy, without scanning the disk for arbitrary .data dirs.
+func TestDataDirsIncludesRegistry(t *testing.T) {
+	current := t.TempDir()
+	shared := t.TempDir()
+	previous := t.TempDir()
+	SetDirs(current, shared)
+	defer SetDirs("", "")
+
+	RememberDir(previous)
+	dirs := DataDirs()
+	for _, want := range []string{current, previous} {
+		if !slices.Contains(dirs, want) {
+			t.Fatalf("DataDirs missing %q: %v", want, dirs)
+		}
+	}
+}
+
+// The repo's build/release/root launchers all sit beside a DumpingGround
+// executable, so a new copy can find sibling .data folders before the
+// registry has been populated by an older release.
+func TestNearbyDataDirs(t *testing.T) {
+	repo := t.TempDir()
+	for _, dir := range []string{repo, filepath.Join(repo, "build"), filepath.Join(repo, "release")} {
+		if err := os.MkdirAll(filepath.Join(dir, ".data"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "DumpingGround.exe"), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	other := filepath.Join(repo, "other")
+	if err := os.MkdirAll(filepath.Join(other, ".data"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got := nearbyDataDirs(filepath.Join(repo, "build", "DumpingGround.exe"))
+	for _, want := range []string{filepath.Join(repo, ".data"), filepath.Join(repo, "build", ".data"), filepath.Join(repo, "release", ".data")} {
+		if !slices.Contains(got, want) {
+			t.Fatalf("nearbyDataDirs missing %q: %v", want, got)
+		}
+	}
+	if slices.Contains(got, filepath.Join(other, ".data")) {
+		t.Fatal("nearbyDataDirs included a folder without a DumpingGround exe")
 	}
 }

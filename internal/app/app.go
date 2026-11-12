@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -127,6 +128,13 @@ type Model struct {
 	frameStamp                      atomic.Int64 // ns timestamp of the frame being built, 0 idle — watchUI reads it
 	settingsOpen                    bool
 	settingsSection                 string
+	settingsExtra                   map[string]json.RawMessage
+	checkUpdates                    bool
+	updateAuto                      atomic.Bool
+	updateNow                       chan struct{}
+	updateBusy                      atomic.Bool
+	updateResult                    atomic.Value // stores updateStatus
+	updateURL                       string
 	diskInfoOpen                    bool
 	reservedQuery                   string
 	sys                             systemUsage
@@ -291,7 +299,8 @@ func New() *Model {
 		iconPending: make(map[string]bool), iconRequests: make(chan string, 32),
 		diskStatus: "Choose a drive or folder to scan", diskMode: "Tree", diskMetric: "Allocated", diskSelected: -1, diskNode: -1, extensionSelected: -1, mapRoot: -1, diskSplit: 300, animateMap: true, detailTab: "Properties", memRelease: "Automatic", tabStyle: "Pill",
 		computerLayout: "Sidebar", language: "System", trayMetric: "CPU", settingsSection: "general",
-		rustGone: map[string]bool{}, rustSel: -1, rustConfirm: -1, rustPathsCat: -1, rustRecycle: true,
+		updateNow: make(chan struct{}, 1),
+		rustGone:  map[string]bool{}, rustSel: -1, rustConfirm: -1, rustPathsCat: -1, rustRecycle: true,
 		rustFilterCat: -1, junkSel: -1, junkConfirm: -1, junkFilterCat: -1, junkPathsCat: -1,
 		rustCollapsed: map[int]bool{}, junkCollapsed: map[string]bool{}}
 }
@@ -375,6 +384,7 @@ func (m *Model) Run() error {
 		m.samplerActive.Store(true)
 		m.applySampleInterval()
 		go m.sampleProcesses()
+		go m.watchUpdates()
 		go func() {
 			vols := disk.Volumes()
 			m.post(func() {
@@ -1044,6 +1054,17 @@ func (m *Model) statusBar(c *ui.Context, t *ui.Theme) {
 			if d.Clicked() {
 				elevate.ResetConsent()
 				m.status = tr("Admin consent reset — the next privileged operation asks again")
+			}
+		}
+		if st := m.updateState(); st.Newer {
+			d := ui.Row(c).AlignItems(ui.Center).Gap(4).PaddingX(4).Radius(3).Label(tr("Open update settings")).Tooltip(st.URL)
+			d.Children(func() {
+				icon(c, "refresh", 11).TextColor(t.Accent)
+				ui.Text(c, fmt.Sprintf(tr("Update %s"), st.Version)).FontSize(11).TextColor(t.Accent)
+			})
+			if d.Clicked() {
+				m.settingsSection = "about"
+				m.settingsOpen = true
 			}
 		}
 		m.statMeter(c, t, "cpu", "CPU", fmt.Sprintf("%.0f%%", m.sys.cpu), m.sys.cpu, fmt.Sprintf(tr("Total CPU usage %.0f%%"), m.sys.cpu))

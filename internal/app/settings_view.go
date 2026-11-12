@@ -168,7 +168,9 @@ func (m *Model) settingsScanning(c *ui.Context, t *ui.Theme) {
 			m.saveSettings()
 		}).Width(settingsSelectW)
 	})
-	ui.Checkbox(c, &m.animateMap, tr("Animate map drill-down")).Tooltip(tr("Respects Windows reduced motion"))
+	if ui.Checkbox(c, &m.animateMap, tr("Animate map drill-down")).Tooltip(tr("Respects Windows reduced motion")).Changed() {
+		m.saveSettings()
+	}
 }
 
 func (m *Model) settingsTray(c *ui.Context, t *ui.Theme) {
@@ -279,8 +281,45 @@ func (m *Model) settingsAbout(c *ui.Context, t *ui.Theme) {
 	ui.Text(c, "Copyright (c) 2026 DumpingGround contributors").TextColor(t.TextMuted)
 	ui.Text(c, mitNotice).FontSize(11).TextColor(t.TextMuted).MaxLines(0)
 	ui.Divider(c)
+	ui.Text(c, tr("Updates")).Bold().FontSize(13)
+	m.settingsRow(c, t, tr("Check for updates automatically"), tr("Check GitHub releases every 30 minutes"), func() {
+		if ui.Checkbox(c, &m.checkUpdates, "").Changed() {
+			m.updateAuto.Store(m.checkUpdates)
+			m.saveSettings()
+			if m.checkUpdates {
+				m.requestUpdateCheck()
+			}
+		}
+	})
+	st := m.updateState()
+	status := tr("Not checked yet")
+	statusColor := t.TextMuted
+	switch {
+	case st.Checking:
+		status = tr("Checking for updates…")
+	case st.Err != "":
+		status = tr("Update check failed")
+		statusColor = t.Danger
+	case st.Newer:
+		status = fmt.Sprintf(tr("Update %s is available"), st.Version)
+		statusColor = t.Accent
+	case st.Checked:
+		status = tr("DumpingGround is up to date")
+	}
+	m.settingsRow(c, t, tr("Latest release"), status, func() {
+		if m.iconTextButton(c, "refresh", tr("Check now")).Disabled(st.Checking).Clicked() {
+			m.requestUpdateCheck()
+		}
+	})
+	if st.Err != "" {
+		ui.Text(c, st.Err).FontSize(11).TextColor(statusColor).SingleLine().MinWidth(0).Tooltip(st.Err)
+	}
+	ui.Divider(c)
 	ui.Text(c, tr("State & logs")).Bold().FontSize(13)
+	ui.Text(c, tr("Portable state")).FontSize(11).TextColor(t.TextMuted)
 	ui.Text(c, appdir.Dir()).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
+	ui.Text(c, tr("Shared settings")).FontSize(11).TextColor(t.TextMuted)
+	ui.Text(c, sharedSettingsPath()).FontSize(11).TextColor(t.TextMuted).SingleLine().Ellipsis("…")
 }
 
 // hasDiscreteGPU reports whether the machine has a dedicated graphics

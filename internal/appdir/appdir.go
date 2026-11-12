@@ -6,20 +6,29 @@
 // that folder cannot be created or written (read-only media, a
 // protected location), the per-user fallback is
 // %LOCALAPPDATA%\DumpingGround.
+//
+// Preferences are the exception: they also have a canonical copy in the
+// per-user folder so build/, release/ and moved launchers see the same
+// settings. Portable folders receive a mirrored settings.json, keeping
+// .data complete enough to move to another machine.
 package appdir
 
 import (
+	"encoding/json"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"sync"
 )
 
 var (
-	mu      sync.Mutex
-	dir     string
-	testDir string // set by tests to pin the location
+	mu            sync.Mutex
+	dir           string
+	testDir       string // set by tests to pin the location
+	testSharedDir string // set by tests to pin the per-user location
 )
 
 // Dir returns the state directory. The portable ".data" folder beside
@@ -38,10 +47,29 @@ func Dir() string {
 }
 
 // SetDir pins the state directory for tests; "" restores resolution.
-func SetDir(d string) {
+// The per-user directory follows it so tests never touch real user state.
+func SetDir(d string) { SetDirs(d, d) }
+
+// SetDirs pins the portable and per-user locations separately for tests.
+func SetDirs(data, shared string) {
 	mu.Lock()
 	defer mu.Unlock()
-	testDir, dir = d, ""
+	testDir, testSharedDir, dir = data, shared, ""
+}
+
+// SharedDir returns the stable per-user directory. Preferences use it so
+// copies launched from different paths share one settings file, while the
+// portable ".data" folders stay full-state snapshots and migration sources.
+func SharedDir() string {
+	mu.Lock()
+	defer mu.Unlock()
+	if testSharedDir != "" {
+		return testSharedDir
+	}
+	if testDir != "" {
+		return testDir
+	}
+	return legacyDir()
 }
 
 // legacyDir is where versions before the portable folder kept state.
@@ -76,6 +104,127 @@ func writable(dir string) bool {
 	_ = f.Close()
 	_ = os.Remove(name)
 	return true
+}
+
+// DataDirs returns the current state folder, folders this user has run
+// from before, and nearby DumpingGround copies' ".data" folders. Settings
+// merge across all of them; other state stays per-location and portable.
+func DataDirs() []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(d string) {
+		if d == "" {
+			return
+		}
+		d = filepath.Clean(d)
+		if seen[d] || strings.EqualFold(d, SharedDir()) {
+			return
+		}
+		if st, err := os.Stat(d); err != nil || !st.IsDir() {
+			return
+		}
+		seen[d] = true
+		out = append(out, d)
+	}
+	add(Dir())
+	if exe, err := os.Executable(); err == nil {
+		for _, d := range nearbyDataDirs(exe) {
+			add(d)
+		}
+	}
+	for _, d := range registryDirs() {
+		add(d)
+	}
+	return out
+}
+
+// RememberDir records a state folder in the per-user registry. A copy at
+// a path never seen before can then find settings left by earlier copies.
+func RememberDir(d string) {
+	if d == "" {
+		return
+	}
+	d = filepath.Clean(d)
+	shared := SharedDir()
+	if strings.EqualFold(d, shared) {
+		return
+	}
+	dirs := registryDirs()
+	if slices.IndexFunc(dirs, func(old string) bool { return strings.EqualFold(old, d) }) < 0 {
+		dirs = append([]string{d}, dirs...)
+		if len(dirs) > 64 {
+			dirs = dirs[:64]
+		}
+		if err := os.MkdirAll(shared, 0o755); err != nil {
+			return
+		}
+		data, err := json.Marshal(dirs)
+		if err == nil {
+			_ = os.WriteFile(registryPath(), data, 0o644)
+		}
+	}
+}
+
+func registryPath() string { return filepath.Join(SharedDir(), "data-dirs.json") }
+
+func registryDirs() []string {
+	data, err := os.ReadFile(registryPath())
+	if err != nil {
+		return nil
+	}
+	var dirs []string
+	if json.Unmarshal(data, &dirs) != nil {
+		return nil
+	}
+	return dirs
+}
+
+// nearbyDataDirs checks only directories that contain a DumpingGround
+// executable: the repo's build/release/root copies, or copies grouped in
+// one portable folder. It deliberately does not scan arbitrary .data
+// directories, which can belong to other apps.
+func nearbyDataDirs(exe string) []string {
+	if exe == "" {
+		return nil
+	}
+	parent := filepath.Dir(filepath.Dir(exe))
+	var out []string
+	add := func(dir string) {
+		if !hasAppExe(dir) {
+			return
+		}
+		if st, err := os.Stat(filepath.Join(dir, ".data")); err == nil && st.IsDir() {
+			out = append(out, filepath.Join(dir, ".data"))
+		}
+	}
+	add(parent)
+	entries, err := os.ReadDir(parent)
+	if err != nil {
+		return out
+	}
+	for i, e := range entries {
+		if i >= 256 {
+			break
+		}
+		if e.IsDir() {
+			add(filepath.Join(parent, e.Name()))
+		}
+	}
+	return out
+}
+
+func hasAppExe(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		name := strings.ToLower(e.Name())
+		if !e.IsDir() && strings.HasSuffix(name, ".exe") && strings.Contains(name, "dumpingground") {
+			return true
+		}
+	}
+	return false
 }
 
 // migrate copies state an earlier run left in the per-user folder into

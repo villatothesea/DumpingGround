@@ -17,6 +17,8 @@
 - treemap 面积比例、不重叠、边界、极端权重与层级矩形预算。
 - NTFS 记录的更新序列校验、Unicode 文件名、resident/nonresident 数据、signed run offsets、损坏记录拒绝。
 - 本机普通权限的 D 盘扫描：MFT 打开被系统拒绝后回退，限时取消返回部分结果。
+- 设置从上一个 `.data` 位置迁移到新的共享/便携副本；未知 JSON 键在保存后保留，便于降级兼容。
+- 更新检查器使用本地 HTTP 服务验证 GitHub release JSON、HTTP 错误与版本比较；设置页包含自动检查和立即检查入口。
 
 ## 已做真实窗口检查
 

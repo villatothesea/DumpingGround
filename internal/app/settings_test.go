@@ -2,8 +2,11 @@ package app
 
 import (
 	"bytes"
+	"encoding/json"
 	"image/png"
 	"math"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/dumpingground/dumpingground/internal/appdir"
@@ -23,17 +26,64 @@ func TestSettingsRoundTrip(t *testing.T) {
 	m.computerLayout = "Cards"
 	m.trayMetric = "Memory"
 	m.closeToTray = true
+	m.checkUpdates = true
 	m.processInterval = "5 s"
 	m.saveSettings()
 
 	fresh := New()
 	fresh.loadSettings()
 	if fresh.themeMode != 2 || fresh.computerLayout != "Cards" || fresh.trayMetric != "Memory" ||
-		!fresh.closeToTray || fresh.processInterval != "5 s" {
+		!fresh.closeToTray || !fresh.checkUpdates || fresh.processInterval != "5 s" {
 		t.Errorf("settings did not round-trip: %+v", fresh)
+	}
+	if !fresh.updateAuto.Load() {
+		t.Error("updateAuto did not follow saved checkUpdates")
 	}
 	if fresh.sampleInterval.Load() != 5e9 {
 		t.Errorf("sampleInterval = %d, want 5e9", fresh.sampleInterval.Load())
+	}
+}
+
+// A settings file left by a previous executable location is adopted by
+// the new one, mirrored into both homes, and keeps keys this build does
+// not know so a later downgrade can still read them.
+func TestSettingsMigrateSharedAndPreserveUnknown(t *testing.T) {
+	current := t.TempDir()
+	shared := t.TempDir()
+	previous := t.TempDir()
+	appdir.SetDirs(current, shared)
+	defer appdir.SetDirs("", "")
+	appdir.RememberDir(previous)
+
+	old := `{"closeToTray":true,"futureFeature":{"enabled":true,"level":3}}`
+	if err := os.WriteFile(filepath.Join(previous, "settings.json"), []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m := New()
+	m.loadSettings()
+	if !m.closeToTray {
+		t.Fatal("previous .data settings were not migrated")
+	}
+	if _, ok := m.settingsExtra["futureFeature"]; !ok {
+		t.Fatal("unknown setting was dropped")
+	}
+	for _, path := range []string{
+		filepath.Join(current, "settings.json"),
+		filepath.Join(shared, "settings.json"),
+		filepath.Join(previous, "settings.json"),
+	} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("settings mirror %s: %v", path, err)
+		}
+		var doc map[string]json.RawMessage
+		if err := json.Unmarshal(data, &doc); err != nil {
+			t.Fatal(err)
+		}
+		var future map[string]any
+		if string(doc["closeToTray"]) != "true" || json.Unmarshal(doc["futureFeature"], &future) != nil || future["enabled"] != true || future["level"] != float64(3) {
+			t.Fatalf("settings mirror %s lost data: %s", path, data)
+		}
 	}
 }
 
@@ -81,7 +131,7 @@ func TestSettingsWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	for _, want := range []string{"DumpingGround", "Version " + version, "MIT License", "DumpingGround contributors", "Permission is hereby granted"} {
+	for _, want := range []string{"DumpingGround", "Version " + version, "MIT License", "DumpingGround contributors", "Permission is hereby granted", "Updates", "Check for updates automatically", "Check now", "Shared settings"} {
 		if !tt.HasText(want) {
 			t.Errorf("about page missing %q", want)
 		}
