@@ -466,7 +466,7 @@ func (m *Model) startupDetail(c *ui.Context, t *ui.Theme, rows []*startup.Item) 
 			it = r
 		}
 	}
-	panel := ui.Column(c).FillWidth().Height(118).Shrink(0).Padding(10, 14).Gap(3).Radius(8).Background(t.Surface)
+	panel := ui.Column(c).FillWidth().Height(132).Shrink(0).Padding(10, 14).Gap(3).Radius(8).Background(t.Surface)
 	panel.BorderWidth(1).BorderColor(t.Border)
 	panel.Children(func() {
 		if it == nil {
