@@ -110,6 +110,13 @@ func (s *Scanner) Scan(ctx context.Context, root string, progress chan<- Progres
 				// million-node index; building it here keeps that work off
 				// the UI goroutine, which would otherwise pay it lazily on
 				// the first USN event and stall.
+				if progress != nil {
+					p := Progress{Files: fast.Files, Dirs: fast.Dirs, Bytes: fast.Bytes, Allocated: fast.Allocated, Skipped: fast.Skipped, Estimated: fast.Estimated, Current: root + " · indexing files", Elapsed: fast.Duration, Method: "NTFS MFT"}
+					select {
+					case progress <- p:
+					default:
+					}
+				}
 				fast.frnInit()
 			}
 			return fast, fastErr

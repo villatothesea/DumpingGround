@@ -305,6 +305,18 @@ func scanMFTRecords(ctx context.Context, stream io.Reader, count int64, recordBy
 	if readErr != nil {
 		return nil, readErr
 	}
+	phase := func(msg string) {
+		if progress == nil {
+			return
+		}
+		done := completed.Load()
+		p := Progress{Files: progFiles.Load(), Dirs: progDirs.Load(), Bytes: progBytes.Load(), Allocated: progAllocated.Load(), Skipped: progSkipped.Load(), Current: fmt.Sprintf("%s · %s · NTFS records %s / %s", root, msg, format.Int(uint64(done)), format.Int(uint64(count))), Elapsed: time.Since(start), Method: "NTFS MFT"}
+		select {
+		case progress <- p:
+		default:
+		}
+	}
+	phase("building index")
 	// Merge chunks in record order: node IDs, parent links and ref slots all
 	// key on that order.
 	total := 0
@@ -344,6 +356,7 @@ func scanMFTRecords(ctx context.Context, stream io.Reader, count int64, recordBy
 	if len(out.Nodes) == 0 || out.Nodes[out.Root].Name != root {
 		return nil, errors.New("root record missing from MFT")
 	}
+	phase("linking tree")
 	// Link using both record index and sequence number. Stale directory references
 	// are excluded rather than attached to a newly reused MFT record.
 	for i, ref := range parents {
@@ -365,6 +378,7 @@ func scanMFTRecords(ctx context.Context, stream io.Reader, count int64, recordBy
 		out.Nodes[i].Parent = parent
 		out.Nodes[parent].Children = append(out.Nodes[parent].Children, i)
 	}
+	phase("aggregating")
 	// Traverse reachable nodes, count only them, and aggregate in true post-order;
 	// parent record numbers do not necessarily precede their children.
 	order := []int{out.Root}
@@ -395,6 +409,7 @@ func scanMFTRecords(ctx context.Context, stream io.Reader, count int64, recordBy
 		p.Bytes += n.Bytes
 		p.Allocated += n.Allocated
 	}
+	phase("sorting folders")
 	for _, id := range order {
 		kids := out.Nodes[id].Children
 		slices.SortFunc(kids, func(a, b int) int { return cmp.Compare(out.Nodes[b].Allocated, out.Nodes[a].Allocated) })
