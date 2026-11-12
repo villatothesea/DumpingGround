@@ -608,7 +608,7 @@ func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 		if rows > 15 {
 			rows = 15
 		}
-		ui.Column(c).MaxHeight(900).MinHeight(float32(rows)*30+132).Padding(6, 16, 14, 16).Gap(10).Children(func() {
+		ui.Column(c).MaxHeight(900).MinHeight(float32(rows)*30+156).Padding(6, 16, 14, 16).Gap(10).Children(func() {
 			ui.Text(c, tr("Leftovers — ")+displaySweepName(m.sweepName)).Bold().FontSize(16)
 			subtitle := fmt.Sprintf(tr("Everything listed belongs to %s — verified against its registry record or its exact name. Folders go to the Recycle Bin; registry items are exported to a .reg backup in the log folder first."), displaySweepName(m.sweepName))
 			if m.sweepName == orphanScanName {
@@ -623,6 +623,27 @@ func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 				subtitle = tr("Some registry entries could not be read, so what is still installed is unknown. These items are listed for review only — removal is locked until a complete inventory succeeds.")
 			}
 			ui.Text(c, subtitle).FontSize(11).TextColor(t.TextMuted).MaxWidth(760)
+			sel, bytes := 0, uint64(0)
+			for i, it := range m.sweepItems {
+				if m.sweepSel[i] {
+					sel++
+					bytes += it.Bytes
+				}
+			}
+			ui.Row(c).FillWidth().Height(24).Gap(8).AlignItems(ui.Center).Children(func() {
+				if !m.uninstComplete {
+					icon(c, "lock", 14)
+					ui.Text(c, tr("Select all")).FontSize(11).TextColor(t.TextMuted)
+				} else {
+					all := len(m.sweepItems) > 0 && sel == len(m.sweepItems)
+					if ui.Checkbox(c, &all, tr("Select all")).FontSize(11).Changed() {
+						for i := range m.sweepSel {
+							m.sweepSel[i] = all
+						}
+						m.sweepArmed = false
+					}
+				}
+			})
 			ui.List(c, &m.sweepList, len(m.sweepItems), func(i int) {
 				it := m.sweepItems[i]
 				row := ui.Row(c).FillWidth().Height(30).Gap(8).AlignItems(ui.Center).Radius(4)
@@ -653,13 +674,6 @@ func (m *Model) sweepModal(c *ui.Context, t *ui.Theme) {
 					ui.Text(c, why).FontSize(13).TextColor(t.TextMuted).SingleLine().Shrink(0)
 				})
 			}).Grow(1).FillWidth().Padding(0, 12, 0, 0)
-			sel, bytes := 0, uint64(0)
-			for i, it := range m.sweepItems {
-				if m.sweepSel[i] {
-					sel++
-					bytes += it.Bytes
-				}
-			}
 			ui.Row(c).FillWidth().Height(28).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, fmt.Sprintf(tr("%d of %d selected · %s"), sel, len(m.sweepItems), format.Bytes(bytes))).
 					FontSize(11).TextColor(t.TextMuted)
