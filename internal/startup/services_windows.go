@@ -90,6 +90,8 @@ func listServices() []Item {
 		startB := queryValue(h, "Start")
 		image := strings.TrimSpace(utf16z(queryValue(h, "ImagePath")))
 		delayedB := queryValue(h, "DelayedAutostart")
+		pkgFull := strings.TrimSpace(utf16z(queryValue(h, "PackageFullName")))
+		appID := strings.TrimSpace(utf16z(queryValue(h, "AppUserModelId")))
 		syscall.RegCloseKey(h)
 		if len(startB) < 4 || image == "" {
 			continue
@@ -111,12 +113,18 @@ func listServices() []Item {
 		if name == "" {
 			name = s.name
 		}
+		pkgFamily := packageFamilyName(pkgFull)
+		if pkgFamily == "" {
+			if family, _, ok := strings.Cut(appID, "!"); ok {
+				pkgFamily = family
+			}
+		}
 		reg := `HKLM\` + servicesKey + s.name
 		items = append(items, Item{
 			Kind: KindService, Key: "service|" + s.name, Name: name, Command: expandEnv(image), Exe: exe,
 			Location: "Service " + s.name, reg: reg, Scope: "System", Trigger: trigger,
 			Enabled: start != serviceDisabled, Running: s.state == serviceRunning,
-			value: s.name, start: start, delayed: delayed,
+			Package: pkgFamily, value: s.name, start: start, delayed: delayed,
 		})
 	}
 	return items

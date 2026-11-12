@@ -113,7 +113,7 @@ func TestLive(t *testing.T) {
 			t.Logf("%-14s %-8v run=%-5v win=%-5v %-34.34q %-24.24q %s", it.Kind, it.Enabled, it.Running, it.Windows, it.Name, it.Publisher, it.Command)
 		}
 	}
-	t.Logf("apps=%d folder=%d services=%d tasks=%d", counts[KindRun], counts[KindFolder], counts[KindService], counts[KindTask])
+	t.Logf("apps=%d folder=%d packaged=%d services=%d tasks=%d", counts[KindRun], counts[KindFolder], counts[KindPackaged], counts[KindService], counts[KindTask])
 	if counts[KindService] == 0 {
 		t.Error("no automatic services found")
 	}

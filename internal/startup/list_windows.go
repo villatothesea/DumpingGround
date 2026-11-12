@@ -19,6 +19,7 @@ import (
 func List() []Item {
 	running := runningImages()
 	items := listApps(running)
+	items = append(items, listPackagedTasks(running)...)
 	items = append(items, listServices()...)
 	items = append(items, listTasks(running)...)
 	enrich(items)
@@ -134,6 +135,8 @@ func SetEnabled(it Item, on bool) error {
 		err = setServiceEnabled(it, on)
 	case KindTask:
 		err = setTaskEnabled(it, on)
+	case KindPackaged:
+		err = setPackagedTaskEnabled(it, on)
 	default:
 		err = fmt.Errorf("unknown startup kind %d", it.Kind)
 	}

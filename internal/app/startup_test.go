@@ -23,12 +23,16 @@ func fakeStartupItems() []startup.Item {
 			Location: `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, Scope: "Current user", Trigger: "At sign-in"},
 		{Kind: startup.KindFolder, Key: "folder|HKCU|Snipaste.lnk", Name: "Snipaste", Publisher: "Le Liu", Command: `D:\Programs\Snipaste\Snipaste.exe`,
 			Location: `C:\Users\dev\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\Snipaste.lnk`, Scope: "Current user", Trigger: "At sign-in", Enabled: true, Running: true},
+		{Kind: startup.KindPackaged, Key: "packaged|OpenAI.Codex_2p2nqsd0c76g0|App", Name: "ChatGPT", Publisher: "OpenAI", Command: `C:\Program Files\WindowsApps\OpenAI.Codex_1_x64__2p2nqsd0c76g0\app\ChatGPT.exe`,
+			Location: "Packaged app OpenAI.Codex_2p2nqsd0c76g0", Scope: "Current user", Trigger: "At sign-in", Enabled: true, Package: "OpenAI.Codex_2p2nqsd0c76g0"},
 		{Kind: startup.KindService, Key: "service|TPHKLOAD", Name: "Lenovo Hotkey Client Loader", Publisher: "Lenovo", Command: `C:\Windows\System32\DriverStore\FileRepository\fn.inf\TPHKLOAD.exe`,
 			Location: "Service TPHKLOAD", Scope: "System", Trigger: "Automatic", Enabled: true, Running: true},
 		{Kind: startup.KindService, Key: "service|gupdate", Name: "Google Updater Service", Publisher: "Google LLC", Command: `"C:\Program Files (x86)\Google\GoogleUpdater\updater.exe" --system`,
 			Location: "Service GoogleUpdaterService", Scope: "System", Trigger: "Automatic (delayed)", Enabled: true},
 		{Kind: startup.KindService, Key: "service|oldsvc", Name: "Legacy Helper", Publisher: "Acme", Command: `C:\Program Files\Acme\helper.exe`,
 			Location: "Service AcmeHelper", Scope: "System", Trigger: "Disabled", Running: true},
+		{Kind: startup.KindService, Key: "service|CodexSandboxService.OpenAI.Codex", Name: "ChatGPT", Publisher: "OpenAI", Command: `C:\Program Files\WindowsApps\OpenAI.Codex_1_x64__2p2nqsd0c76g0\app\resources\codex-windows-sandbox-service.exe`,
+			Location: "Service CodexSandboxService.OpenAI.Codex", Scope: "System", Trigger: "Automatic", Enabled: true, Running: true, Package: "OpenAI.Codex_2p2nqsd0c76g0"},
 		{Kind: startup.KindTask, Key: `task|\GoogleUpdateTaskMachineCore`, Name: "GoogleUpdateTaskMachineCore", Publisher: "Google LLC", Command: `C:\Program Files (x86)\Google\Update\GoogleUpdate.exe /c`,
 			Location: `Task Scheduler \GoogleUpdateTaskMachineCore`, Scope: "System", Trigger: "At startup", Enabled: true},
 		{Kind: startup.KindService, Key: "service|WSearch", Name: "Windows Search", Publisher: "Microsoft Windows", Command: `C:\Windows\system32\SearchIndexer.exe /Embedding`,
@@ -72,7 +76,7 @@ func startupFixture(t *testing.T) (*Model, *switchLog) {
 func TestStartupRowsFilterAndCounts(t *testing.T) {
 	m, _ := startupFixture(t)
 	rows, counts, hidden := m.startupRows()
-	if counts != [4]int{7, 3, 3, 1} || hidden != 2 || len(rows) != 7 {
+	if counts != [4]int{9, 4, 4, 1} || hidden != 2 || len(rows) != 9 {
 		t.Fatalf("counts=%v hidden=%d rows=%d", counts, hidden, len(rows))
 	}
 	for _, r := range rows {
@@ -81,12 +85,12 @@ func TestStartupRowsFilterAndCounts(t *testing.T) {
 		}
 	}
 	m.st.showWindows = true
-	if _, counts, hidden = m.startupRows(); counts[0] != 9 || hidden != 0 {
+	if _, counts, hidden = m.startupRows(); counts[0] != 11 || hidden != 0 {
 		t.Errorf("with Windows shown: counts=%v hidden=%d", counts, hidden)
 	}
 	m.st.showWindows = false
 	m.st.filter = "Services"
-	if rows, _, _ = m.startupRows(); len(rows) != 3 || rows[0].Kind != startup.KindService {
+	if rows, _, _ = m.startupRows(); len(rows) != 4 || rows[0].Kind != startup.KindService {
 		t.Errorf("Services filter: %d rows", len(rows))
 	}
 	m.st.filter, m.st.query = "", "google"
@@ -110,7 +114,7 @@ func TestStartupPageSwitches(t *testing.T) {
 	tt := ui.NewTester(m.view, 1180, 760)
 	tt.SetTitleBar(ui.TitleBar{Height: 40, Right: 138})
 	tt.Frame()
-	for _, want := range []string{"Startup — 5 on · 2 off", "Steam", "Discord", "Lenovo Hotkey Client Loader", "GoogleUpdateTaskMachineCore", "Windows components (+2)"} {
+	for _, want := range []string{"Startup — 7 on · 2 off", "Steam", "Discord", "Lenovo Hotkey Client Loader", "GoogleUpdateTaskMachineCore", "Windows components (+2)"} {
 		if !tt.HasText(want) {
 			t.Errorf("missing %q; screen: %v", want, tt.Texts())
 		}
@@ -215,6 +219,28 @@ func TestStartupSelectionShowsDetail(t *testing.T) {
 	}
 	if !found {
 		t.Error("the service consequence note is missing")
+	}
+}
+
+func TestStartupPackagedServiceWarning(t *testing.T) {
+	svc := &startup.Item{Kind: startup.KindService, Name: "ChatGPT", Enabled: true, Package: "OpenAI.Codex_2p2nqsd0c76g0"}
+	if got := startupConsequence(svc); !strings.Contains(got, "may re-enable") || !strings.Contains(got, "packaged startup item") {
+		t.Fatalf("packaged service warning = %q", got)
+	}
+	svc.Enabled = false
+	if got := startupConsequence(svc); !strings.Contains(got, "Disabled for now") {
+		t.Fatalf("disabled packaged service warning = %q", got)
+	}
+	app := &startup.Item{Kind: startup.KindPackaged, Name: "ChatGPT", Enabled: true, Scope: "Current user", Package: svc.Package}
+	if got := startupConsequence(app); !strings.Contains(got, "survives package updates") {
+		t.Fatalf("packaged startup explanation = %q", got)
+	}
+	if got := startupStartsLabel(app); got != "Packaged app · Current user" {
+		t.Fatalf("packaged startup source = %q", got)
+	}
+	app.Enabled, app.Locked = false, "Managed by administrator policy"
+	if got := startupConsequence(app); got != app.Locked+"." {
+		t.Fatalf("policy-locked packaged startup explanation = %q", got)
 	}
 }
 

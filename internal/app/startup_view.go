@@ -76,7 +76,7 @@ func (m *Model) startupRows() (rows []*startup.Item, counts [4]int, hidden int) 
 		}
 		counts[0]++
 		switch it.Kind {
-		case startup.KindRun, startup.KindFolder:
+		case startup.KindRun, startup.KindFolder, startup.KindPackaged:
 			counts[1]++
 		case startup.KindService:
 			counts[2]++
@@ -120,10 +120,12 @@ func startupKindRank(it *startup.Item) int {
 		return 0
 	case startup.KindFolder:
 		return 1
-	case startup.KindService:
+	case startup.KindPackaged:
 		return 2
+	case startup.KindService:
+		return 3
 	}
-	return 3
+	return 4
 }
 
 func startupStatusRank(it *startup.Item) int {
@@ -146,6 +148,8 @@ func startupStartsLabel(it *startup.Item) string {
 		return tr(it.Trigger)
 	case startup.KindFolder:
 		return tr("Startup folder") + " · " + tr(it.Scope)
+	case startup.KindPackaged:
+		return tr("Packaged app") + " · " + tr(it.Scope)
 	}
 	return tr("Run key") + " · " + tr(it.Scope)
 }
@@ -390,6 +394,8 @@ func startupGlyph(it *startup.Item) string {
 	switch it.Kind {
 	case startup.KindService:
 		return "gear"
+	case startup.KindPackaged:
+		return "pkg"
 	case startup.KindTask:
 		return "zap"
 	}
@@ -419,6 +425,8 @@ func (m *Model) applyStartup(it startup.Item, on bool) {
 				st.msg = fmt.Sprintf(tr("Could not switch %q: %v"), it.Name, err)
 			case on:
 				st.msg = fmt.Sprintf(tr("%q will start with Windows again"), it.Name)
+			case it.Kind == startup.KindService && it.Package != "":
+				st.msg = fmt.Sprintf(tr("%q is Disabled for now — its app package may re-enable it"), it.Name)
 			case it.Kind == startup.KindService:
 				st.msg = fmt.Sprintf(tr("%q will not start at the next boot — it keeps running until then"), it.Name)
 			default:
@@ -437,6 +445,9 @@ func (m *Model) startupConfirm(c *ui.Context) {
 	}
 	it := st.confirmItem
 	msg := fmt.Sprintf(tr("%s (%s) will be set to Disabled and will not start at the next boot. Programs that depend on it may stop working. The current setting is remembered, so switching it back on restores it exactly."), it.Name, strings.TrimPrefix(it.Location, "Service "))
+	if it.Package != "" {
+		msg += "\n\n" + tr("This service is registered by an app package. The package or the app may restore Automatic startup; the durable sign-in switch is the app's packaged startup item or Windows Settings → Apps → Startup.")
+	}
 	if a := startup.AdviceFor(it); a.Level == startup.AdviceSafeOff || a.Level == startup.AdviceCaution {
 		msg += "\n\n" + tr("What we know: ") + tr(a.Reason)
 	}
@@ -495,8 +506,14 @@ func (m *Model) startupKV(c *ui.Context, t *ui.Theme, k, v string) {
 // and that nothing is deleted.
 func startupConsequence(it *startup.Item) string {
 	switch {
+	case it.Kind == startup.KindPackaged && it.Locked != "":
+		return tr(it.Locked) + "."
 	case it.Locked != "":
 		return tr(it.Locked) + tr(". Use Services or Task Scheduler if you really need to change it.")
+	case it.Kind == startup.KindService && it.Package != "" && it.Enabled:
+		return tr("Managed by an app package — package updates or the app may re-enable it. Turning it off sets Disabled for now; the durable sign-in switch is the app's packaged startup item or Windows Settings → Apps → Startup.")
+	case it.Kind == startup.KindService && it.Package != "":
+		return tr("Disabled for now — the app package may re-enable it. The durable sign-in switch is the app's packaged startup item or Windows Settings → Apps → Startup.")
 	case it.Kind == startup.KindService && it.Enabled:
 		return tr("Turning it off sets the service to Disabled for the next boot. Anything that depends on it may stop working. The original setting is remembered and restored when you switch it back on.")
 	case it.Kind == startup.KindService:
@@ -505,6 +522,10 @@ func startupConsequence(it *startup.Item) string {
 		return tr("Turning it off disables the scheduled task. The task and its settings stay in Task Scheduler.")
 	case it.Kind == startup.KindTask:
 		return tr("The task is disabled. Switching it on enables it in Task Scheduler again.")
+	case it.Kind == startup.KindPackaged && it.Enabled:
+		return tr("This is the packaged app's own sign-in switch — the same one Windows Settings → Apps → Startup controls. Turning it off survives package updates.")
+	case it.Kind == startup.KindPackaged:
+		return tr("Off in the packaged app's startup setting. Switching it on lets the app start at sign-in again.")
 	case it.Enabled:
 		return tr("Turning it off stops it from starting at sign-in. Nothing is deleted — the entry stays where it is and you can switch it back on.")
 	}
@@ -534,7 +555,7 @@ func (m *Model) startupMenu(c *ui.Context, menu *ui.Menu, it *startup.Item) {
 		c.WriteClipboard(fmt.Sprintf(tr("%s — %s\n%s · %s\nStarts from: %s (%s)\nRuns: %s"), it.Name, it.Publisher, startupCategory(it), startupStartsLabel(it), it.Location, it.Scope, it.Command))
 	}
 	menu.Separator()
-	if menu.Item(tr("Open in Registry Editor")).Disabled(it.Kind != startup.KindRun && it.Kind != startup.KindService).Chosen() {
+	if menu.Item(tr("Open in Registry Editor")).Disabled(it.Kind != startup.KindRun && it.Kind != startup.KindService && it.Kind != startup.KindPackaged).Chosen() {
 		if err := startup.OpenInRegedit(*it); err != nil {
 			m.st.msg = "regedit: " + err.Error()
 		}

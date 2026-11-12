@@ -197,6 +197,9 @@ func trStartLocation(s string) string {
 	if rest, ok := strings.CutPrefix(s, "Task Scheduler "); ok {
 		return tr("Task Scheduler ") + rest
 	}
+	if rest, ok := strings.CutPrefix(s, "Packaged app "); ok {
+		return tr("Packaged app ") + rest
+	}
 	return s
 }
 

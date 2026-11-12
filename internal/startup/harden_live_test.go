@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/dumpingground/dumpingground/internal/appdir"
+	"github.com/dumpingground/dumpingground/internal/elevate"
 )
 
 // Live toggle against the hardened Codex sandbox service — only runs
@@ -14,6 +15,9 @@ import (
 func TestHardenedServiceToggle(t *testing.T) {
 	if os.Getenv("DG_LIVE_SVC") == "" {
 		t.Skip("set DG_LIVE_SVC to run")
+	}
+	if !elevate.SelfElevated() {
+		t.Skip("requires an elevated test process")
 	}
 	if d := os.Getenv("DG_APPDIR"); d != "" {
 		appdir.SetDir(d)

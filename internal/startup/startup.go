@@ -1,13 +1,14 @@
 // Package startup lists everything that starts with Windows or with the
-// user's session — Run keys, Startup folders, automatic services and
-// logon/boot scheduled tasks — and switches items on and off without
-// deleting anything.
+// user's session — Run keys, Startup folders, packaged-app StartupTasks,
+// automatic services and logon/boot scheduled tasks — and switches items
+// on and off without deleting anything.
 //
 // Every switch is reversible by construction: apps are toggled through the
 // StartupApproved keys (the mechanism Task Manager itself uses, the Run
-// value stays), tasks through Task Scheduler's own enable flag, services
-// through their start type with the original remembered. Parts of Windows
-// are listed for transparency but locked.
+// value stays), packaged apps through their per-user StartupTask state,
+// tasks through Task Scheduler's own enable flag, services through their
+// start type with the original remembered. Parts of Windows are listed for
+// transparency but locked.
 package startup
 
 import "errors"
@@ -16,14 +17,15 @@ import "errors"
 type Kind uint8
 
 const (
-	KindRun     Kind = iota // a value under a Run key
-	KindFolder              // a file in a Startup folder
-	KindService             // an automatic Windows service
-	KindTask                // a scheduled task that fires at logon or boot
+	KindRun      Kind = iota // a value under a Run key
+	KindFolder               // a file in a Startup folder
+	KindService              // an automatic Windows service
+	KindTask                 // a scheduled task that fires at logon or boot
+	KindPackaged             // a packaged app's StartupTask
 )
 
 func (k Kind) String() string {
-	return [...]string{"Startup app", "Startup folder", "Service", "Scheduled task"}[k]
+	return [...]string{"Startup app", "Startup folder", "Service", "Scheduled task", "Packaged app"}[k]
 }
 
 // Item is one startup entry.
@@ -42,6 +44,7 @@ type Item struct {
 	Running   bool   // the program or service is running right now
 	Windows   bool   // a component of Windows — hidden by default
 	Locked    string // non-empty: why the switch is disabled
+	Package   string // AppX/MSIX package family owning the item, when known
 
 	// Where the switch lives, for SetEnabled.
 	reg      string // full registry path of the item, for "Open in Registry Editor"
@@ -53,7 +56,9 @@ type Item struct {
 }
 
 // App reports whether the item is software launched with the session.
-func (it *Item) App() bool { return it.Kind == KindRun || it.Kind == KindFolder }
+func (it *Item) App() bool {
+	return it.Kind == KindRun || it.Kind == KindFolder || it.Kind == KindPackaged
+}
 
 // ErrUnsupported is what non-Windows builds return.
 var ErrUnsupported = errors.New("startup management is only available on Windows")

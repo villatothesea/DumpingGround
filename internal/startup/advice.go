@@ -52,6 +52,7 @@ const (
 	rCompanion = "Vendor companion — off if you don't use its features"
 	rOnlyIf    = "Needed only in its specific scenario — off if that doesn't apply"
 	rMailOff   = "Mail client — off stops new-mail alerts"
+	rPackaged  = "Managed by an app package — Windows may re-enable it; use the packaged startup item or Windows Settings → Apps → Startup"
 	rJunkSoft  = "Bundled pushware — off is a good start"
 	rUnknown   = "No information on record — check what it does before switching it"
 	rWinUnk    = "A Windows component not on the known list — leave it on unless you know it"
@@ -655,6 +656,9 @@ func AdviceFor(it Item) Advice {
 	if it.Kind == KindService && svc != "" {
 		if a, ok := adviceServices[strings.ToLower(svc)]; ok {
 			return a
+		}
+		if it.Package != "" {
+			return Advice{AdviceOptional, rPackaged}
 		}
 	}
 	hay := strings.ToLower(it.Name + " " + it.Exe + " " + it.Command + " " + it.Publisher)

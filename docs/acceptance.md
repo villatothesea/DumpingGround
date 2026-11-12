@@ -19,6 +19,8 @@
 - 本机普通权限的 D 盘扫描：MFT 打开被系统拒绝后回退，限时取消返回部分结果。
 - 设置从上一个 `.data` 位置迁移到新的共享/便携副本；未知 JSON 键在保存后保留，便于降级兼容。
 - 更新检查器使用本地 HTTP 服务验证 GitHub release JSON、HTTP 错误与版本比较；设置页包含自动检查和立即检查入口。
+- 启动页枚举当前用户注册的 AppX/MSIX StartupTask：解析包清单中的 `windows.startupTask`，按包族名读取 `SystemAppData` 状态；合成的 HKCU 项验证 `Enabled(2) → DisabledByUser(1) → Enabled(2)` 往返，启用时写入 `UserEnabledStartupOnce`。
+- 本机 `OpenAI.Codex` 同时暴露两个启动入口：`ChatGPT` packaged StartupTask（可由用户持久关闭）和 `CodexSandboxService.OpenAI.Codex` packaged service。服务按 `PackageFullName`/`AppUserModelId` 标记为应用包管理，页面说明包更新或应用可能恢复自动启动，不再暗示服务级关闭一定持久。
 
 ## 已做真实窗口检查
 
@@ -35,6 +37,7 @@
 - Windows 10、ARM64、不同文件系统、网络盘的完整兼容矩阵。
 - PE 的全局句柄查询、线程调用栈和内核级能力。
 - 低内存长期验收：十分钟进程页采样仍发现增长，等待功能稳定后专门处理。
+- ChatGPT packaged service 的持久关闭：本次 shell 为普通完整性令牌，`DG_LIVE_SVC` 路径在取得服务所有权时被拒绝，未实际改写服务；未重启 Windows，也未运行 `Reset-AppxPackage`（会删除应用数据/登录状态）。包清单与挂起的 AppX 更新事件确认包服务注册来自 manifest，但“禁用后跨包更新持久”没有在本机实际验收。
 
 ## 已修复
 
@@ -52,6 +55,10 @@ go test ./...
 go vet ./...
 $env:DG_TEST_VOLUME = "D:\"
 go test ./internal/disk -run TestLiveVolumeScanAndFallback -v
+go test ./internal/startup -run 'TestPackaged|TestLivePackagedItems' -v
+$env:DG_LIVE_SVC = "1"
+$env:DG_APPDIR = "$env:TEMP\dg-live-svc"
+go test ./internal/startup -run TestHardenedServiceToggle -v
 ```
 
-`DG_TEST_VOLUME` 测试是只读且限时的，扫描中取消，不修改文件。
+`DG_TEST_VOLUME` 测试是只读且限时的，扫描中取消，不修改文件。`TestLivePackagedItems` 只读；`TestPackaged*` 只写测试用 HKCU package-family 键并清理。`DG_LIVE_SVC` 会切换真实服务，须以管理员运行；可另设 `DG_SVC_ON=1` 恢复。`DG_APPDIR` 可把 undo 记录隔离到测试目录。
