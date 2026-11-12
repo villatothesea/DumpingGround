@@ -70,8 +70,20 @@ lsass、杀毒软件）一律够不着——杀掉它们会直接蓝屏，而读
 位置），则退回 `%LOCALAPPDATA%\DumpingGround`。`.data` 首次创建时
 会把旧版本留在 `%LOCALAPPDATA%` 的状态全部迁过来，不会丢东西。
 
+偏好设置单独处理：权威的 `settings.json` 放在稳定的用户目录
+（`%LOCALAPPDATA%\DumpingGround`）里，所以无论 exe 放在哪、换过多少个
+版本，看到的都是同一份设置。这份文件会镜像进每个用过的 `.data`
+文件夹，便携副本带到别的机器时设置也一起走；新版本加的设置在回退到
+旧版本时也不会被抹掉。
+
 页面快捷键：Ctrl+1 Computer、Ctrl+2 Processes、Ctrl+3 Disk Usage、
 Ctrl+4 Uninstall、Ctrl+5 Startup。
+
+### 更新
+
+需要在设置里手动开启：开启后每 30 分钟检查一次 GitHub 新版本，也可以
+点"立即检查"手动触发。发现新版本只弹通知——应用从不自动下载或安装
+任何东西。
 
 ### 计算机
 
@@ -140,7 +152,7 @@ Ctrl+4 Uninstall、Ctrl+5 Startup。
 - 启动软件自带的卸载程序（需要时提权），然后盯注册表条目——条目真消失才
   弹残留审查，中途取消卸载 = 什么都没发生。
 - 残留扫描覆盖文件、启动项、注册表键；每条标 Confirmed（有证据）或
-  Likely（名字匹配，从不预选）。
+  Likely（名字匹配，从不预选），列表很长时有一键全选。
 - 注册表删除先备份；文件一律走回收站。
 
 ### 启动项
@@ -148,16 +160,25 @@ Ctrl+4 Uninstall、Ctrl+5 Startup。
 所有会自动启动的东西，一张列表，每项一个开关：
 
 - **应用**——`Run` 注册表项（当前用户、所有用户、32 位）和两个启动文件夹。
+- **打包应用**——已安装 AppX/MSIX 包声明的 `windows.startupTask`。开关写入
+  的状态和"设置 → 应用 → 启动"里的开关是同一份，所以商店更新、包重装
+  都不会把它改回去。
 - **服务**——自动和延迟自动启动的服务，以及已被关掉的。
 - **计划任务**——在登录或开机时触发的任务。
 
 每行显示发布者（取自程序自带的版本信息）、此刻是否在运行、完整命令。
-选中一行会说明它配置在哪、开关会产生什么效果。
+选中一行展开详情卡：它配置在哪、这个条目是干什么的、关掉会失去什么——
+逐条写的具体说明，不是"更新器/助手"这类笼统标签（更新器会告诉你不自动
+升级了，服务会告诉你哪个功能停了）。打包服务会如实标注：它的 SCM 启动
+类型每次包更新时都会按清单重新写回，这类应用的持久开关是打包启动任务，
+不是服务。
 
 不删除任何东西，每个开关都能撤销：
 
 - 应用用 `StartupApproved` 标志——Task Manager 用的同一机制——`Run` 值或
   快捷方式原地不动。
+- 打包启动任务在用户 `SystemAppData` 键下写 `Enabled`/`DisabledByUser`
+  状态；被策略锁死的状态会拒绝修改。
 - 计划任务通过任务计划程序本身启用/禁用。
 - 服务改启动类型；原值（自动、是否延迟）会被记住，打开开关时原样恢复。
   关服务前会先确认；正在运行的服务会一直运行到下次开机。
@@ -167,7 +188,7 @@ Ctrl+4 Uninstall、Ctrl+5 Startup。
 
 ## 构建
 
-Go 1.27+，MyGo 固定 v0.3.5。无需 Bun、WebView2 或 C 工具链。
+Go 1.27+，MyGo 固定 v0.4.6。无需 Bun、WebView2 或 C 工具链。
 
 ```powershell
 go test ./...
@@ -183,6 +204,7 @@ go build -tags mygo_noinspector -trimpath -ldflags "-s -w -H=windowsgui" -o buil
 - [实际功能验收](docs/acceptance.md)
 - [诊断能力：MFT 验证、句柄搜索、线程调用栈](docs/diagnostics.md)
 - [MFT 严格验证记录](docs/mft-validation.md)
+- [MFT 并行读取实验记录](docs/mft-parallel-read-experiment.md)
 
 ## License
 

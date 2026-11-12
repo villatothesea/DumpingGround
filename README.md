@@ -81,8 +81,21 @@ falls back to `%LOCALAPPDATA%\DumpingGround` instead. The first time a
 `.data` folder is created it adopts any state an earlier version left
 in `%LOCALAPPDATA%`, so nothing is abandoned.
 
+Preferences are handled separately: the canonical `settings.json` lives
+in the stable per-user folder (`%LOCALAPPDATA%\DumpingGround`), so
+every copy of the exe — release after release, wherever it sits — sees
+the same settings. The file is mirrored into each `.data` folder the
+app has used, so a portable copy still carries preferences to another
+machine, and keys from newer versions survive a downgrade.
+
 Pages are also on Ctrl+1 Computer, Ctrl+2 Processes, Ctrl+3 Disk Usage,
 Ctrl+4 Uninstall, Ctrl+5 Startup.
+
+### Updates
+
+Opt-in, in Settings: a GitHub release check runs every 30 minutes and a
+Check now button runs it on demand. A newer release only raises a
+notification — nothing is ever downloaded or installed by the app.
 
 ### Computer
 
@@ -168,7 +181,8 @@ pretending to pass.
   the registry entry — leftover review opens only when the entry is truly
   gone, so cancelling the uninstaller is a no-op.
 - Leftover scan covers files, startup entries, and registry keys; each item
-  is Confirmed (evidence) or Likely (name match, never pre-checked).
+  is Confirmed (evidence) or Likely (name match, never pre-checked), with
+  a select-all checkbox for long lists.
 - Registry removals are backed up; filesystem items go to the Recycle Bin.
 
 ### Startup
@@ -177,17 +191,29 @@ Everything that starts by itself, in one list with an on/off switch each:
 
 - **Apps** — the `Run` keys (current user, all users, 32-bit) and both
   Startup folders.
+- **Packaged apps** — `windows.startupTask` declarations from installed
+  AppX/MSIX packages. Switching one writes the same per-user state
+  Windows Settings → Apps → Startup writes, so it survives store
+  updates and package reinstalls.
 - **Services** — automatic and delayed-start services, and ones switched off.
 - **Scheduled tasks** — tasks that fire at sign-in or at boot.
 
 Each row shows the publisher (from the program's own version resource),
 whether it is running right now, and the exact command. Selecting a row
-says where it is configured and what switching it does.
+opens a detail card: where it is configured, what the entry actually
+does, and what switching it off costs — written per item, not as a
+generic category label (an updater tells you updates stop, a service
+tells you which feature stops). Packaged services are labelled
+honestly: their SCM start type is re-applied from the manifest on every
+package update, so the durable switch for those apps is the packaged
+startup task, not the service.
 
 Nothing is deleted, and every switch can be undone:
 
 - Apps use the `StartupApproved` flags — the mechanism Task Manager uses —
   so the `Run` value or shortcut stays exactly where it is.
+- Packaged startup tasks write `Enabled`/`DisabledByUser` state under the
+  user's `SystemAppData` key — policy-locked states are refused.
 - Tasks are enabled or disabled through Task Scheduler itself.
 - Services have their start type changed; the original (automatic, and
   whether delayed) is remembered and restored on switching back on.
@@ -200,7 +226,7 @@ Nothing is deleted, and every switch can be undone:
 
 ## Building
 
-Go 1.27+, MyGo pinned to v0.3.5. No Bun, WebView2, or C toolchain.
+Go 1.27+, MyGo pinned to v0.4.6. No Bun, WebView2, or C toolchain.
 
 ```powershell
 go test ./...
@@ -216,6 +242,7 @@ CPU rendering by default; `--renderer=gpu` switches to D3D11.
 - [Acceptance checklist](docs/acceptance.md)
 - [Diagnostics: MFT validation, handle search, stacks](docs/diagnostics.md)
 - [MFT validation log](docs/mft-validation.md)
+- [MFT parallel-read experiment](docs/mft-parallel-read-experiment.md)
 
 ## License
 

@@ -70,8 +70,20 @@ Manager / Process Explorer / WizTree / Autoruns 的常用工作流程為目標�
 位置），則退回 `%LOCALAPPDATA%\DumpingGround`。`.data` 首次建立時
 會把舊版本留在 `%LOCALAPPDATA%` 的狀態全部遷移過來，不會丟東西。
 
+偏好設定單獨處理：權威的 `settings.json` 放在穩定的使用者目錄
+（`%LOCALAPPDATA%\DumpingGround`）裡，所以無論 exe 放在哪、換過多少個
+版本，看到的都是同一份設定。這份檔案會鏡像進每個用過的 `.data`
+資料夾，可攜副本帶到別的機器時設定也一起走；新版本加的設定在回退到
+舊版本時也不會被抹掉。
+
 頁面快速鍵：Ctrl+1 Computer、Ctrl+2 Processes、Ctrl+3 Disk Usage、
 Ctrl+4 Uninstall、Ctrl+5 Startup。
+
+### 更新
+
+需要在設定裡手動開啟：開啟後每 30 分鐘檢查一次 GitHub 新版本，也可以
+點「立即檢查」手動觸發。發現新版本只彈通知——應用程式從不自動下載或
+安裝任何東西。
 
 ### 電腦
 
@@ -148,7 +160,7 @@ Ctrl+4 Uninstall、Ctrl+5 Startup。
 - 啟動軟體自帶的解除安裝程式（需要時提升權限），然後盯登錄檔條目——
   條目真消失才彈出殘留檢閱，中途取消解除安裝 = 什麼都沒發生。
 - 殘留掃描涵蓋檔案、啟動項目、登錄檔機碼；每條標 Confirmed（有證據）或
-  Likely（名稱匹配，從不預選）。
+  Likely（名稱匹配，從不預選），清單很長時有一鍵全選。
 - 登錄檔刪除先備份；檔案一律走資源回收筒。
 
 ### 啟動項目
@@ -157,16 +169,25 @@ Ctrl+4 Uninstall、Ctrl+5 Startup。
 
 - **應用程式**——`Run` 登錄檔機碼（目前使用者、所有使用者、32 位元）
   和兩個啟動資料夾。
+- **封裝應用程式**——已安裝 AppX/MSIX 套件宣告的 `windows.startupTask`。
+  開關寫入的狀態和「設定 → 應用程式 → 啟動」裡的開關是同一份，所以
+  市集更新、套件重裝都不會把它改回去。
 - **服務**——自動和延遲自動啟動的服務，以及已被關掉的。
 - **排定工作**——在登入或開機時觸發的工作。
 
 每列顯示發行者（取自程式自帶的版本資訊）、此刻是否在執行、完整命令。
-選中一列會說明它設定在哪、開關會產生什麼效果。
+選中一列展開詳情卡：它設定在哪、這個項目是做什麼的、關掉會失去什麼——
+逐條寫的具體說明，不是「更新程式/小幫手」這類籠統標籤（更新程式會告訴
+你不自動升級了，服務會告訴你哪個功能停了）。封裝服務會如實標註：它的
+SCM 啟動類型每次套件更新時都會按資訊清單重新寫回，這類應用程式的持久
+開關是封裝啟動工作，不是服務。
 
 不刪除任何東西，每個開關都能復原：
 
 - 應用程式用 `StartupApproved` 旗標——Task Manager 用的同一機制——
   `Run` 值或捷徑原地不動。
+- 封裝啟動工作在使用者 `SystemAppData` 機碼下寫 `Enabled`/`DisabledByUser`
+  狀態；被原則鎖死的狀態會拒絕修改。
 - 排定工作透過工作排程器本身啟用/停用。
 - 服務改啟動類型；原值（自動、是否延遲）會被記住，開啟開關時原樣復原。
   關服務前會先確認；正在執行的服務會一直執行到下次開機。
@@ -176,7 +197,7 @@ Ctrl+4 Uninstall、Ctrl+5 Startup。
 
 ## 建置
 
-Go 1.27+，MyGo 固定 v0.3.5。無需 Bun、WebView2 或 C 工具鏈。
+Go 1.27+，MyGo 固定 v0.4.6。無需 Bun、WebView2 或 C 工具鏈。
 
 ```powershell
 go test ./...
@@ -192,6 +213,7 @@ go build -tags mygo_noinspector -trimpath -ldflags "-s -w -H=windowsgui" -o buil
 - [實際功能驗收](docs/acceptance.md)
 - [診斷能力：MFT 驗證、控制代碼搜尋、執行緒呼叫堆疊](docs/diagnostics.md)
 - [MFT 嚴格驗證記錄](docs/mft-validation.md)
+- [MFT 平行讀取實驗記錄](docs/mft-parallel-read-experiment.md)
 
 ## License
 
