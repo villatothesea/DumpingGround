@@ -1041,7 +1041,7 @@ func (m *Model) diskMap(c *ui.Context) {
 	m.prepareMap()
 	t := c.Theme()
 	animate := m.animateMap && !c.Preferences().ReduceMotion
-	ui.Column(c).Fill().AlignItems(ui.Stretch).Children(func() {
+	ui.Column(c).Fill().MinHeight(0).AlignItems(ui.Stretch).Children(func() {
 		canvas := ui.Box(c.Key("space-map")).Grow(1).FillWidth().MinHeight(0).Clip().Background(t.Surface).Label(tr("Treemap canvas"))
 		if canvas.Clicked() {
 			if x, y, ok := canvas.PointerPosition(); ok {

@@ -33,7 +33,7 @@ func (m *Model) uninstallView(c *ui.Context, t *ui.Theme) {
 			})
 		}()
 	}
-	ui.Column(c).Fill().Padding(4, 12).Gap(8).Children(func() {
+	ui.Column(c).Fill().MinHeight(0).Padding(4, 12).Gap(8).Children(func() {
 		ui.Row(c).FillWidth().Height(30).AlignItems(ui.Center).Gap(8).Children(func() {
 			icon(c, "pkg", 18)
 			var total uint64

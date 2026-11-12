@@ -177,7 +177,7 @@ func (m *Model) startupView(c *ui.Context, t *ui.Theme) {
 		st.list.Sort = &st.sort
 	}
 	rows, counts, hidden := m.startupRows()
-	ui.Column(c).Fill().Padding(4, 12).Gap(8).Children(func() {
+	ui.Column(c).Fill().MinHeight(0).Padding(4, 12).Gap(8).Children(func() {
 		m.startupToolbar(c, t, rows, counts, hidden)
 		switch {
 		case !st.loaded:

@@ -643,7 +643,7 @@ func (m *Model) detailPill(c *ui.Context, t *ui.Theme, name string) {
 
 func (m *Model) processDetails(c *ui.Context) {
 	t := c.Theme()
-	ui.Column(c).Fill().AlignItems(ui.Stretch).Children(func() {
+	ui.Column(c).Fill().MinHeight(0).AlignItems(ui.Stretch).Children(func() {
 		head := ui.Row(c).Height(32).Shrink(0).PaddingX(8).Gap(8).AlignItems(ui.Center)
 		head.BorderWidth(0, 0, 1, 0).BorderColor(t.Border)
 		head.Children(func() {
